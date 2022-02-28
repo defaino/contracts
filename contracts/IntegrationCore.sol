@@ -92,8 +92,9 @@ contract IntegrationCore is IIntegrationCore, AbstractCore {
         _resultArr = new OptimizationInfo[](_accounts.length);
 
         for (uint256 i = 0; i < _accounts.length; i++) {
-            bytes32[] memory _assetKeys =
-                _assetsRegistry.getUserIntegrationBorrowAssets(_accounts[i]);
+            bytes32[] memory _assetKeys = _assetsRegistry.getUserIntegrationBorrowAssets(
+                _accounts[i]
+            );
 
             _resultArr[i] = OptimizationInfo(_assetKeys, getTotalBorrowBalanceInUSD(_accounts[i]));
         }
@@ -109,18 +110,20 @@ contract IntegrationCore is IIntegrationCore, AbstractCore {
             "IntegrationCore: User does not have current vault token address"
         );
 
-        IBorrowerRouter _router =
-            IBorrowerRouter(borrowerRouterRegistry.borrowerRouters(_userAddr));
+        IBorrowerRouter _router = IBorrowerRouter(
+            borrowerRouterRegistry.borrowerRouters(_userAddr)
+        );
         ILiquidityPool _liquidityPool = _assetKey.getAssetLiquidityPool(liquidityPoolRegistry);
 
         uint256 _totalBorrowAmount = getUserBorrowedAmount(_userAddr, _assetKey);
-        uint256 _depositInVaultAmount =
-            _router.getUserDepositedAmountInAsset(_liquidityPool.assetAddr(), _vaultTokenAddr);
+        uint256 _depositInVaultAmount = _router.getUserDepositedAmountInAsset(
+            _liquidityPool.assetAddr(),
+            _vaultTokenAddr
+        );
 
-        uint256 _rewardAmount =
-            _totalBorrowAmount
-                .mulWithPrecision(systemParameters.getOptimizationPercentageParam())
-                .mulWithPrecision(assetParameters.getOptimiztionReward(_assetKey));
+        uint256 _rewardAmount = _totalBorrowAmount
+            .mulWithPrecision(systemParameters.getOptimizationPercentageParam())
+            .mulWithPrecision(assetParameters.getOptimiztionReward(_assetKey));
 
         return
             UserOptimizationInfo(
@@ -150,10 +153,9 @@ contract IntegrationCore is IIntegrationCore, AbstractCore {
 
         ILiquidityPool _liquidityPool = _assetKey.getAssetLiquidityPool(liquidityPoolRegistry);
 
-        uint256 _maxNumber =
-            _liquidityPool.convertNTokensToAsset(
-                IERC20(address(_liquidityPool)).balanceOf(_userAddr)
-            );
+        uint256 _maxNumber = _liquidityPool.convertNTokensToAsset(
+            IERC20(address(_liquidityPool)).balanceOf(_userAddr)
+        );
 
         _maxToSupply = _countMaxToWithdraw(
             _maxNumber,
@@ -174,12 +176,11 @@ contract IntegrationCore is IIntegrationCore, AbstractCore {
     {
         ILiquidityPool _liquidityPool = _assetKey.getAssetLiquidityPool(liquidityPoolRegistry);
 
-        uint256 _maxNumber =
-            _liquidityPool.convertNTokensToAsset(
-                IERC20(address(_liquidityPool)).balanceOf(
-                    borrowerRouterRegistry.borrowerRouters(_userAddr)
-                )
-            );
+        uint256 _maxNumber = _liquidityPool.convertNTokensToAsset(
+            IERC20(address(_liquidityPool)).balanceOf(
+                borrowerRouterRegistry.borrowerRouters(_userAddr)
+            )
+        );
 
         _maxToWithdraw = _countMaxToWithdraw(
             _maxNumber,
@@ -229,8 +230,9 @@ contract IntegrationCore is IIntegrationCore, AbstractCore {
         address _borrowerRouterAddr = borrowerRouterRegistry.borrowerRouters(_userAddr);
         ILiquidityPoolRegistry _poolsRegistry = liquidityPoolRegistry;
 
-        bytes32[] memory _userSupplyAssets =
-            assetsRegistry.getUserIntegrationSupplyAssets(_userAddr);
+        bytes32[] memory _userSupplyAssets = assetsRegistry.getUserIntegrationSupplyAssets(
+            _userAddr
+        );
 
         for (uint256 i = 0; i < _userSupplyAssets.length; i++) {
             _totalSupplyBalance += _getCurrentSupplyAmountInUSD(
@@ -249,8 +251,9 @@ contract IntegrationCore is IIntegrationCore, AbstractCore {
         returns (uint256 _totalBorrowBalance)
     {
         ILiquidityPoolRegistry _poolsRegistry = liquidityPoolRegistry;
-        bytes32[] memory _userBorrowAssets =
-            assetsRegistry.getUserIntegrationBorrowAssets(_userAddr);
+        bytes32[] memory _userBorrowAssets = assetsRegistry.getUserIntegrationBorrowAssets(
+            _userAddr
+        );
 
         for (uint256 i = 0; i < _userBorrowAssets.length; i++) {
             _totalBorrowBalance += _userBorrowAssets[i].getCurrentBorrowAmountInUSD(
@@ -272,19 +275,19 @@ contract IntegrationCore is IIntegrationCore, AbstractCore {
         IAssetParameters _parameters = assetParameters;
         ILiquidityPoolRegistry _poolsRegistry = liquidityPoolRegistry;
 
-        bytes32[] memory _userSupplyAssets =
-            assetsRegistry.getUserIntegrationSupplyAssets(_userAddr);
+        bytes32[] memory _userSupplyAssets = assetsRegistry.getUserIntegrationSupplyAssets(
+            _userAddr
+        );
 
         for (uint256 i = 0; i < _userSupplyAssets.length; i++) {
             bytes32 _currentAssetKey = _userSupplyAssets[i];
 
             if (!disabledCollateralAssets[_userAddr][_currentAssetKey]) {
-                uint256 _currentTokensAmount =
-                    _getCurrentSupplyAmountInUSD(
-                        _userSupplyAssets[i],
-                        _borrowerRouterAddr,
-                        _poolsRegistry
-                    );
+                uint256 _currentTokensAmount = _getCurrentSupplyAmountInUSD(
+                    _userSupplyAssets[i],
+                    _borrowerRouterAddr,
+                    _poolsRegistry
+                );
 
                 _currentBorrowLimit += _currentTokensAmount.divWithPrecision(
                     _parameters.getIntegrationColRatio(_currentAssetKey)
@@ -316,8 +319,9 @@ contract IntegrationCore is IIntegrationCore, AbstractCore {
             "IntegrationCore: Liquidity amount must be greater than zero."
         );
 
-        ILiquidityPool _assetLiquidityPool =
-            _assetKey.getAssetLiquidityPool(liquidityPoolRegistry);
+        ILiquidityPool _assetLiquidityPool = _assetKey.getAssetLiquidityPool(
+            liquidityPoolRegistry
+        );
 
         require(
             assetParameters.isAvailableAsCollateral(_assetKey),
@@ -327,8 +331,12 @@ contract IntegrationCore is IIntegrationCore, AbstractCore {
         IBasicCore _defiCore = defiCore;
 
         if (!_defiCore.disabledCollateralAssets(msg.sender, _assetKey)) {
-            uint256 _newBorrowLimit =
-                _defiCore.getNewBorrowLimitInUSD(msg.sender, _assetKey, _liquidityAmount, false);
+            uint256 _newBorrowLimit = _defiCore.getNewBorrowLimitInUSD(
+                msg.sender,
+                _assetKey,
+                _liquidityAmount,
+                false
+            );
             require(
                 _newBorrowLimit >= _defiCore.getTotalBorrowBalanceInUSD(msg.sender),
                 "IntegrationCore: Borrow limit used greater than 100%."
@@ -356,8 +364,9 @@ contract IntegrationCore is IIntegrationCore, AbstractCore {
         onlyExistingBorrowerRouter(msg.sender)
         updateUserAssets(_assetKey, true)
     {
-        ILiquidityPool _assetLiquidityPool =
-            _assetKey.getAssetLiquidityPool(liquidityPoolRegistry);
+        ILiquidityPool _assetLiquidityPool = _assetKey.getAssetLiquidityPool(
+            liquidityPoolRegistry
+        );
 
         rewardsDistribution.updateCumulativeSums(msg.sender, _assetLiquidityPool);
 
@@ -368,8 +377,12 @@ contract IntegrationCore is IIntegrationCore, AbstractCore {
             );
 
             if (!disabledCollateralAssets[msg.sender][_assetKey]) {
-                uint256 _newBorrowLimit =
-                    getNewBorrowLimitInUSD(msg.sender, _assetKey, _liquidityAmount, false);
+                uint256 _newBorrowLimit = getNewBorrowLimitInUSD(
+                    msg.sender,
+                    _assetKey,
+                    _liquidityAmount,
+                    false
+                );
                 require(
                     _newBorrowLimit >= getTotalBorrowBalanceInUSD(msg.sender),
                     "IntegrationCore: Borrow limit used greater than 100%."
@@ -379,8 +392,9 @@ contract IntegrationCore is IIntegrationCore, AbstractCore {
             _liquidityAmount = getMaxToWithdraw(msg.sender, _assetKey);
         }
 
-        IBorrowerRouter _router =
-            IBorrowerRouter(borrowerRouterRegistry.borrowerRouters(msg.sender));
+        IBorrowerRouter _router = IBorrowerRouter(
+            borrowerRouterRegistry.borrowerRouters(msg.sender)
+        );
 
         _router.increaseAllowance(address(_assetLiquidityPool));
 
@@ -414,8 +428,9 @@ contract IntegrationCore is IIntegrationCore, AbstractCore {
 
         (uint256 _availableLiquidity, ) = getAvailableLiquidity(msg.sender);
 
-        ILiquidityPool _assetLiquidityPool =
-            _assetKey.getAssetLiquidityPool(liquidityPoolRegistry);
+        ILiquidityPool _assetLiquidityPool = _assetKey.getAssetLiquidityPool(
+            liquidityPoolRegistry
+        );
 
         require(
             _availableLiquidity > 0 &&
@@ -425,8 +440,9 @@ contract IntegrationCore is IIntegrationCore, AbstractCore {
 
         rewardsDistribution.updateCumulativeSums(msg.sender, _assetLiquidityPool);
 
-        IBorrowerRouter _userBorrowerRouter =
-            IBorrowerRouter(borrowerRouterRegistry.borrowerRouters(msg.sender));
+        IBorrowerRouter _userBorrowerRouter = IBorrowerRouter(
+            borrowerRouterRegistry.borrowerRouters(msg.sender)
+        );
 
         _assetLiquidityPool.borrowFor(msg.sender, address(_userBorrowerRouter), _borrowAmount);
 
@@ -458,8 +474,9 @@ contract IntegrationCore is IIntegrationCore, AbstractCore {
             require(_repayAmount > 0, "IntegrationCore: Zero amount cannot be repaid.");
         }
 
-        ILiquidityPool _assetLiquidityPool =
-            _assetKey.getAssetLiquidityPool(liquidityPoolRegistry);
+        ILiquidityPool _assetLiquidityPool = _assetKey.getAssetLiquidityPool(
+            liquidityPoolRegistry
+        );
 
         rewardsDistribution.updateCumulativeSums(msg.sender, _assetLiquidityPool);
 
@@ -483,10 +500,12 @@ contract IntegrationCore is IIntegrationCore, AbstractCore {
             require(_repayAmount > 0, "IntegrationCore: Zero amount cannot be repaid.");
         }
 
-        IBorrowerRouter _userBorrowerRouter =
-            IBorrowerRouter(borrowerRouterRegistry.borrowerRouters(msg.sender));
-        ILiquidityPool _assetLiquidityPool =
-            _assetKey.getAssetLiquidityPool(liquidityPoolRegistry);
+        IBorrowerRouter _userBorrowerRouter = IBorrowerRouter(
+            borrowerRouterRegistry.borrowerRouters(msg.sender)
+        );
+        ILiquidityPool _assetLiquidityPool = _assetKey.getAssetLiquidityPool(
+            liquidityPoolRegistry
+        );
 
         rewardsDistribution.updateCumulativeSums(msg.sender, _assetLiquidityPool);
 
@@ -528,13 +547,13 @@ contract IntegrationCore is IIntegrationCore, AbstractCore {
         require(_userBorrowedAmount > 0, "IntegrationCore: User borrowed amount is zero.");
 
         ILiquidityPool _liquidityPool = _assetKey.getAssetLiquidityPool(liquidityPoolRegistry);
-        IBorrowerRouter _router =
-            IBorrowerRouter(borrowerRouterRegistry.borrowerRouters(_userAddr));
+        IBorrowerRouter _router = IBorrowerRouter(
+            borrowerRouterRegistry.borrowerRouters(_userAddr)
+        );
 
-        uint256 _optimizationAmount =
-            _userBorrowedAmount.mulWithPrecision(
-                systemParameters.getOptimizationPercentageParam()
-            );
+        uint256 _optimizationAmount = _userBorrowedAmount.mulWithPrecision(
+            systemParameters.getOptimizationPercentageParam()
+        );
 
         _liquidityPool.optimization(
             _userAddr,
@@ -555,22 +574,23 @@ contract IntegrationCore is IIntegrationCore, AbstractCore {
         uint256 _currentBorrowLimit,
         bool _disabledAsCollateral
     ) internal view returns (uint256) {
-        ILiquidityPool _assetLiquidityPool =
-            _assetKey.getAssetLiquidityPool(liquidityPoolRegistry);
+        ILiquidityPool _assetLiquidityPool = _assetKey.getAssetLiquidityPool(
+            liquidityPoolRegistry
+        );
 
-        uint256 _maxToWithdraw =
-            _assetLiquidityPool.convertNTokensToAsset(
-                IERC20(address(_assetLiquidityPool)).balanceOf(_from)
-            );
+        uint256 _maxToWithdraw = _assetLiquidityPool.convertNTokensToAsset(
+            IERC20(address(_assetLiquidityPool)).balanceOf(_from)
+        );
 
         if (!_disabledAsCollateral) {
             uint256 _userLiquidityInUSD = _assetLiquidityPool.getAmountInUSD(_maxToWithdraw);
-            uint256 _residualLimit =
-                _currentBorrowLimit - _userLiquidityInUSD.divWithPrecision(_currentColRatio);
+            uint256 _residualLimit = _currentBorrowLimit -
+                _userLiquidityInUSD.divWithPrecision(_currentColRatio);
 
             if (_residualLimit < _totalBorrowBalance) {
-                uint256 missingAmount =
-                    (_totalBorrowBalance - _residualLimit).mulWithPrecision(_currentColRatio);
+                uint256 missingAmount = (_totalBorrowBalance - _residualLimit).mulWithPrecision(
+                    _currentColRatio
+                );
                 _maxToWithdraw = _assetLiquidityPool.getAmountFromUSD(
                     _userLiquidityInUSD - missingAmount
                 );

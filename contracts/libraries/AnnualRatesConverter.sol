@@ -12,9 +12,8 @@ library AnnualRatesConverter {
         uint256 _highURPercentage,
         uint256 _decimal
     ) internal pure returns (uint256) {
-        uint256 _interestPerPercent =
-            ((_highInterestPercentage - _lowInterestPercentage) * _decimal) /
-                (_highURPercentage - _lowURPercentage);
+        uint256 _interestPerPercent = ((_highInterestPercentage - _lowInterestPercentage) *
+            _decimal) / (_highURPercentage - _lowURPercentage);
 
         return
             (_interestPerPercent * (_currentUR - _lowURPercentage)) /

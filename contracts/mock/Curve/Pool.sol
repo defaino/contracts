@@ -127,8 +127,9 @@ contract CurvePoolMock is IMetaPool {
 
         ERC20 _token = ERC20(coins[i]);
 
-        uint256 _amountToTransferInUnderlying =
-            _convertFromLP(_token_mount).convertFrom18(_token.decimals());
+        uint256 _amountToTransferInUnderlying = _convertFromLP(_token_mount).convertFrom18(
+            _token.decimals()
+        );
 
         require(
             _amountToTransferInUnderlying >= _min_amount,

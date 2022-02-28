@@ -2,7 +2,7 @@
 
 ### Setup
 
-- To configure the system, you need to run the command - `npm install`
+- To configure the system, you need to run the command - `yarn install`
 
 ### Helpful information
 

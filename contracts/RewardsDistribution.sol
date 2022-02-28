@@ -37,7 +37,7 @@ contract RewardsDistribution is IRewardsDistribution, OwnableUpgradeable, Abstra
     mapping(bytes32 => LiquidityPoolInfo) public liquidityPoolsInfo;
     mapping(bytes32 => mapping(address => UserDistributionInfo)) public usersDistributionInfo;
 
-    modifier onlyEligibleContracts {
+    modifier onlyEligibleContracts() {
         require(
             defiCoreAddr == msg.sender ||
                 integrationCoreAddr == msg.sender ||
@@ -69,25 +69,27 @@ contract RewardsDistribution is IRewardsDistribution, OwnableUpgradeable, Abstra
         override
         returns (uint256 _supplyAPY, uint256 _borrowAPY)
     {
-        ILiquidityPool _governanceLP =
-            ILiquidityPool(liquidityPoolsRegistry.getGovernanceLiquidityPool());
+        ILiquidityPool _governanceLP = ILiquidityPool(
+            liquidityPoolsRegistry.getGovernanceLiquidityPool()
+        );
         bytes32 _assetKey = _liquidityPool.assetKey();
 
         LiquidityPoolStats memory _stats = _getLiquidityPoolStats(_assetKey, _liquidityPool);
 
-        uint256 _annualSupplyReward =
-            _governanceLP.getAmountInUSD(_stats.supplyRewardPerBlock) * BLOCKS_PER_YEAR * DECIMAL;
-        uint256 _totalSupplyPoolInUSD =
-            _liquidityPool.getAmountInUSD(
-                _liquidityPool.convertNTokensToAsset(_stats.totalSupplyPool)
-            );
+        uint256 _annualSupplyReward = _governanceLP.getAmountInUSD(_stats.supplyRewardPerBlock) *
+            BLOCKS_PER_YEAR *
+            DECIMAL;
+        uint256 _totalSupplyPoolInUSD = _liquidityPool.getAmountInUSD(
+            _liquidityPool.convertNTokensToAsset(_stats.totalSupplyPool)
+        );
 
         if (_totalSupplyPoolInUSD != 0) {
             _supplyAPY = _annualSupplyReward / _totalSupplyPoolInUSD;
         }
 
-        uint256 _annualBorrowReward =
-            _governanceLP.getAmountInUSD(_stats.borrowRewardPerBlock) * BLOCKS_PER_YEAR * DECIMAL;
+        uint256 _annualBorrowReward = _governanceLP.getAmountInUSD(_stats.borrowRewardPerBlock) *
+            BLOCKS_PER_YEAR *
+            DECIMAL;
         uint256 _totalBorrowPoolInUSD = _liquidityPool.getAmountInUSD(_stats.totalBorrowPool);
 
         if (_totalBorrowPoolInUSD != 0) {
@@ -100,8 +102,10 @@ contract RewardsDistribution is IRewardsDistribution, OwnableUpgradeable, Abstra
         address _userAddr,
         ILiquidityPool _liquidityPool
     ) external view override returns (uint256 _userReward) {
-        (uint256 _newSupplyCumulativeSum, uint256 _newBorrowCumulativeSum) =
-            _getNewCumulativeSums(_assetKey, _liquidityPool);
+        (uint256 _newSupplyCumulativeSum, uint256 _newBorrowCumulativeSum) = _getNewCumulativeSums(
+            _assetKey,
+            _liquidityPool
+        );
         _userReward = _getNewUserReward(
             _userAddr,
             _assetKey,
@@ -167,16 +171,17 @@ contract RewardsDistribution is IRewardsDistribution, OwnableUpgradeable, Abstra
         bytes32 _assetKey,
         ILiquidityPool _liquidityPool
     ) internal {
-        (uint256 _newSupplyCumulativeSum, uint256 _newBorrowCumulativeSum) =
-            _updateCumulativeSums(_assetKey, _liquidityPool);
-        uint256 _newReward =
-            _getNewUserReward(
-                _userAddr,
-                _assetKey,
-                _liquidityPool,
-                _newSupplyCumulativeSum,
-                _newBorrowCumulativeSum
-            );
+        (uint256 _newSupplyCumulativeSum, uint256 _newBorrowCumulativeSum) = _updateCumulativeSums(
+            _assetKey,
+            _liquidityPool
+        );
+        uint256 _newReward = _getNewUserReward(
+            _userAddr,
+            _assetKey,
+            _liquidityPool,
+            _newSupplyCumulativeSum,
+            _newBorrowCumulativeSum
+        );
 
         usersDistributionInfo[_assetKey][_userAddr] = UserDistributionInfo(
             _newSupplyCumulativeSum,
@@ -276,8 +281,10 @@ contract RewardsDistribution is IRewardsDistribution, OwnableUpgradeable, Abstra
         view
         returns (LiquidityPoolStats memory)
     {
-        (uint256 _supplyRewardPerBlock, uint256 _borrowRewardPerBlock) =
-            _getRewardsPerBlock(_assetKey, _liquidityPool.getBorrowPercentage());
+        (uint256 _supplyRewardPerBlock, uint256 _borrowRewardPerBlock) = _getRewardsPerBlock(
+            _assetKey,
+            _liquidityPool.getBorrowPercentage()
+        );
         uint256 _totalBorrowPool = _liquidityPool.aggregatedBorrowedAmount();
 
         return
@@ -294,14 +301,14 @@ contract RewardsDistribution is IRewardsDistribution, OwnableUpgradeable, Abstra
         view
         returns (uint256 _supplyRewardPerBlock, uint256 _borrowRewardPerBlock)
     {
-        (uint256 _minSupplyPart, uint256 _minBorrowPart) =
-            assetParameters.getDistributionMinimums(_assetKey);
+        (uint256 _minSupplyPart, uint256 _minBorrowPart) = assetParameters.getDistributionMinimums(
+            _assetKey
+        );
 
         uint256 _totalRewardPerBlock = liquidityPoolsInfo[_assetKey].rewardPerBlock;
 
-        uint256 _supplyRewardPerBlockPart =
-            (DECIMAL - _minBorrowPart - _minSupplyPart).mulWithPrecision(_currentUR) +
-                _minSupplyPart;
+        uint256 _supplyRewardPerBlockPart = (DECIMAL - _minBorrowPart - _minSupplyPart)
+            .mulWithPrecision(_currentUR) + _minSupplyPart;
 
         _supplyRewardPerBlock = _totalRewardPerBlock.mulWithPrecision(_supplyRewardPerBlockPart);
         _borrowRewardPerBlock = _totalRewardPerBlock - _supplyRewardPerBlock;

@@ -74,32 +74,31 @@ contract DefiCore is IDefiCore, AbstractCore {
         IAssetParameters _assetParameters = assetParameters;
         ILiquidityPoolRegistry _poolRegistry = liquidityPoolRegistry;
 
-        ILiquidityPool _borrowLiquidityPool =
-            ILiquidityPool(_poolRegistry.liquidityPools(_borrowAssetKey));
-        ILiquidityPool _receiveLiquidityPool =
-            ILiquidityPool(_poolRegistry.liquidityPools(_receiveAssetKey));
+        ILiquidityPool _borrowLiquidityPool = ILiquidityPool(
+            _poolRegistry.liquidityPools(_borrowAssetKey)
+        );
+        ILiquidityPool _receiveLiquidityPool = ILiquidityPool(
+            _poolRegistry.liquidityPools(_receiveAssetKey)
+        );
 
         uint256 _receiveAssetPrice = _receiveLiquidityPool.getAssetPrice();
-        uint256 _bonusPrice =
-            _receiveAssetPrice.mulWithPrecision(
-                DECIMAL - _assetParameters.getLiquidationDiscount(_receiveAssetKey)
-            );
+        uint256 _bonusPrice = _receiveAssetPrice.mulWithPrecision(
+            DECIMAL - _assetParameters.getLiquidationDiscount(_receiveAssetKey)
+        );
 
-        uint256 _liquidationLimitByBorrow =
-            getTotalBorrowBalanceInUSD(_userAddr).mulWithPrecision(
-                systemParameters.getLiquidationBoundaryParam()
-            );
+        uint256 _liquidationLimitByBorrow = getTotalBorrowBalanceInUSD(_userAddr).mulWithPrecision(
+            systemParameters.getLiquidationBoundaryParam()
+        );
 
-        uint256 _maxQuantityInUSD =
-            _getMaxQuantity(
-                _receiveAssetKey,
-                _borrowAssetKey,
-                _userAddr,
-                _liquidationLimitByBorrow,
-                _receiveLiquidityPool,
-                _borrowLiquidityPool,
-                _assetParameters
-            );
+        uint256 _maxQuantityInUSD = _getMaxQuantity(
+            _receiveAssetKey,
+            _borrowAssetKey,
+            _userAddr,
+            _liquidationLimitByBorrow,
+            _receiveLiquidityPool,
+            _borrowLiquidityPool,
+            _assetParameters
+        );
 
         _liquidationInfo = UserLiquidationInfo(
             _borrowLiquidityPool.getAssetPrice(),
@@ -150,9 +149,9 @@ contract DefiCore is IDefiCore, AbstractCore {
 
         uint256 _aggregatedBorrowedAmount = _liquidityPool.aggregatedBorrowedAmount();
         uint256 _maxWithdrawUR = assetParameters.getMaxUtilizationRatio(_assetKey) - ONE_PERCENT; // If maxUR = 95%, maxWithdrawUR = 94% for more safety
-        uint256 _maxAvailableLiquidity =
-            (_liquidityPool.getAggregatedLiquidityAmount() + _aggregatedBorrowedAmount) -
-                _aggregatedBorrowedAmount.divWithPrecision(_maxWithdrawUR);
+        uint256 _maxAvailableLiquidity = (_liquidityPool.getAggregatedLiquidityAmount() +
+            _aggregatedBorrowedAmount) -
+            _aggregatedBorrowedAmount.divWithPrecision(_maxWithdrawUR);
 
         _maxToWithdraw = Math.min(_maxToWithdraw, _maxAvailableLiquidity);
     }
@@ -221,8 +220,11 @@ contract DefiCore is IDefiCore, AbstractCore {
             bytes32 _currentAssetKey = _userSupplyAssets[i];
 
             if (isCollateralAssetEnabled(_userAddr, _currentAssetKey)) {
-                uint256 _currentTokensAmount =
-                    _getCurrentSupplyAmountInUSD(_currentAssetKey, _userAddr, _poolRegistry);
+                uint256 _currentTokensAmount = _getCurrentSupplyAmountInUSD(
+                    _currentAssetKey,
+                    _userAddr,
+                    _poolRegistry
+                );
 
                 _currentBorrowLimit += _currentTokensAmount.divWithPrecision(
                     _parameters.getColRatio(_currentAssetKey)
@@ -251,8 +253,9 @@ contract DefiCore is IDefiCore, AbstractCore {
             );
         }
 
-        ILiquidityPool _governancePool =
-            ILiquidityPool(_poolRegistry.getGovernanceLiquidityPool());
+        ILiquidityPool _governancePool = ILiquidityPool(
+            _poolRegistry.getGovernanceLiquidityPool()
+        );
         IERC20 _governanceToken = governanceToken;
 
         uint256 _userBalance = _governanceToken.balanceOf(_userAddr);
@@ -277,8 +280,9 @@ contract DefiCore is IDefiCore, AbstractCore {
     {
         require(_liquidityAmount > 0, "DefiCore: Liquidity amount must be greater than zero.");
 
-        ILiquidityPool _assetLiquidityPool =
-            _assetKey.getAssetLiquidityPool(liquidityPoolRegistry);
+        ILiquidityPool _assetLiquidityPool = _assetKey.getAssetLiquidityPool(
+            liquidityPoolRegistry
+        );
 
         rewardsDistribution.updateCumulativeSums(msg.sender, _assetLiquidityPool);
 
@@ -293,8 +297,9 @@ contract DefiCore is IDefiCore, AbstractCore {
         uint256 _liquidityAmount,
         bool _isMaxWithdraw
     ) external override(IBasicCore, AbstractCore) {
-        ILiquidityPool _assetLiquidityPool =
-            _assetKey.getAssetLiquidityPool(liquidityPoolRegistry);
+        ILiquidityPool _assetLiquidityPool = _assetKey.getAssetLiquidityPool(
+            liquidityPoolRegistry
+        );
 
         rewardsDistribution.updateCumulativeSums(msg.sender, _assetLiquidityPool);
 
@@ -304,8 +309,12 @@ contract DefiCore is IDefiCore, AbstractCore {
             require(_liquidityAmount > 0, "DefiCore: Liquidity amount must be greater than zero.");
 
             if (isCollateralAssetEnabled(msg.sender, _assetKey)) {
-                uint256 _newBorrowLimit =
-                    getNewBorrowLimitInUSD(msg.sender, _assetKey, _liquidityAmount, false);
+                uint256 _newBorrowLimit = getNewBorrowLimitInUSD(
+                    msg.sender,
+                    _assetKey,
+                    _liquidityAmount,
+                    false
+                );
                 require(
                     _newBorrowLimit >= getTotalBorrowBalanceInUSD(msg.sender),
                     "DefiCore: Borrow limit used greater than 100%."
@@ -341,8 +350,9 @@ contract DefiCore is IDefiCore, AbstractCore {
     function borrow(bytes32 _assetKey, uint256 _borrowAmount) external {
         _borrowInternal(_assetKey, _borrowAmount, msg.sender);
 
-        ILiquidityPool _assetLiquidityPool =
-            _assetKey.getAssetLiquidityPool(liquidityPoolRegistry);
+        ILiquidityPool _assetLiquidityPool = _assetKey.getAssetLiquidityPool(
+            liquidityPoolRegistry
+        );
 
         _assetLiquidityPool.borrowFor(msg.sender, msg.sender, _borrowAmount);
 
@@ -358,8 +368,9 @@ contract DefiCore is IDefiCore, AbstractCore {
     ) external {
         _borrowInternal(_assetKey, _borrowAmount, _borrowerAddr);
 
-        ILiquidityPool _assetLiquidityPool =
-            _assetKey.getAssetLiquidityPool(liquidityPoolRegistry);
+        ILiquidityPool _assetLiquidityPool = _assetKey.getAssetLiquidityPool(
+            liquidityPoolRegistry
+        );
 
         _assetLiquidityPool.delegateBorrow(_borrowerAddr, msg.sender, _borrowAmount);
 
@@ -375,8 +386,9 @@ contract DefiCore is IDefiCore, AbstractCore {
     ) external {
         _borrowInternal(_assetKey, _borrowAmount, msg.sender);
 
-        ILiquidityPool _assetLiquidityPool =
-            _assetKey.getAssetLiquidityPool(liquidityPoolRegistry);
+        ILiquidityPool _assetLiquidityPool = _assetKey.getAssetLiquidityPool(
+            liquidityPoolRegistry
+        );
 
         _assetLiquidityPool.borrowFor(msg.sender, _recipientAddr, _borrowAmount);
 
@@ -394,8 +406,9 @@ contract DefiCore is IDefiCore, AbstractCore {
             require(_repayAmount > 0, "DefiCore: Zero amount cannot be repaid.");
         }
 
-        ILiquidityPool _assetLiquidityPool =
-            _assetKey.getAssetLiquidityPool(liquidityPoolRegistry);
+        ILiquidityPool _assetLiquidityPool = _assetKey.getAssetLiquidityPool(
+            liquidityPoolRegistry
+        );
 
         rewardsDistribution.updateCumulativeSums(msg.sender, _assetLiquidityPool);
 
@@ -419,8 +432,9 @@ contract DefiCore is IDefiCore, AbstractCore {
     ) external {
         require(_repayAmount > 0, "DefiCore: Zero amount cannot be repaid.");
 
-        ILiquidityPool _assetLiquidityPool =
-            _assetKey.getAssetLiquidityPool(liquidityPoolRegistry);
+        ILiquidityPool _assetLiquidityPool = _assetKey.getAssetLiquidityPool(
+            liquidityPoolRegistry
+        );
 
         rewardsDistribution.updateCumulativeSums(_recipientAddr, _assetLiquidityPool);
 
@@ -450,11 +464,13 @@ contract DefiCore is IDefiCore, AbstractCore {
         ILiquidityPoolRegistry _poolRegistry = liquidityPoolRegistry;
         IAssetParameters _parameters = assetParameters;
 
-        ILiquidityPool _borrowAssetsPool =
-            ILiquidityPool(_poolRegistry.liquidityPools(_borrowAssetKey));
+        ILiquidityPool _borrowAssetsPool = ILiquidityPool(
+            _poolRegistry.liquidityPools(_borrowAssetKey)
+        );
 
-        ILiquidityPool _supplyAssetsPool =
-            ILiquidityPool(_poolRegistry.liquidityPools(_supplyAssetKey));
+        ILiquidityPool _supplyAssetsPool = ILiquidityPool(
+            _poolRegistry.liquidityPools(_supplyAssetKey)
+        );
 
         require(
             _borrowAssetsPool.getAmountInUSD(_liquidationAmount) <=
@@ -477,17 +493,15 @@ contract DefiCore is IDefiCore, AbstractCore {
         _rewardsDistribution.updateCumulativeSums(_userAddr, _supplyAssetsPool);
         _rewardsDistribution.updateCumulativeSums(_userAddr, _borrowAssetsPool);
 
-        uint256 _amountToLiquidateInUsd =
-            _borrowAssetsPool.getAmountInUSD(
-                _borrowAssetsPool.repayBorrowFor(_userAddr, msg.sender, _liquidationAmount, false)
-            );
+        uint256 _amountToLiquidateInUsd = _borrowAssetsPool.getAmountInUSD(
+            _borrowAssetsPool.repayBorrowFor(_userAddr, msg.sender, _liquidationAmount, false)
+        );
 
         emit LiquidateBorrow(_borrowAssetKey, _userAddr, _liquidationAmount);
 
-        uint256 _repayAmount =
-            _supplyAssetsPool.getAmountFromUSD(_amountToLiquidateInUsd).divWithPrecision(
-                DECIMAL - _parameters.getLiquidationDiscount(_supplyAssetKey)
-            );
+        uint256 _repayAmount = _supplyAssetsPool
+            .getAmountFromUSD(_amountToLiquidateInUsd)
+            .divWithPrecision(DECIMAL - _parameters.getLiquidationDiscount(_supplyAssetKey));
 
         emit LiquidatorPay(_supplyAssetKey, msg.sender, _repayAmount);
 
@@ -567,8 +581,9 @@ contract DefiCore is IDefiCore, AbstractCore {
 
         require(_debtAmount == 0, "DefiCore: Unable to borrow because the account is in arrears.");
 
-        ILiquidityPool _assetLiquidityPool =
-            _assetKey.getAssetLiquidityPool(liquidityPoolRegistry);
+        ILiquidityPool _assetLiquidityPool = _assetKey.getAssetLiquidityPool(
+            liquidityPoolRegistry
+        );
 
         require(
             _availableLiquidity >= _assetLiquidityPool.getAmountInUSD(_borrowAmount),
@@ -587,12 +602,12 @@ contract DefiCore is IDefiCore, AbstractCore {
         ILiquidityPool _borrowAssetsPool,
         IAssetParameters _assetParameters
     ) internal view returns (uint256 _maxQuantityInUSD) {
-        uint256 _liquidateLimitBySupply =
-            (getUserLiquidityAmount(_userAddr, _supplyAssetKey) *
-                (DECIMAL - _assetParameters.getLiquidationDiscount(_supplyAssetKey))) / DECIMAL;
+        uint256 _liquidateLimitBySupply = (getUserLiquidityAmount(_userAddr, _supplyAssetKey) *
+            (DECIMAL - _assetParameters.getLiquidationDiscount(_supplyAssetKey))) / DECIMAL;
 
-        uint256 _userBorrowAmountInUSD =
-            _borrowAssetsPool.getAmountInUSD(getUserBorrowedAmount(_userAddr, _borrowAssetKey));
+        uint256 _userBorrowAmountInUSD = _borrowAssetsPool.getAmountInUSD(
+            getUserBorrowedAmount(_userAddr, _borrowAssetKey)
+        );
 
         _maxQuantityInUSD = Math.min(
             _supplyAssetsPool.getAmountInUSD(_liquidateLimitBySupply),
@@ -611,8 +626,9 @@ contract DefiCore is IDefiCore, AbstractCore {
         address _userAddr,
         ILiquidityPoolRegistry _poolsRegistry
     ) internal view override returns (uint256) {
-        ILiquidityPool _currentLiquidityPool =
-            ILiquidityPool(_poolsRegistry.liquidityPools(_assetKey));
+        ILiquidityPool _currentLiquidityPool = ILiquidityPool(
+            _poolsRegistry.liquidityPools(_assetKey)
+        );
 
         return _currentLiquidityPool.getAmountInUSD(getUserLiquidityAmount(_userAddr, _assetKey));
     }

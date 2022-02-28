@@ -141,8 +141,10 @@ contract AssetParameters is IAssetParameters, OwnableUpgradeable, AbstractDepend
         override
         returns (uint256)
     {
-        (uint256 _price, uint8 _currentPriceDecimals) =
-            priceManager.getPrice(_assetKey, _assetDecimals);
+        (uint256 _price, uint8 _currentPriceDecimals) = priceManager.getPrice(
+            _assetKey,
+            _assetDecimals
+        );
 
         return _price.convert(_currentPriceDecimals, PRICE_DECIMALS);
     }

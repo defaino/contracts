@@ -150,8 +150,10 @@ contract PriceManager is IPriceManager, OwnableUpgradeable, AbstractDependant {
         view
         returns (uint256)
     {
-        int24 _timeWeightedAverageTick =
-            UniswapOracleLibrary.consult(priceFeeds[_assetKey].uniswapPool, PRICE_PERIOD);
+        int24 _timeWeightedAverageTick = UniswapOracleLibrary.consult(
+            priceFeeds[_assetKey].uniswapPool,
+            PRICE_PERIOD
+        );
         return
             UniswapOracleLibrary.getQuoteAtTick(
                 _timeWeightedAverageTick,

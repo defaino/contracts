@@ -188,8 +188,11 @@ contract Registry is AccessControl {
         require(_contractAddress != address(0), "Registry: Null address is forbidden.");
         require(_contracts[_name] == address(0), "Registry: Unable to change the contract.");
 
-        TransparentUpgradeableProxy proxy =
-            new TransparentUpgradeableProxy(_contractAddress, address(upgrader), "");
+        TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
+            _contractAddress,
+            address(upgrader),
+            ""
+        );
 
         _contracts[_name] = address(proxy);
         _isProxy[address(proxy)] = true;

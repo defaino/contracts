@@ -163,8 +163,8 @@ contract AssetsRegistry is IAssetsRegistry, AbstractDependant {
         override
         returns (bytes32[] memory _availableAssets, bytes32[] memory _userBorrowAssets)
     {
-        (bytes32[] memory _allAssetsArr, uint256 _assetsCount) =
-            liquidityPoolRegistry.getAllowForIntegrationAssets();
+        (bytes32[] memory _allAssetsArr, uint256 _assetsCount) = liquidityPoolRegistry
+            .getAllowForIntegrationAssets();
         bytes32[] memory _assetsArr = new bytes32[](_assetsCount);
 
         for (uint256 i = 0; i < _assetsCount; i++) {
@@ -253,13 +253,13 @@ contract AssetsRegistry is IAssetsRegistry, AbstractDependant {
         for (uint256 i = 0; i < _assetsKeys.length; i++) {
             bytes32 _currentKey = _assetsKeys[i];
 
-            ILiquidityPool _currentLiquidityPool =
-                _currentKey.getAssetLiquidityPool(liquidityPoolRegistry);
+            ILiquidityPool _currentLiquidityPool = _currentKey.getAssetLiquidityPool(
+                liquidityPoolRegistry
+            );
 
-            uint256 _userBalance =
-                ERC20(_currentLiquidityPool.assetAddr()).balanceOf(_userAddr).convertTo18(
-                    _currentLiquidityPool.getUnderlyingDecimals()
-                );
+            uint256 _userBalance = ERC20(_currentLiquidityPool.assetAddr())
+                .balanceOf(_userAddr)
+                .convertTo18(_currentLiquidityPool.getUnderlyingDecimals());
 
             _resultArr[i] = _getAssetInfo(
                 _userAddr,
@@ -284,13 +284,13 @@ contract AssetsRegistry is IAssetsRegistry, AbstractDependant {
         for (uint256 i = 0; i < _assetsKeys.length; i++) {
             bytes32 _currentKey = _assetsKeys[i];
 
-            ILiquidityPool _currentLiquidityPool =
-                _currentKey.getAssetLiquidityPool(liquidityPoolRegistry);
+            ILiquidityPool _currentLiquidityPool = _currentKey.getAssetLiquidityPool(
+                liquidityPoolRegistry
+            );
 
-            uint256 _userBalance =
-                _currentLiquidityPool.convertNTokensToAsset(
-                    ERC20(address(_currentLiquidityPool)).balanceOf(_userAddr)
-                );
+            uint256 _userBalance = _currentLiquidityPool.convertNTokensToAsset(
+                ERC20(address(_currentLiquidityPool)).balanceOf(_userAddr)
+            );
 
             _resultArr[i] = _getAssetInfo(
                 _userAddr,
@@ -330,11 +330,17 @@ contract AssetsRegistry is IAssetsRegistry, AbstractDependant {
             "AssetsRegistry: Caller not a system Core contract."
         );
 
-        IBasicCore _core =
-            _isDefiCore ? IBasicCore(_defiCoreAddr) : IBasicCore(_integrationCoreAddr);
+        IBasicCore _core = _isDefiCore
+            ? IBasicCore(_defiCoreAddr)
+            : IBasicCore(_integrationCoreAddr);
 
-        (bool _isRemove, EnumerableSet.Bytes32Set storage _userAssets) =
-            _getUpdateInfo(_userAddr, _assetKey, _isSuply, _isDefiCore, _core);
+        (bool _isRemove, EnumerableSet.Bytes32Set storage _userAssets) = _getUpdateInfo(
+            _userAddr,
+            _assetKey,
+            _isSuply,
+            _isDefiCore,
+            _core
+        );
 
         if (_isRemove) {
             _userAssets.remove(_assetKey);
@@ -539,8 +545,9 @@ contract AssetsRegistry is IAssetsRegistry, AbstractDependant {
         IRewardsDistribution _rewardsDistribution,
         ILiquidityPool _currentLiquidityPool
     ) internal view returns (uint256) {
-        (uint256 _userSupplyAPY, uint256 _userBorrowAPY) =
-            _rewardsDistribution.getAPY(_currentLiquidityPool);
+        (uint256 _userSupplyAPY, uint256 _userBorrowAPY) = _rewardsDistribution.getAPY(
+            _currentLiquidityPool
+        );
 
         return _isSupply ? _userSupplyAPY : _userBorrowAPY;
     }

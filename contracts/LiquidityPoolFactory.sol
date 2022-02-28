@@ -35,12 +35,11 @@ contract LiquidityPoolFactory is AbstractDependant {
     ) external onlyLiquidityPoolRegistry returns (address) {
         ILiquidityPoolAdmin _liquidityPoolAdmin = liquidityPoolAdmin;
 
-        TransparentUpgradeableProxy _proxy =
-            new TransparentUpgradeableProxy(
-                _liquidityPoolAdmin.getCurrentLiquidityPoolsImplementation(),
-                _liquidityPoolAdmin.getUpgrader(),
-                ""
-            );
+        TransparentUpgradeableProxy _proxy = new TransparentUpgradeableProxy(
+            _liquidityPoolAdmin.getCurrentLiquidityPoolsImplementation(),
+            _liquidityPoolAdmin.getUpgrader(),
+            ""
+        );
 
         ILiquidityPool(address(_proxy)).liquidityPoolInitialize(
             _assetAddr,

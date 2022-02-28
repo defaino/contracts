@@ -38,8 +38,10 @@ contract BorrowerRouterFactory is IBorrowerRouterFactory, AbstractDependant {
         onlyIntegrationCore
         returns (address)
     {
-        BeaconProxy _proxy =
-            new BeaconProxy(borrowerRouterRegistry.getBorrowerRoutersBeacon(), "");
+        BeaconProxy _proxy = new BeaconProxy(
+            borrowerRouterRegistry.getBorrowerRoutersBeacon(),
+            ""
+        );
 
         IBorrowerRouter(address(_proxy)).borrowerRouterInitialize(address(registry), _userAddr);
 

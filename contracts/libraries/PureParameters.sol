@@ -2,7 +2,13 @@
 pragma solidity 0.8.3;
 
 library PureParameters {
-    enum Types {NOT_EXIST, UINT, ADDRESS, BYTES32, BOOL}
+    enum Types {
+        NOT_EXIST,
+        UINT,
+        ADDRESS,
+        BYTES32,
+        BOOL
+    }
 
     struct Param {
         uint256 uintParam;

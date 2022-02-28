@@ -147,16 +147,16 @@ contract LiquidityPoolRegistry is ILiquidityPoolRegistry, OwnableUpgradeable, Ab
             uint256 _marketSize = _currentLiquidityPool.getTotalLiquidity();
             uint256 _totalBorrowed = _currentLiquidityPool.getTotalBorrowedAmount();
 
-            (uint256 _distrSupplyAPY, uint256 _distrBorrowAPY) =
-                _rewardsDistributon.getAPY(_currentLiquidityPool);
+            (uint256 _distrSupplyAPY, uint256 _distrBorrowAPY) = _rewardsDistributon.getAPY(
+                _currentLiquidityPool
+            );
 
-            PoolAPYInfo memory _poolAPYInfo =
-                PoolAPYInfo(
-                    _currentLiquidityPool.getAPY(),
-                    _currentLiquidityPool.getAnnualBorrowRate(),
-                    _distrSupplyAPY,
-                    _distrBorrowAPY
-                );
+            PoolAPYInfo memory _poolAPYInfo = PoolAPYInfo(
+                _currentLiquidityPool.getAPY(),
+                _currentLiquidityPool.getAnnualBorrowRate(),
+                _distrSupplyAPY,
+                _distrBorrowAPY
+            );
 
             _resultArr[i] = LiquidityPoolInfo(
                 _currentKey,
@@ -181,19 +181,19 @@ contract LiquidityPoolRegistry is ILiquidityPoolRegistry, OwnableUpgradeable, Ab
 
         uint256 _totalBorrowed = _currentLiquidityPool.getTotalBorrowedAmount();
 
-        (uint256 _distrSupplyAPY, uint256 _distrBorrowAPY) =
-            rewardsDistribution.getAPY(_currentLiquidityPool);
+        (uint256 _distrSupplyAPY, uint256 _distrBorrowAPY) = rewardsDistribution.getAPY(
+            _currentLiquidityPool
+        );
 
-        IAssetParameters.LiquidityPoolParams memory _liquidityPoolParams =
-            _parameters.getLiquidityPoolParams(_assetKey);
+        IAssetParameters.LiquidityPoolParams memory _liquidityPoolParams = _parameters
+            .getLiquidityPoolParams(_assetKey);
 
-        PoolAPYInfo memory _poolAPYInfo =
-            PoolAPYInfo(
-                _currentLiquidityPool.getAPY(),
-                _currentLiquidityPool.getAnnualBorrowRate(),
-                _distrSupplyAPY,
-                _distrBorrowAPY
-            );
+        PoolAPYInfo memory _poolAPYInfo = PoolAPYInfo(
+            _currentLiquidityPool.getAPY(),
+            _currentLiquidityPool.getAnnualBorrowRate(),
+            _distrSupplyAPY,
+            _distrBorrowAPY
+        );
 
         return
             DetailedLiquidityPoolInfo(
@@ -225,8 +225,11 @@ contract LiquidityPoolRegistry is ILiquidityPoolRegistry, OwnableUpgradeable, Ab
             "LiquidityPoolRegistry: Liquidity pool with such a key already exists."
         );
 
-        address _poolAddr =
-            liquidityPoolFactory.newLiquidityPool(_assetAddr, _assetKey, _tokenSymbol);
+        address _poolAddr = liquidityPoolFactory.newLiquidityPool(
+            _assetAddr,
+            _assetKey,
+            _tokenSymbol
+        );
 
         liquidityPools[_assetKey] = _poolAddr;
 

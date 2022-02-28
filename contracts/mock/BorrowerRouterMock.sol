@@ -88,8 +88,7 @@ contract BorrowerRouterMock is IBorrowerRouter, Initializable {
                 _assetAddr,
                 _vaultTokenAddr,
                 depositOfAssetInToken[_vaultTokenAddr][_assetAddr]
-            )
-                .convertTo18(ERC20(_assetAddr).decimals());
+            ).convertTo18(ERC20(_assetAddr).decimals());
     }
 
     function getUserRewardInAsset(address _assetAddr, address _vaultTokenAddr)
@@ -193,8 +192,7 @@ contract BorrowerRouterMock is IBorrowerRouter, Initializable {
         if (_currentVaultAddr == address(0)) {
             _currentVaultAddr = IVaultRegistry(
                 ISystemParameters(registry.getSystemParametersContract()).getYEarnRegistryParam()
-            )
-                .latestVault(_vaultTokenAddr);
+            ).latestVault(_vaultTokenAddr);
 
             require(
                 _currentVaultAddr != address(0),
@@ -214,10 +212,9 @@ contract BorrowerRouterMock is IBorrowerRouter, Initializable {
         address _vaultTokenAddr,
         uint256 _assetAmount
     ) internal returns (uint256) {
-        ICurveRegistry _crvRegistry =
-            ICurveRegistry(
-                ISystemParameters(registry.getSystemParametersContract()).getCurveRegistryParam()
-            );
+        ICurveRegistry _crvRegistry = ICurveRegistry(
+            ISystemParameters(registry.getSystemParametersContract()).getCurveRegistryParam()
+        );
 
         (address _poolAddr, bool _isMeta) = _getCurvePool(_crvRegistry, _vaultTokenAddr);
 
@@ -244,10 +241,9 @@ contract BorrowerRouterMock is IBorrowerRouter, Initializable {
         uint256[N_UNDERLYING_COINS_IN_META] memory _crvArray;
         _crvArray[_indexInPool] = _amount;
 
-        ICurveZap _depositContract =
-            ICurveZap(
-                ISystemParameters(registry.getSystemParametersContract()).getCurveZapParam()
-            );
+        ICurveZap _depositContract = ICurveZap(
+            ISystemParameters(registry.getSystemParametersContract()).getCurveZapParam()
+        );
 
         _increaseAllowance(_assetAddr, address(_depositContract));
 
@@ -260,8 +256,12 @@ contract BorrowerRouterMock is IBorrowerRouter, Initializable {
         address _poolAddr,
         uint256 _amount
     ) internal returns (uint256) {
-        (uint256 _numberOfCoins, uint256 _indexInArray) =
-            getPoolInfo(_crvRegistry, _poolAddr, _assetAddr, false);
+        (uint256 _numberOfCoins, uint256 _indexInArray) = getPoolInfo(
+            _crvRegistry,
+            _poolAddr,
+            _assetAddr,
+            false
+        );
 
         require(
             _numberOfCoins == BASE_POOL_3 || _numberOfCoins == BASE_POOL_2,
@@ -333,10 +333,9 @@ contract BorrowerRouterMock is IBorrowerRouter, Initializable {
         uint256 _assetWithdrawAmount,
         bool _isMaxWithdraw
     ) internal returns (uint256) {
-        ICurveRegistry _crvRegistry =
-            ICurveRegistry(
-                ISystemParameters(registry.getSystemParametersContract()).getCurveRegistryParam()
-            );
+        ICurveRegistry _crvRegistry = ICurveRegistry(
+            ISystemParameters(registry.getSystemParametersContract()).getCurveRegistryParam()
+        );
 
         (address _poolAddr, bool _isMeta) = _getCurvePool(_crvRegistry, _vaultTokenAddr);
 
@@ -376,10 +375,9 @@ contract BorrowerRouterMock is IBorrowerRouter, Initializable {
             "BorrowerRouter: Unsupported meta pool."
         );
 
-        ICurveZap _depositContract =
-            ICurveZap(
-                ISystemParameters(registry.getSystemParametersContract()).getCurveZapParam()
-            );
+        ICurveZap _depositContract = ICurveZap(
+            ISystemParameters(registry.getSystemParametersContract()).getCurveZapParam()
+        );
 
         (, uint256 _indexInPool) = getPoolInfo(_crvRegistry, _poolAddr, _assetAddr, true);
 
@@ -396,13 +394,12 @@ contract BorrowerRouterMock is IBorrowerRouter, Initializable {
             );
         }
 
-        uint256 _vaultTokenAmount =
-            _yEarnWithdraw(
-                _assetAddr,
-                _vaultTokenAddr,
-                _assetWithdrawAmountInToken,
-                _isMaxWithdraw
-            );
+        uint256 _vaultTokenAmount = _yEarnWithdraw(
+            _assetAddr,
+            _vaultTokenAddr,
+            _assetWithdrawAmountInToken,
+            _isMaxWithdraw
+        );
 
         _increaseAllowance(_vaultTokenAddr, address(_depositContract));
 
@@ -422,8 +419,12 @@ contract BorrowerRouterMock is IBorrowerRouter, Initializable {
         uint256 _assetWithdrawAmount,
         bool _isMaxWithdraw
     ) internal {
-        (uint256 _numberOfCoins, uint256 _indexInPool) =
-            getPoolInfo(_crvRegistry, _poolAddr, _assetAddr, false);
+        (uint256 _numberOfCoins, uint256 _indexInPool) = getPoolInfo(
+            _crvRegistry,
+            _poolAddr,
+            _assetAddr,
+            false
+        );
 
         _increaseAllowance(_vaultTokenAddr, _poolAddr);
 
@@ -438,13 +439,12 @@ contract BorrowerRouterMock is IBorrowerRouter, Initializable {
             );
         }
 
-        uint256 _vaultTokenAmount =
-            _yEarnWithdraw(
-                _assetAddr,
-                _vaultTokenAddr,
-                _withdrawAmountInVaultToken,
-                _isMaxWithdraw
-            );
+        uint256 _vaultTokenAmount = _yEarnWithdraw(
+            _assetAddr,
+            _vaultTokenAddr,
+            _withdrawAmountInVaultToken,
+            _isMaxWithdraw
+        );
 
         IBasePool(_poolAddr).remove_liquidity_one_coin(
             _vaultTokenAmount,
@@ -470,19 +470,17 @@ contract BorrowerRouterMock is IBorrowerRouter, Initializable {
             return _amountToConvert;
         }
 
-        ICurveRegistry _crvRegistry =
-            ICurveRegistry(
-                ISystemParameters(registry.getSystemParametersContract()).getCurveRegistryParam()
-            );
+        ICurveRegistry _crvRegistry = ICurveRegistry(
+            ISystemParameters(registry.getSystemParametersContract()).getCurveRegistryParam()
+        );
 
         (address _poolAddr, bool _isMeta) = _getCurvePool(_crvRegistry, _vaultTokenAddr);
         (, uint256 _indexInPool) = getPoolInfo(_crvRegistry, _poolAddr, _assetAddr, _isMeta);
 
         if (_isMeta) {
-            ICurveZap _depositContract =
-                ICurveZap(
-                    ISystemParameters(registry.getSystemParametersContract()).getCurveZapParam()
-                );
+            ICurveZap _depositContract = ICurveZap(
+                ISystemParameters(registry.getSystemParametersContract()).getCurveZapParam()
+            );
 
             return
                 _depositContract.calc_withdraw_one_coin(
@@ -554,9 +552,8 @@ contract BorrowerRouterMock is IBorrowerRouter, Initializable {
     function getCurrentInterest(address _vaultTokenAddr) public view returns (uint256) {
         IYearnVault _vault = IYearnVault(vaultsDepoitInfo[_vaultTokenAddr].vaultAddr);
 
-        uint256 _totalTokens =
-            (_getSelfBalance(address(_vault)) * _vault.pricePerShare()) /
-                _getOneToken(address(_vault));
+        uint256 _totalTokens = (_getSelfBalance(address(_vault)) * _vault.pricePerShare()) /
+            _getOneToken(address(_vault));
         uint256 _depositedTokens = vaultsDepoitInfo[_vaultTokenAddr].amountInVaultToken;
 
         return _totalTokens <= _depositedTokens ? 0 : _totalTokens - _depositedTokens;

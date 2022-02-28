@@ -186,12 +186,11 @@ abstract contract AbstractCore is IBasicCore, AbstractDependant {
 
         ILiquidityPool _liquidityPool = _assetKey.getAssetLiquidityPool(liquidityPoolRegistry);
 
-        uint256 _newAmount =
-            _getCorrectLimitPart(
-                _assetKey,
-                _liquidityPool.getAmountInUSD(_tokensAmount),
-                assetParameters
-            );
+        uint256 _newAmount = _getCorrectLimitPart(
+            _assetKey,
+            _liquidityPool.getAmountInUSD(_tokensAmount),
+            assetParameters
+        );
 
         if (_isAdding) {
             _newLimit += _newAmount;
@@ -244,13 +243,19 @@ abstract contract AbstractCore is IBasicCore, AbstractDependant {
 
         IAssetParameters _parameters = assetParameters;
 
-        uint256 _currentSupplyAmount =
-            _getCurrentSupplyAmountInUSD(_assetKey, msg.sender, liquidityPoolRegistry);
+        uint256 _currentSupplyAmount = _getCurrentSupplyAmountInUSD(
+            _assetKey,
+            msg.sender,
+            liquidityPoolRegistry
+        );
 
         if (_parameters.isAvailableAsCollateral(_assetKey) && _currentSupplyAmount > 0) {
             (uint256 _availableLiquidity, ) = getAvailableLiquidity(msg.sender);
-            uint256 _currentLimitPart =
-                _getCorrectLimitPart(_assetKey, _currentSupplyAmount, _parameters);
+            uint256 _currentLimitPart = _getCorrectLimitPart(
+                _assetKey,
+                _currentSupplyAmount,
+                _parameters
+            );
 
             require(
                 _availableLiquidity >= _currentLimitPart,
@@ -282,10 +287,9 @@ abstract contract AbstractCore is IBasicCore, AbstractDependant {
         uint256 _currentSupplyAmount,
         IAssetParameters _parameters
     ) internal view returns (uint256) {
-        uint256 _correctColRatio =
-            _isIntegrationCore()
-                ? _parameters.getIntegrationColRatio(_assetKey)
-                : _parameters.getColRatio(_assetKey);
+        uint256 _correctColRatio = _isIntegrationCore()
+            ? _parameters.getIntegrationColRatio(_assetKey)
+            : _parameters.getColRatio(_assetKey);
 
         return _currentSupplyAmount.divWithPrecision(_correctColRatio);
     }
@@ -320,12 +324,13 @@ abstract contract AbstractCore is IBasicCore, AbstractDependant {
     ) internal view returns (uint256) {
         if (_isCollateralEnabled) {
             uint256 _userLiquidityInUSD = _liquidityPool.getAmountInUSD(_maxToWithdraw);
-            uint256 _residualLimit =
-                _currentBorrowLimit - _userLiquidityInUSD.divWithPrecision(_currentColRatio);
+            uint256 _residualLimit = _currentBorrowLimit -
+                _userLiquidityInUSD.divWithPrecision(_currentColRatio);
 
             if (_residualLimit < _totalBorrowBalance) {
-                uint256 missingAmount =
-                    (_totalBorrowBalance - _residualLimit).mulWithPrecision(_currentColRatio);
+                uint256 missingAmount = (_totalBorrowBalance - _residualLimit).mulWithPrecision(
+                    _currentColRatio
+                );
                 _maxToWithdraw = _liquidityPool.getAmountFromUSD(
                     _userLiquidityInUSD - missingAmount
                 );
