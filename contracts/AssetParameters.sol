@@ -48,7 +48,33 @@ contract AssetParameters is IAssetParameters, OwnableUpgradeable, AbstractDepend
 
     mapping(bytes32 => mapping(bytes32 => PureParameters.Param)) private _parameters;
 
-    modifier onlyExist(bytes32 _assetKey) {
+    event InterestRateParamsUpdated(
+        bytes32 _assetKey,
+        uint256 _basePercentage,
+        uint256 _firstSlope,
+        uint256 _secondSlope,
+        uint256 _utilizationBreakingPoint
+    );
+    event MainParamsUpdated(
+        bytes32 _assetKey,
+        uint256 _colRatio,
+        uint256 _reserveFactor,
+        uint256 _liquidationDiscount,
+        uint256 _maxUR
+    );
+    event IntegrationParamsUpdated(
+        bytes32 _assetKey,
+        uint256 _integrationColRatio,
+        uint256 _optimizationReward,
+        bool _allowForIntegration
+    );
+    event DistributionMinimumsUpdated(
+        bytes32 _assetKey,
+        uint256 _supplyDistrPart,
+        uint256 _borrowDistrPart
+    );
+
+    modifier onlyExists(bytes32 _assetKey) {
         require(
             liquidityPoolRegistry.onlyExistingPool(_assetKey),
             "AssetParameters: Asset doesn't exist."
@@ -179,195 +205,214 @@ contract AssetParameters is IAssetParameters, OwnableUpgradeable, AbstractDepend
         emit BoolParamUpdated(_assetKey, ENABLE_COLLATERAL_KEY, _isCollateral);
     }
 
-    function freeze(bytes32 _assetKey) external onlyOwner onlyExist(_assetKey) {
+    function freeze(bytes32 _assetKey) external onlyOwner onlyExists(_assetKey) {
         _parameters[_assetKey][FREEZE_KEY] = PureParameters.makeBoolParam(true);
 
         emit BoolParamUpdated(_assetKey, FREEZE_KEY, true);
     }
 
-    function enableCollateral(bytes32 _assetKey) external onlyOwner onlyExist(_assetKey) {
+    function enableCollateral(bytes32 _assetKey) external onlyOwner onlyExists(_assetKey) {
         _parameters[_assetKey][ENABLE_COLLATERAL_KEY] = PureParameters.makeBoolParam(true);
 
         emit BoolParamUpdated(_assetKey, ENABLE_COLLATERAL_KEY, true);
     }
 
-    function setupInterestRateModel(
+    function setupInterestRateModel(bytes32 _assetKey, InterestRateParams calldata _interestParams)
+        public
+        onlyOwner
+        onlyExists(_assetKey)
+    {
+        _setupInterestRateParams(_assetKey, _interestParams);
+    }
+
+    function setupMainParameters(bytes32 _assetKey, MainPoolParams calldata _mainParams)
+        public
+        onlyOwner
+        onlyExists(_assetKey)
+    {
+        _setupMainParameters(_assetKey, _mainParams);
+    }
+
+    function setupIntegrationParameters(
         bytes32 _assetKey,
-        uint256 _basePercentage,
-        uint256 _firstSlope,
-        uint256 _secondSlope,
-        uint256 _utilizationBreakingPoint
-    ) external onlyOwner onlyExist(_assetKey) {
-        require(
-            _basePercentage <= ONE_PERCENT * 3,
-            "AssetParameters: The new value of the base percentage is invalid."
-        );
-        require(
-            _firstSlope >= ONE_PERCENT * 3 && _firstSlope <= ONE_PERCENT * 20,
-            "AssetParameters: The new value of the first slope is invalid."
-        );
-        require(
-            _secondSlope >= ONE_PERCENT * 50 && _secondSlope <= DECIMAL,
-            "AssetParameters: The new value of the second slope is invalid."
-        );
-        require(
-            _utilizationBreakingPoint >= ONE_PERCENT * 60 &&
-                _utilizationBreakingPoint <= ONE_PERCENT * 90,
-            "AssetParameters: The new value of the utilization breaking point is invalid."
-        );
-
-        _parameters[_assetKey][BASE_PERCENTAGE_KEY] = PureParameters.makeUintParam(
-            _basePercentage
-        );
-        emit UintParamUpdated(_assetKey, BASE_PERCENTAGE_KEY, _basePercentage);
-
-        _parameters[_assetKey][FIRST_SLOPE_KEY] = PureParameters.makeUintParam(_firstSlope);
-        emit UintParamUpdated(_assetKey, FIRST_SLOPE_KEY, _firstSlope);
-
-        _parameters[_assetKey][SECOND_SLOPE_KEY] = PureParameters.makeUintParam(_secondSlope);
-        emit UintParamUpdated(_assetKey, SECOND_SLOPE_KEY, _secondSlope);
-
-        _parameters[_assetKey][UTILIZATION_BREAKING_POINT_KEY] = PureParameters.makeUintParam(
-            _utilizationBreakingPoint
-        );
-        emit UintParamUpdated(
-            _assetKey,
-            UTILIZATION_BREAKING_POINT_KEY,
-            _utilizationBreakingPoint
-        );
-    }
-
-    function setupMaxUtilizationRatio(bytes32 _assetKey, uint256 _newValue)
-        external
-        onlyOwner
-        onlyExist(_assetKey)
-    {
-        require(
-            _newValue >= ONE_PERCENT * 94 && _newValue <= ONE_PERCENT * 97,
-            "AssetParameters: The new value of the max utilization ratio is invalid."
-        );
-
-        _parameters[_assetKey][MAX_UTILIZATION_RATIO_KEY] = PureParameters.makeUintParam(
-            _newValue
-        );
-        emit UintParamUpdated(_assetKey, MAX_UTILIZATION_RATIO_KEY, _newValue);
-    }
-
-    function setupLiquidationDiscount(bytes32 _assetKey, uint256 _newValue)
-        external
-        onlyOwner
-        onlyExist(_assetKey)
-    {
-        require(
-            _newValue <= ONE_PERCENT * 10,
-            "AssetParameters: The new value of the liquidation discount is invalid."
-        );
-
-        _parameters[_assetKey][LIQUIDATION_DISCOUNT_KEY] = PureParameters.makeUintParam(_newValue);
-        emit UintParamUpdated(_assetKey, LIQUIDATION_DISCOUNT_KEY, _newValue);
-    }
-
-    function setupOptimizationReward(bytes32 _assetKey, uint256 _newValue)
-        external
-        onlyOwner
-        onlyExist(_assetKey)
-    {
-        require(
-            _newValue <= ONE_PERCENT * 5,
-            "AssetParameters: The new value of the optimization reward is invalid."
-        );
-
-        _parameters[_assetKey][OPTIMIZATION_REWARD_KEY] = PureParameters.makeUintParam(_newValue);
-        emit UintParamUpdated(_assetKey, OPTIMIZATION_REWARD_KEY, _newValue);
+        PoolIntegrationParams calldata _integrationParams
+    ) public onlyOwner onlyExists(_assetKey) {
+        _setupIntegrationParameters(_assetKey, _integrationParams);
     }
 
     function setupDistributionsMinimums(
         bytes32 _assetKey,
-        uint256 _minSupplyPart,
-        uint256 _minBorrowPart
-    ) external onlyOwner onlyExist(_assetKey) {
+        DistributionMinimums calldata _distrMinimums
+    ) public onlyOwner onlyExists(_assetKey) {
+        _setupDistributionsMinimums(_assetKey, _distrMinimums);
+    }
+
+    function setupAllParameters(bytes32 _assetKey, AllPoolParams calldata _poolParams)
+        external
+        onlyOwner
+        onlyExists(_assetKey)
+    {
+        _setupInterestRateParams(_assetKey, _poolParams.interestRateParams);
+        _setupMainParameters(_assetKey, _poolParams.mainParams);
+        _setupIntegrationParameters(_assetKey, _poolParams.integrationParams);
+        _setupDistributionsMinimums(_assetKey, _poolParams.distrMinimums);
+    }
+
+    function _setupInterestRateParams(
+        bytes32 _assetKey,
+        InterestRateParams calldata _interestParams
+    ) internal {
         require(
-            _minSupplyPart >= ONE_PERCENT * 5 && _minSupplyPart <= ONE_PERCENT * 15,
+            _interestParams.basePercentage <= ONE_PERCENT * 3,
+            "AssetParameters: The new value of the base percentage is invalid."
+        );
+        require(
+            _interestParams.firstSlope >= ONE_PERCENT * 3 &&
+                _interestParams.firstSlope <= ONE_PERCENT * 20,
+            "AssetParameters: The new value of the first slope is invalid."
+        );
+        require(
+            _interestParams.secondSlope >= ONE_PERCENT * 50 &&
+                _interestParams.secondSlope <= DECIMAL,
+            "AssetParameters: The new value of the second slope is invalid."
+        );
+        require(
+            _interestParams.utilizationBreakingPoint >= ONE_PERCENT * 60 &&
+                _interestParams.utilizationBreakingPoint <= ONE_PERCENT * 90,
+            "AssetParameters: The new value of the utilization breaking point is invalid."
+        );
+
+        _parameters[_assetKey][BASE_PERCENTAGE_KEY] = PureParameters.makeUintParam(
+            _interestParams.basePercentage
+        );
+        _parameters[_assetKey][FIRST_SLOPE_KEY] = PureParameters.makeUintParam(
+            _interestParams.firstSlope
+        );
+        _parameters[_assetKey][SECOND_SLOPE_KEY] = PureParameters.makeUintParam(
+            _interestParams.secondSlope
+        );
+        _parameters[_assetKey][UTILIZATION_BREAKING_POINT_KEY] = PureParameters.makeUintParam(
+            _interestParams.utilizationBreakingPoint
+        );
+
+        emit InterestRateParamsUpdated(
+            _assetKey,
+            _interestParams.basePercentage,
+            _interestParams.firstSlope,
+            _interestParams.secondSlope,
+            _interestParams.utilizationBreakingPoint
+        );
+    }
+
+    function _setupMainParameters(bytes32 _assetKey, MainPoolParams calldata _mainParams)
+        internal
+    {
+        require(
+            _mainParams.collateralizationRatio >= ONE_PERCENT * 111 &&
+                _mainParams.collateralizationRatio <= ONE_PERCENT * 200,
+            "AssetParameters: The new value of the collateralization ratio is invalid."
+        );
+        require(
+            _mainParams.reserveFactor >= ONE_PERCENT * 10 &&
+                _mainParams.reserveFactor <= ONE_PERCENT * 20,
+            "AssetParameters: The new value of the reserve factor is invalid."
+        );
+        require(
+            _mainParams.liquidationDiscount <= ONE_PERCENT * 10,
+            "AssetParameters: The new value of the liquidation discount is invalid."
+        );
+        require(
+            _mainParams.maxUtilizationRatio >= ONE_PERCENT * 94 &&
+                _mainParams.maxUtilizationRatio <= ONE_PERCENT * 97,
+            "AssetParameters: The new value of the max utilization ratio is invalid."
+        );
+
+        _parameters[_assetKey][COL_RATIO_KEY] = PureParameters.makeUintParam(
+            _mainParams.collateralizationRatio
+        );
+        _parameters[_assetKey][RESERVE_FACTOR_KEY] = PureParameters.makeUintParam(
+            _mainParams.reserveFactor
+        );
+        _parameters[_assetKey][LIQUIDATION_DISCOUNT_KEY] = PureParameters.makeUintParam(
+            _mainParams.liquidationDiscount
+        );
+        _parameters[_assetKey][MAX_UTILIZATION_RATIO_KEY] = PureParameters.makeUintParam(
+            _mainParams.maxUtilizationRatio
+        );
+
+        emit MainParamsUpdated(
+            _assetKey,
+            _mainParams.collateralizationRatio,
+            _mainParams.reserveFactor,
+            _mainParams.liquidationDiscount,
+            _mainParams.maxUtilizationRatio
+        );
+    }
+
+    function _setupIntegrationParameters(
+        bytes32 _assetKey,
+        PoolIntegrationParams calldata _integrationParams
+    ) internal {
+        require(
+            _integrationParams.integrationColRatio >= ONE_PERCENT * 105 &&
+                _integrationParams.integrationColRatio <= ONE_PERCENT * 200,
+            "AssetParameters: The new value of the integration col ratio is invalid."
+        );
+        require(
+            _integrationParams.integrationColRatio <=
+                _getParam(_assetKey, COL_RATIO_KEY).getUintFromParam(),
+            "AssetParameters: Integration col ratio must be less than or equal to col ratio"
+        );
+        require(
+            _integrationParams.optimizationRewardPercentage <= ONE_PERCENT * 5,
+            "AssetParameters: The new value of the optimization reward is invalid."
+        );
+
+        _parameters[_assetKey][INTEGRATION_COL_RATIO_KEY] = PureParameters.makeUintParam(
+            _integrationParams.integrationColRatio
+        );
+        _parameters[_assetKey][OPTIMIZATION_REWARD_KEY] = PureParameters.makeUintParam(
+            _integrationParams.optimizationRewardPercentage
+        );
+        _parameters[_assetKey][ALLOW_FOR_INTEGRATION_KEY] = PureParameters.makeBoolParam(
+            _integrationParams.allowForIntegration
+        );
+
+        emit IntegrationParamsUpdated(
+            _assetKey,
+            _integrationParams.integrationColRatio,
+            _integrationParams.optimizationRewardPercentage,
+            _integrationParams.allowForIntegration
+        );
+    }
+
+    function _setupDistributionsMinimums(
+        bytes32 _assetKey,
+        DistributionMinimums calldata _distrMinimums
+    ) internal {
+        require(
+            _distrMinimums.minSupplyDistrPart >= ONE_PERCENT * 5 &&
+                _distrMinimums.minSupplyDistrPart <= ONE_PERCENT * 15,
             "AssetParameters: The new value of the minimum supply part is invalid."
         );
         require(
-            _minBorrowPart >= ONE_PERCENT * 5 && _minBorrowPart <= ONE_PERCENT * 15,
+            _distrMinimums.minBorrowDistrPart >= ONE_PERCENT * 5 &&
+                _distrMinimums.minBorrowDistrPart <= ONE_PERCENT * 15,
             "AssetParameters: The new value of the minimum borrow part is invalid."
         );
 
         _parameters[_assetKey][MIN_SUPPLY_DISTRIBUTION_PART_KEY] = PureParameters.makeUintParam(
-            _minSupplyPart
+            _distrMinimums.minSupplyDistrPart
         );
-        emit UintParamUpdated(_assetKey, MIN_SUPPLY_DISTRIBUTION_PART_KEY, _minSupplyPart);
-
         _parameters[_assetKey][MIN_BORROW_DISTRIBUTION_PART_KEY] = PureParameters.makeUintParam(
-            _minBorrowPart
-        );
-        emit UintParamUpdated(_assetKey, MIN_BORROW_DISTRIBUTION_PART_KEY, _minBorrowPart);
-    }
-
-    function setupColRatio(bytes32 _assetKey, uint256 _newValue)
-        external
-        onlyOwner
-        onlyExist(_assetKey)
-    {
-        require(
-            _newValue >= ONE_PERCENT * 111 && _newValue <= ONE_PERCENT * 200,
-            "AssetParameters: The new value of the collateralization ratio is invalid."
+            _distrMinimums.minBorrowDistrPart
         );
 
-        _parameters[_assetKey][COL_RATIO_KEY] = PureParameters.makeUintParam(_newValue);
-
-        emit UintParamUpdated(_assetKey, COL_RATIO_KEY, _newValue);
-    }
-
-    function setupIntegrationColRatio(bytes32 _assetKey, uint256 _newValue)
-        external
-        onlyOwner
-        onlyExist(_assetKey)
-    {
-        require(
-            _newValue >= ONE_PERCENT * 105 && _newValue <= ONE_PERCENT * 200,
-            "AssetParameters: The new value of the integration col ratio is invalid."
+        emit DistributionMinimumsUpdated(
+            _assetKey,
+            _distrMinimums.minSupplyDistrPart,
+            _distrMinimums.minBorrowDistrPart
         );
-
-        require(
-            _newValue <= _getParam(_assetKey, COL_RATIO_KEY).getUintFromParam(),
-            "AssetParameters: Integration col ratio must be less than or equal to col ratio"
-        );
-
-        _parameters[_assetKey][INTEGRATION_COL_RATIO_KEY] = PureParameters.makeUintParam(
-            _newValue
-        );
-
-        emit UintParamUpdated(_assetKey, INTEGRATION_COL_RATIO_KEY, _newValue);
-    }
-
-    function setupReserveFactor(bytes32 _assetKey, uint256 _newValue)
-        external
-        onlyOwner
-        onlyExist(_assetKey)
-    {
-        require(
-            _newValue >= ONE_PERCENT * 10 && _newValue <= ONE_PERCENT * 20,
-            "AssetParameters: The new value of the reserve factor is invalid."
-        );
-
-        _parameters[_assetKey][RESERVE_FACTOR_KEY] = PureParameters.makeUintParam(_newValue);
-
-        emit UintParamUpdated(_assetKey, RESERVE_FACTOR_KEY, _newValue);
-    }
-
-    function setupAllowForIntegration(bytes32 _assetKey, bool _newValue)
-        external
-        onlyOwner
-        onlyExist(_assetKey)
-    {
-        _parameters[_assetKey][ALLOW_FOR_INTEGRATION_KEY] = PureParameters.makeBoolParam(
-            _newValue
-        );
-
-        emit BoolParamUpdated(_assetKey, ALLOW_FOR_INTEGRATION_KEY, _newValue);
     }
 
     function _getParam(bytes32 _assetKey, bytes32 _paramKey)

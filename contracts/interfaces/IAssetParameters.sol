@@ -5,11 +5,36 @@ interface IAssetParameters {
     event UintParamUpdated(bytes32 _assetKey, bytes32 _paramKey, uint256 _newValue);
     event BoolParamUpdated(bytes32 _assetKey, bytes32 _paramKey, bool _newValue);
 
+    struct MainPoolParams {
+        uint256 collateralizationRatio;
+        uint256 reserveFactor;
+        uint256 liquidationDiscount;
+        uint256 maxUtilizationRatio;
+    }
+
+    struct PoolIntegrationParams {
+        uint256 integrationColRatio;
+        uint256 optimizationRewardPercentage;
+        bool allowForIntegration;
+    }
+
     struct InterestRateParams {
         uint256 basePercentage;
         uint256 firstSlope;
         uint256 secondSlope;
         uint256 utilizationBreakingPoint;
+    }
+
+    struct DistributionMinimums {
+        uint256 minSupplyDistrPart;
+        uint256 minBorrowDistrPart;
+    }
+
+    struct AllPoolParams {
+        MainPoolParams mainParams;
+        PoolIntegrationParams integrationParams;
+        InterestRateParams interestRateParams;
+        DistributionMinimums distrMinimums;
     }
 
     struct LiquidityPoolParams {
