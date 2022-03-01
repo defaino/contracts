@@ -3,6 +3,7 @@ pragma solidity 0.8.3;
 
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
+import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 
 import "./interfaces/ILiquidityPoolRegistry.sol";
 import "./interfaces/ILiquidityPool.sol";
@@ -17,6 +18,8 @@ contract LiquidityPoolRegistry is ILiquidityPoolRegistry, OwnableUpgradeable, Ab
     using EnumerableSet for EnumerableSet.Bytes32Set;
     using Math for uint256;
 
+    Registry private registry;
+    UpgradeableBeacon private liquidityPoolsBeacon;
     LiquidityPoolFactory private liquidityPoolFactory;
     IRewardsDistribution private rewardsDistribution;
     IAssetParameters private assetParameters;
@@ -24,20 +27,27 @@ contract LiquidityPoolRegistry is ILiquidityPoolRegistry, OwnableUpgradeable, Ab
 
     EnumerableSet.Bytes32Set private _supportedAssets;
 
-    bytes32 public constant GOVERNANCE_TOKEN_KEY = bytes32("NDG");
+    bytes32 public constant GOVERNANCE_TOKEN_KEY = bytes32("GTK");
 
     mapping(bytes32 => address) public override liquidityPools;
     mapping(address => bool) public override existingLiquidityPools;
 
-    function liquidityPoolRegistryInitialize() external initializer {
+    function liquidityPoolRegistryInitialize(address _liquidityPoolImpl) external initializer {
         __Ownable_init();
+
+        liquidityPoolsBeacon = new UpgradeableBeacon(_liquidityPoolImpl);
     }
 
     function setDependencies(Registry _registry) external override onlyInjectorOrZero {
+        registry = _registry;
         liquidityPoolFactory = LiquidityPoolFactory(_registry.getLiquidityPoolFactoryContract());
         assetParameters = IAssetParameters(_registry.getAssetParametersContract());
         priceManager = IPriceManager(_registry.getPriceManagerContract());
         rewardsDistribution = IRewardsDistribution(_registry.getRewardsDistributionContract());
+    }
+
+    function getLiquidityPoolsBeacon() external view override returns (address) {
+        return address(liquidityPoolsBeacon);
     }
 
     function onlyExistingPool(bytes32 _assetKey) public view override returns (bool) {
@@ -52,7 +62,7 @@ contract LiquidityPoolRegistry is ILiquidityPoolRegistry, OwnableUpgradeable, Ab
         _resultArr = getSupportedAssets(0, _assetsCount);
     }
 
-    function getAllLiquidityPools() external view override returns (address[] memory _resultArr) {
+    function getAllLiquidityPools() public view override returns (address[] memory _resultArr) {
         uint256 _assetsCount = _supportedAssets.length();
 
         _resultArr = new address[](_assetsCount);
@@ -253,6 +263,42 @@ contract LiquidityPoolRegistry is ILiquidityPoolRegistry, OwnableUpgradeable, Ab
                 0,
                 true
             );
+        }
+    }
+
+    function upgradeLiquidityPoolsImpl(address _newLiquidityPoolImpl) external onlyOwner {
+        liquidityPoolsBeacon.upgradeTo(_newLiquidityPoolImpl);
+    }
+
+    function injectDependenciesToExistingLiquidityPools() external onlyOwner {
+        Registry _registry = registry;
+
+        address[] memory _liquidityPools = getAllLiquidityPools();
+
+        for (uint256 i = 0; i < _liquidityPools.length; i++) {
+            AbstractDependant dependant = AbstractDependant(_liquidityPools[i]);
+
+            if (dependant.injector() == address(0)) {
+                dependant.setInjector(address(this));
+            }
+
+            dependant.setDependencies(_registry);
+        }
+    }
+
+    function injectDependencies(uint256 _offset, uint256 _limit) external onlyOwner {
+        Registry _registry = registry;
+
+        bytes32[] memory _assets = getSupportedAssets(_offset, _limit);
+
+        for (uint256 i = 0; i < _assets.length; i++) {
+            AbstractDependant dependant = AbstractDependant(liquidityPools[_assets[i]]);
+
+            if (dependant.injector() == address(0)) {
+                dependant.setInjector(address(this));
+            }
+
+            dependant.setDependencies(_registry);
         }
     }
 }

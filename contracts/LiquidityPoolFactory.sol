@@ -1,45 +1,38 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 pragma solidity 0.8.3;
 
-import "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
 
-import "./interfaces/ILiquidityPoolAdmin.sol";
 import "./interfaces/ILiquidityPool.sol";
+import "./interfaces/ILiquidityPoolRegistry.sol";
 
 import "./Registry.sol";
 import "./abstract/AbstractDependant.sol";
 
 contract LiquidityPoolFactory is AbstractDependant {
     Registry private registry;
-    ILiquidityPoolAdmin private liquidityPoolAdmin;
-    address private liquidityPoolRegistry;
+    ILiquidityPoolRegistry private liquidityPoolRegistry;
 
     function setDependencies(Registry _registry) external override onlyInjectorOrZero {
         registry = _registry;
-        liquidityPoolAdmin = ILiquidityPoolAdmin(_registry.getLiquidityPoolAdminContract());
-        liquidityPoolRegistry = registry.getLiquidityPoolRegistryContract();
-    }
-
-    modifier onlyLiquidityPoolRegistry() {
-        require(
-            liquidityPoolRegistry == msg.sender,
-            "LiquidityPoolFactory: Caller not an AssetParameters."
+        liquidityPoolRegistry = ILiquidityPoolRegistry(
+            registry.getLiquidityPoolRegistryContract()
         );
-        _;
     }
 
     function newLiquidityPool(
         address _assetAddr,
         bytes32 _assetKey,
         string calldata _tokenSymbol
-    ) external onlyLiquidityPoolRegistry returns (address) {
-        ILiquidityPoolAdmin _liquidityPoolAdmin = liquidityPoolAdmin;
+    ) external returns (address) {
+        ILiquidityPoolRegistry _liquidityPoolRegistry = liquidityPoolRegistry;
 
-        TransparentUpgradeableProxy _proxy = new TransparentUpgradeableProxy(
-            _liquidityPoolAdmin.getCurrentLiquidityPoolsImplementation(),
-            _liquidityPoolAdmin.getUpgrader(),
-            ""
+        require(
+            address(_liquidityPoolRegistry) == msg.sender,
+            "LiquidityPoolFactory: Caller not an AssetParameters."
         );
+
+        BeaconProxy _proxy = new BeaconProxy(_liquidityPoolRegistry.getLiquidityPoolsBeacon(), "");
 
         ILiquidityPool(address(_proxy)).liquidityPoolInitialize(
             _assetAddr,
@@ -48,7 +41,7 @@ contract LiquidityPoolFactory is AbstractDependant {
         );
 
         AbstractDependant(address(_proxy)).setDependencies(registry);
-        AbstractDependant(address(_proxy)).setInjector(address(_liquidityPoolAdmin));
+        AbstractDependant(address(_proxy)).setInjector(address(_liquidityPoolRegistry));
 
         return address(_proxy);
     }

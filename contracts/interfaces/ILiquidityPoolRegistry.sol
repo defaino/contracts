@@ -31,6 +31,8 @@ interface ILiquidityPoolRegistry {
         PoolAPYInfo apyInfo;
     }
 
+    function getLiquidityPoolsBeacon() external view returns (address);
+
     function getAllSupportedAssets() external view returns (bytes32[] memory _resultArr);
 
     function getAllLiquidityPools() external view returns (address[] memory _resultArr);
