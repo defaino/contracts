@@ -7,7 +7,7 @@ import "./interfaces/ILiquidityPoolAdmin.sol";
 import "./interfaces/ILiquidityPool.sol";
 
 import "./Registry.sol";
-import "./common/AbstractDependant.sol";
+import "./abstract/AbstractDependant.sol";
 
 contract LiquidityPoolFactory is AbstractDependant {
     Registry private registry;

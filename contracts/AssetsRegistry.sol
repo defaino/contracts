@@ -16,8 +16,8 @@ import "./libraries/AssetsHelperLibrary.sol";
 import "./libraries/DecimalsConverter.sol";
 
 import "./Registry.sol";
+import "./abstract/AbstractDependant.sol";
 import "./common/Globals.sol";
-import "./common/AbstractDependant.sol";
 
 contract AssetsRegistry is IAssetsRegistry, AbstractDependant {
     using EnumerableSet for EnumerableSet.Bytes32Set;

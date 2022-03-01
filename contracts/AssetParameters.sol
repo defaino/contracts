@@ -12,8 +12,8 @@ import "./interfaces/IPriceManager.sol";
 import "./libraries/PureParameters.sol";
 import "./libraries/DecimalsConverter.sol";
 
+import "./abstract/AbstractDependant.sol";
 import "./common/Globals.sol";
-import "./common/AbstractDependant.sol";
 
 contract AssetParameters is IAssetParameters, OwnableUpgradeable, AbstractDependant {
     using PureParameters for PureParameters.Param;

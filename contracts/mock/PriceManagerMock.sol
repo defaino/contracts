@@ -11,8 +11,8 @@ import "../interfaces/IPriceManager.sol";
 import "../libraries/UniswapOracleLibrary.sol";
 
 import "../Registry.sol";
+import "../abstract/AbstractDependant.sol";
 import "../common/Globals.sol";
-import "../common/AbstractDependant.sol";
 
 contract PriceManagerMock is IPriceManager, OwnableUpgradeable, AbstractDependant {
     Registry private registry;

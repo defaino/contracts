@@ -18,8 +18,8 @@ import "./libraries/MathHelper.sol";
 
 import "./Registry.sol";
 import "./GovernanceToken.sol";
+import "./abstract/AbstractDependant.sol";
 import "./common/Globals.sol";
-import "./common/AbstractDependant.sol";
 
 contract DefiCore is IDefiCore, AbstractDependant {
     using AssetsHelperLibrary for bytes32;

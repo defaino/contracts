@@ -14,8 +14,8 @@ import "./interfaces/ILiquidityPool.sol";
 import "./libraries/MathHelper.sol";
 
 import "./Registry.sol";
+import "./abstract/AbstractDependant.sol";
 import "./common/Globals.sol";
-import "./common/AbstractDependant.sol";
 
 contract RewardsDistribution is IRewardsDistribution, OwnableUpgradeable, AbstractDependant {
     using MathHelper for uint256;

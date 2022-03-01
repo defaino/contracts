@@ -21,8 +21,8 @@ import "./libraries/MathHelper.sol";
 
 import "./Registry.sol";
 import "./CompoundRateKeeper.sol";
+import "./abstract/AbstractDependant.sol";
 import "./common/Globals.sol";
-import "./common/AbstractDependant.sol";
 
 contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
     using DecimalsConverter for uint256;

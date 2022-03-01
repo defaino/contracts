@@ -11,8 +11,8 @@ import "./interfaces/IPriceManager.sol";
 import "./libraries/UniswapOracleLibrary.sol";
 
 import "./Registry.sol";
+import "./abstract/AbstractDependant.sol";
 import "./common/Globals.sol";
-import "./common/AbstractDependant.sol";
 
 contract PriceManager is IPriceManager, OwnableUpgradeable, AbstractDependant {
     address private liquidityPoolRegistry;

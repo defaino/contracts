@@ -9,8 +9,8 @@ import "./interfaces/ILiquidityPoolAdmin.sol";
 import "./interfaces/ILiquidityPoolRegistry.sol";
 
 import "./Registry.sol";
+import "./abstract/AbstractDependant.sol";
 import "./common/Upgrader.sol";
-import "./common/AbstractDependant.sol";
 
 contract LiquidityPoolAdmin is ILiquidityPoolAdmin, OwnableUpgradeable, AbstractDependant {
     Registry private registry;

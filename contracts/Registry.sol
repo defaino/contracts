@@ -4,8 +4,8 @@ pragma solidity 0.8.3;
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
+import "./abstract/AbstractDependant.sol";
 import "./common/Upgrader.sol";
-import "./common/AbstractDependant.sol";
 
 contract Registry is AccessControl {
     Upgrader private immutable upgrader;
