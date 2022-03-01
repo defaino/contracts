@@ -59,8 +59,6 @@ interface IAssetParameters {
      */
     function isAvailableAsCollateral(bytes32 _assetKey) external view returns (bool);
 
-    function isAllowForIntegration(bytes32 _assetKey) external view returns (bool);
-
     /**
      * @notice Returns parameters for calculating interest rates on a loan
      * @param _assetKey Asset key obtained by converting the asset character to bytes
@@ -85,8 +83,6 @@ interface IAssetParameters {
      */
     function getLiquidationDiscount(bytes32 _assetKey) external view returns (uint256);
 
-    function getOptimiztionReward(bytes32 _assetKey) external view returns (uint256);
-
     /**
      * @notice Returns the minimum percentages of the parties for the distribution of governance tokens
      * @param _assetKey Asset key obtained by converting the asset character to bytes
@@ -104,13 +100,6 @@ interface IAssetParameters {
      * @return current collateralization ratio value
      */
     function getColRatio(bytes32 _assetKey) external view returns (uint256);
-
-    /**
-     * @notice Returns the integration collateralization ratio for the required pool
-     * @param _assetKey Asset key obtained by converting the asset character to bytes
-     * @return current integration collateralization ratio value
-     */
-    function getIntegrationColRatio(bytes32 _assetKey) external view returns (uint256);
 
     /**
      * @notice Returns the collateralization ratio for the required pool

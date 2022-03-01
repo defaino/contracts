@@ -8,9 +8,7 @@ import "./interfaces/IAssetsRegistry.sol";
 import "./interfaces/IAssetParameters.sol";
 import "./interfaces/IAssetParameters.sol";
 import "./interfaces/ILiquidityPool.sol";
-import "./interfaces/IBasicCore.sol";
-import "./interfaces/IBorrowerRouter.sol";
-import "./interfaces/IBorrowerRouterRegistry.sol";
+import "./interfaces/IDefiCore.sol";
 import "./interfaces/IRewardsDistribution.sol";
 import "./interfaces/ILiquidityPoolRegistry.sol";
 
@@ -33,22 +31,12 @@ contract AssetsRegistry is IAssetsRegistry, AbstractDependant {
     mapping(address => EnumerableSet.Bytes32Set) internal _borrowIntegrationAssets;
 
     IDefiCore private defiCore;
-    IIntegrationCore private integrationCore;
     IAssetParameters private assetParameters;
     IRewardsDistribution private rewardsDistribution;
-    IBorrowerRouterRegistry private borrowerRouterRegistry;
     ILiquidityPoolRegistry private liquidityPoolRegistry;
 
     modifier onlyDefiCore() {
         require(address(defiCore) == msg.sender, "AssetsRegistry: Caller not a DefiCore.");
-        _;
-    }
-
-    modifier onlyIntegrationCore() {
-        require(
-            address(integrationCore) == msg.sender,
-            "AssetsRegistry: Caller not an IntegrationCore."
-        );
         _;
     }
 
@@ -62,12 +50,8 @@ contract AssetsRegistry is IAssetsRegistry, AbstractDependant {
 
     function setDependencies(Registry _registry) external override onlyInjectorOrZero {
         defiCore = IDefiCore(_registry.getDefiCoreContract());
-        integrationCore = IIntegrationCore(_registry.getIntegrationCoreContract());
         assetParameters = IAssetParameters(_registry.getAssetParametersContract());
         rewardsDistribution = IRewardsDistribution(_registry.getRewardsDistributionContract());
-        borrowerRouterRegistry = IBorrowerRouterRegistry(
-            _registry.getBorrowerRouterRegistryContract()
-        );
         liquidityPoolRegistry = ILiquidityPoolRegistry(
             _registry.getLiquidityPoolRegistryContract()
         );
@@ -82,15 +66,6 @@ contract AssetsRegistry is IAssetsRegistry, AbstractDependant {
         _userSupplyAssets = _getUserAssets(_supplyAssets[_userAddr]);
     }
 
-    function getUserIntegrationSupplyAssets(address _userAddr)
-        external
-        view
-        override
-        returns (bytes32[] memory _userIntegrationSupplyAssets)
-    {
-        _userIntegrationSupplyAssets = _getUserAssets(_supplyIntegrationAssets[_userAddr]);
-    }
-
     function getUserBorrowAssets(address _userAddr)
         external
         view
@@ -98,15 +73,6 @@ contract AssetsRegistry is IAssetsRegistry, AbstractDependant {
         returns (bytes32[] memory _userBorrowAssets)
     {
         _userBorrowAssets = _getUserAssets(_borrowAssets[_userAddr]);
-    }
-
-    function getUserIntegrationBorrowAssets(address _userAddr)
-        external
-        view
-        override
-        returns (bytes32[] memory _userIntegrationBorrowAssets)
-    {
-        _userIntegrationBorrowAssets = _getUserAssets(_borrowIntegrationAssets[_userAddr]);
     }
 
     function getSupplyAssets(address _userAddr)
@@ -119,34 +85,6 @@ contract AssetsRegistry is IAssetsRegistry, AbstractDependant {
             _getAssets(liquidityPoolRegistry.getSupportedAssets(0, 100), _supplyAssets[_userAddr]);
     }
 
-    function getIntegrationSupplyAssets(address _userAddr)
-        external
-        view
-        override
-        returns (bytes32[] memory _availableAssets, bytes32[] memory _userSupplyAssets)
-    {
-        IAssetParameters _parameters = assetParameters;
-
-        bytes32[] memory _allAssets = _getUserAssets(_supplyAssets[_userAddr]);
-        bytes32[] memory _allowForIntegrationAssets = new bytes32[](_allAssets.length);
-
-        uint256 _finalArrLength;
-
-        for (uint256 i = 0; i < _allAssets.length; i++) {
-            if (_parameters.isAvailableAsCollateral(_allAssets[i])) {
-                _allowForIntegrationAssets[_finalArrLength++] = _allAssets[i];
-            }
-        }
-
-        bytes32[] memory _finalArr = new bytes32[](_finalArrLength);
-
-        for (uint256 i = 0; i < _finalArrLength; i++) {
-            _finalArr[i] = _allowForIntegrationAssets[i];
-        }
-
-        return _getAssets(_finalArr, _supplyIntegrationAssets[_userAddr]);
-    }
-
     function getBorrowAssets(address _userAddr)
         external
         view
@@ -157,38 +95,13 @@ contract AssetsRegistry is IAssetsRegistry, AbstractDependant {
             _getAssets(liquidityPoolRegistry.getSupportedAssets(0, 100), _borrowAssets[_userAddr]);
     }
 
-    function getIntegrationBorrowAssets(address _userAddr)
-        external
-        view
-        override
-        returns (bytes32[] memory _availableAssets, bytes32[] memory _userBorrowAssets)
-    {
-        (bytes32[] memory _allAssetsArr, uint256 _assetsCount) = liquidityPoolRegistry
-            .getAllowForIntegrationAssets();
-        bytes32[] memory _assetsArr = new bytes32[](_assetsCount);
-
-        for (uint256 i = 0; i < _assetsCount; i++) {
-            _assetsArr[i] = _allAssetsArr[i];
-        }
-
-        return _getAssets(_assetsArr, _borrowIntegrationAssets[_userAddr]);
-    }
-
     function getSupplyAssetsInfo(bytes32[] calldata _assetsKeys, address _userAddr)
         external
         view
         override
         returns (SupplyAssetInfo[] memory)
     {
-        return _getSupplyAssetsInfo(_assetsKeys, _userAddr, IBasicCore(address(defiCore)));
-    }
-
-    function getIntegrationSupplyAssetsInfo(bytes32[] calldata _assetsKeys, address _userAddr)
-        external
-        view
-        returns (SupplyAssetInfo[] memory)
-    {
-        return _getSupplyAssetsInfo(_assetsKeys, _userAddr, IBasicCore(address(integrationCore)));
+        return _getSupplyAssetsInfo(_assetsKeys, _userAddr, IDefiCore(address(defiCore)));
     }
 
     function getBorrowAssetsInfo(bytes32[] calldata _assetsKeys, address _userAddr)
@@ -208,35 +121,7 @@ contract AssetsRegistry is IAssetsRegistry, AbstractDependant {
                 _userAddr,
                 _poolRegistry,
                 _rewardsDistribution,
-                IBasicCore(address(defiCore))
-            );
-        }
-    }
-
-    function getIntegrationBorrowAssetsInfo(bytes32[] calldata _assetsKeys, address _userAddr)
-        external
-        view
-        returns (IntegrationBorrowAssetInfo[] memory _resultArr)
-    {
-        ILiquidityPoolRegistry _poolRegistry = liquidityPoolRegistry;
-        IRewardsDistribution _rewardsDistribution = rewardsDistribution;
-        IBorrowerRouterRegistry _routerRegistry = borrowerRouterRegistry;
-
-        _resultArr = new IntegrationBorrowAssetInfo[](_assetsKeys.length);
-
-        for (uint256 i = 0; i < _assetsKeys.length; i++) {
-            _resultArr[i].borrowAssetInfo = _getBorrowAssetInfo(
-                _assetsKeys[i],
-                _userAddr,
-                _poolRegistry,
-                _rewardsDistribution,
-                IBasicCore(address(integrationCore))
-            );
-            _resultArr[i].vaultsInfo = _getUserVaultsInfo(
-                _assetsKeys[i],
-                _userAddr,
-                _resultArr[i].borrowAssetInfo.assetAddr,
-                IBorrowerRouter(_routerRegistry.borrowerRouters(_userAddr))
+                IDefiCore(address(defiCore))
             );
         }
     }
@@ -246,7 +131,7 @@ contract AssetsRegistry is IAssetsRegistry, AbstractDependant {
         address _userAddr,
         bool _isSupply
     ) external view override returns (AssetInfo[] memory _resultArr) {
-        IBasicCore _defiCore = defiCore;
+        IDefiCore _defiCore = defiCore;
 
         _resultArr = new AssetInfo[](_assetsKeys.length);
 
@@ -272,37 +157,6 @@ contract AssetsRegistry is IAssetsRegistry, AbstractDependant {
         }
     }
 
-    function getIntegrationAssetsInfo(
-        bytes32[] calldata _assetsKeys,
-        address _userAddr,
-        bool _isSupply
-    ) external view returns (AssetInfo[] memory _resultArr) {
-        IBasicCore _integrationCore = integrationCore;
-
-        _resultArr = new AssetInfo[](_assetsKeys.length);
-
-        for (uint256 i = 0; i < _assetsKeys.length; i++) {
-            bytes32 _currentKey = _assetsKeys[i];
-
-            ILiquidityPool _currentLiquidityPool = _currentKey.getAssetLiquidityPool(
-                liquidityPoolRegistry
-            );
-
-            uint256 _userBalance = _currentLiquidityPool.convertNTokensToAsset(
-                ERC20(address(_currentLiquidityPool)).balanceOf(_userAddr)
-            );
-
-            _resultArr[i] = _getAssetInfo(
-                _userAddr,
-                _currentKey,
-                _userBalance,
-                _currentLiquidityPool,
-                _integrationCore,
-                _isSupply
-            );
-        }
-    }
-
     function updateAssetsAfterTransfer(
         bytes32 _assetKey,
         address _from,
@@ -320,25 +174,14 @@ contract AssetsRegistry is IAssetsRegistry, AbstractDependant {
         address _userAddr,
         bytes32 _assetKey,
         bool _isSuply
-    ) external override {
-        address _integrationCoreAddr = address(integrationCore);
-        address _defiCoreAddr = address(defiCore);
-        bool _isDefiCore = msg.sender == _defiCoreAddr;
-
-        require(
-            _isDefiCore || msg.sender == _integrationCoreAddr,
-            "AssetsRegistry: Caller not a system Core contract."
-        );
-
-        IBasicCore _core = _isDefiCore
-            ? IBasicCore(_defiCoreAddr)
-            : IBasicCore(_integrationCoreAddr);
+    ) external override onlyDefiCore {
+        IDefiCore _core = IDefiCore(defiCore);
 
         (bool _isRemove, EnumerableSet.Bytes32Set storage _userAssets) = _getUpdateInfo(
             _userAddr,
             _assetKey,
             _isSuply,
-            _isDefiCore,
+            true,
             _core
         );
 
@@ -352,7 +195,7 @@ contract AssetsRegistry is IAssetsRegistry, AbstractDependant {
     function _getSupplyAssetsInfo(
         bytes32[] calldata _assetsKeys,
         address _userAddr,
-        IBasicCore _core
+        IDefiCore _core
     ) internal view returns (SupplyAssetInfo[] memory _resultArr) {
         IRewardsDistribution _rewardsDistribution = rewardsDistribution;
         IAssetParameters _parameters = assetParameters;
@@ -380,7 +223,7 @@ contract AssetsRegistry is IAssetsRegistry, AbstractDependant {
         ILiquidityPool _liquidityPool,
         IRewardsDistribution _rewardsDistribution,
         IAssetParameters _parameters,
-        IBasicCore _core
+        IDefiCore _core
     ) internal view returns (SupplyAssetInfo memory) {
         uint256 _userLiquidityAmount = _core.getUserLiquidityAmount(_userAddr, _assetKey);
         (uint256 _userDistributionAPY, ) = _rewardsDistribution.getAPY(_liquidityPool);
@@ -406,7 +249,7 @@ contract AssetsRegistry is IAssetsRegistry, AbstractDependant {
         address _userAddr,
         ILiquidityPoolRegistry _poolsRegistry,
         IRewardsDistribution _rewardsDistribution,
-        IBasicCore _core
+        IDefiCore _core
     ) internal view returns (BorrowAssetInfo memory) {
         ILiquidityPool _currentLiquidityPool = _assetKey.getAssetLiquidityPool(_poolsRegistry);
 
@@ -433,7 +276,7 @@ contract AssetsRegistry is IAssetsRegistry, AbstractDependant {
         bytes32 _assetKey,
         uint256 _userBalance,
         ILiquidityPool _liquidityPool,
-        IBasicCore _core,
+        IDefiCore _core,
         bool _isSupply
     ) internal view returns (AssetInfo memory) {
         return
@@ -450,25 +293,6 @@ contract AssetsRegistry is IAssetsRegistry, AbstractDependant {
                 assetParameters.isAvailableAsCollateral(_assetKey),
                 _core.isCollateralAssetEnabled(_userAddr, _assetKey)
             );
-    }
-
-    function _getUserVaultsInfo(
-        bytes32 _assetKey,
-        address _userAddr,
-        address _assetAddr,
-        IBorrowerRouter _router
-    ) internal view returns (VaultInfo[] memory _resultArr) {
-        address[] memory _vaultTokens = integrationCore.getUserVaultTokens(_userAddr, _assetKey);
-
-        _resultArr = new VaultInfo[](_vaultTokens.length);
-
-        for (uint256 i = 0; i < _vaultTokens.length; i++) {
-            _resultArr[i] = VaultInfo(
-                _vaultTokens[i],
-                _router.getUserDepositedAmountInAsset(_assetAddr, _vaultTokens[i]),
-                _router.getUserRewardInAsset(_assetAddr, _vaultTokens[i])
-            );
-        }
     }
 
     function _getAssets(
@@ -500,14 +324,12 @@ contract AssetsRegistry is IAssetsRegistry, AbstractDependant {
         bytes32 _assetKey,
         bool _isSupply,
         bool _isDefiCore,
-        IBasicCore _core
+        IDefiCore _core
     ) internal view returns (bool, EnumerableSet.Bytes32Set storage) {
         bool _isRemove;
         EnumerableSet.Bytes32Set storage _userAssets;
 
-        _isRemove = _isSupply
-            ? _core.getUserLiquidityAmount(_userAddr, _assetKey) == 0
-            : !_core.isBorrowExists(_userAddr, _assetKey);
+        _isRemove = _core.getUserLiquidityAmount(_userAddr, _assetKey) == 0;
 
         if (_isDefiCore) {
             if (_isSupply) {

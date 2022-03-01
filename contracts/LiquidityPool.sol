@@ -6,8 +6,7 @@ import "@openzeppelin/contracts/utils/math/Math.sol";
 
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 
-import "./interfaces/IBasicCore.sol";
-import "./interfaces/IBorrowerRouter.sol";
+import "./interfaces/IDefiCore.sol";
 import "./interfaces/ISystemParameters.sol";
 import "./interfaces/IAssetParameters.sol";
 import "./interfaces/IAssetsRegistry.sol";
@@ -34,7 +33,6 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
     IAssetsRegistry private assetsRegistry;
     IInterestRateLibrary private interestRateLibrary;
     IRewardsDistribution private rewardsDistribution;
-    IBasicCore private integrationCore;
     ILiquidityPoolRegistry private liquidityPoolRegistry;
 
     CompoundRateKeeper public compoundRateKeeper;
@@ -48,7 +46,6 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
     mapping(address => mapping(address => uint256)) public borrowAllowances;
 
     mapping(address => BorrowInfo) public override borrowInfos;
-    mapping(address => BorrowInfo) public override integrationBorrowInfos;
 
     uint256 public override aggregatedBorrowedAmount;
     uint256 public aggregatedNormalizedBorrowedAmount;
@@ -59,22 +56,6 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
 
     modifier onlyDefiCore() {
         require(address(defiCore) == msg.sender, "LiquidityPool: Caller not a DefiCore.");
-        _;
-    }
-
-    modifier onlyIntegrationCore() {
-        require(
-            address(integrationCore) == msg.sender,
-            "LiquidityPool: Caller not an IntegrationCore."
-        );
-        _;
-    }
-
-    modifier onlyEligibleContracts() {
-        require(
-            address(defiCore) == msg.sender || address(integrationCore) == msg.sender,
-            "LiquidityPool: Caller not an eligible contract."
-        );
         _;
     }
 
@@ -106,7 +87,6 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
         assetsRegistry = IAssetsRegistry(_registry.getAssetsRegistryContract());
         interestRateLibrary = IInterestRateLibrary(_registry.getInterestRateLibraryContract());
         rewardsDistribution = IRewardsDistribution(_registry.getRewardsDistributionContract());
-        integrationCore = IBasicCore(_registry.getIntegrationCoreContract());
         liquidityPoolRegistry = ILiquidityPoolRegistry(
             _registry.getLiquidityPoolRegistryContract()
         );
@@ -127,17 +107,6 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
         return
             _convertFromUnderlyingAsset(IERC20(assetAddr).balanceOf(address(this))) -
             totalReserves;
-    }
-
-    /// @dev Return total borrow amount without interest
-    function getUserTotalBorrowedAmount(address _userAddr)
-        external
-        view
-        override
-        returns (uint256)
-    {
-        return
-            borrowInfos[_userAddr].borrowAmount + integrationBorrowInfos[_userAddr].borrowAmount;
     }
 
     function getBorrowPercentage() public view override returns (uint256) {
@@ -374,19 +343,15 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
 
         borrowAllowances[_userAddr][_delegatee] = borrowAllowance - _amountToBorrow;
 
-        _borrowFor(_delegatee, _amountToBorrow, borrowInfos[_userAddr]);
+        _borrowFor(_userAddr, _delegatee, _amountToBorrow);
     }
 
     function borrowFor(
         address _userAddr,
         address _recipient,
         uint256 _amountToBorrow
-    ) external override onlyEligibleContracts {
-        BorrowInfo storage borrowInfo = msg.sender == address(integrationCore)
-            ? integrationBorrowInfos[_userAddr]
-            : borrowInfos[_userAddr];
-
-        _borrowFor(_recipient, _amountToBorrow, borrowInfo);
+    ) external override onlyDefiCore {
+        _borrowFor(_userAddr, _recipient, _amountToBorrow);
     }
 
     function repayBorrowFor(
@@ -394,83 +359,57 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
         address _closureAddr,
         uint256 _repayAmount,
         bool _isMaxRepay
-    ) external override onlyEligibleContracts returns (uint256) {
-        BorrowInfo storage borrowInfo = msg.sender == address(integrationCore)
-            ? integrationBorrowInfos[_userAddr]
-            : borrowInfos[_userAddr];
-
-        return
-            _repayBorrowFor(
-                _userAddr,
-                _closureAddr,
-                address(0),
-                address(0),
-                _repayAmount,
-                borrowInfo,
-                _isMaxRepay,
-                false
-            );
-    }
-
-    function repayBorrowIntegration(
-        address _userAddr,
-        address _vaultTokenAddr,
-        address _borrowerRouterAddr,
-        uint256 _repayAmount,
-        bool _isMaxRepay
-    ) external override onlyIntegrationCore returns (uint256) {
-        return
-            _repayBorrowFor(
-                _userAddr,
-                _userAddr,
-                _vaultTokenAddr,
-                _borrowerRouterAddr,
-                _repayAmount,
-                integrationBorrowInfos[_userAddr],
-                _isMaxRepay,
-                true
-            );
-    }
-
-    function optimization(
-        address _userAddr,
-        address _optimizatorAddr,
-        address _vaultTokenAddr,
-        address _borrowerRouterAddr,
-        uint256 _optimizationAmount
-    ) external override onlyIntegrationCore returns (uint256) {
-        BorrowInfo storage _borrowInfo = integrationBorrowInfos[_userAddr];
+    ) external override onlyDefiCore returns (uint256) {
         RepayBorrowVars memory _repayBorrowVars = _getRepayBorrowVars(
             _userAddr,
-            _optimizationAmount,
-            _borrowInfo,
-            false,
-            true
+            _repayAmount,
+            _isMaxRepay
         );
+
+        if (_repayBorrowVars.currentAbsoluteAmount == 0) {
+            return 0;
+        }
 
         IERC20 _assetToken = IERC20(assetAddr);
-        IBorrowerRouter _router = IBorrowerRouter(_borrowerRouterAddr);
+        uint256 _repayAmountInUnderlying = _convertToUnderlyingAsset(_repayBorrowVars.repayAmount);
 
-        uint256 _receivedAmountInUnderlying = _router.withdraw(
-            address(_assetToken),
-            _vaultTokenAddr,
-            _convertToUnderlyingAsset(_repayBorrowVars.repayAmount),
+        BorrowInfo storage borrowInfo = borrowInfos[_userAddr];
+
+        uint256 _currentInterest = _repayBorrowVars.currentAbsoluteAmount -
+            borrowInfo.borrowAmount;
+
+        if (_repayBorrowVars.repayAmount > _currentInterest) {
+            borrowInfo.borrowAmount =
+                _repayBorrowVars.currentAbsoluteAmount -
+                _repayBorrowVars.repayAmount;
+            aggregatedBorrowedAmount -= _repayBorrowVars.repayAmount - _currentInterest;
+        }
+
+        aggregatedNormalizedBorrowedAmount = MathHelper.getNormalizedAmount(
+            aggregatedBorrowedAmount,
+            aggregatedNormalizedBorrowedAmount,
+            _repayBorrowVars.repayAmount,
+            _repayBorrowVars.currentRate,
             false
         );
-        uint256 _optimizatorReward = _receivedAmountInUnderlying.mulWithPrecision(
-            assetParameters.getOptimiztionReward(assetKey)
+
+        borrowInfo.normalizedAmount = MathHelper.getNormalizedAmount(
+            borrowInfo.borrowAmount,
+            _repayBorrowVars.normalizedAmount,
+            _repayBorrowVars.repayAmount,
+            _repayBorrowVars.currentRate,
+            false
         );
-        uint256 _receivedAmount = _convertFromUnderlyingAsset(_receivedAmountInUnderlying);
 
-        _repayBorrowVars.repayAmount =
-            _receivedAmount -
-            _convertFromUnderlyingAsset(_optimizatorReward);
+        uint256 _reserveFunds = _currentInterest.mulWithPrecision(
+            assetParameters.getReserveFactor(assetKey)
+        );
 
-        _closeBorrow(_repayBorrowVars, _borrowInfo);
+        totalReserves += _reserveFunds;
 
-        _assetToken.transfer(_optimizatorAddr, _optimizatorReward);
+        _assetToken.transferFrom(_closureAddr, address(this), _repayAmountInUnderlying);
 
-        return _receivedAmount;
+        return _repayBorrowVars.repayAmount;
     }
 
     function liquidate(
@@ -561,11 +500,35 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
         return _amountToConvert.convertTo18(getUnderlyingDecimals());
     }
 
-    function _updateUserBorrowInfo(
-        BorrowInfo storage borrowInfo,
-        uint256 _amountToBorrow,
-        uint256 _currentRate
+    function _borrowFor(
+        address _userAddr,
+        address _recipient,
+        uint256 _amountToBorrow
     ) internal {
+        require(
+            getAggregatedLiquidityAmount() >= _amountToBorrow,
+            "LiquidityPool: Not enough available to borrow amount."
+        );
+
+        uint256 _currentRate = updateRateWithInterval();
+
+        require(
+            _getBorrowPercentage(_amountToBorrow) <=
+                assetParameters.getMaxUtilizationRatio(assetKey),
+            "LiquidityPool: Utilization ratio after borrow cannot be greater than the maximum."
+        );
+
+        aggregatedBorrowedAmount += _amountToBorrow;
+        aggregatedNormalizedBorrowedAmount = MathHelper.getNormalizedAmount(
+            0,
+            aggregatedNormalizedBorrowedAmount,
+            _amountToBorrow,
+            _currentRate,
+            true
+        );
+
+        BorrowInfo storage borrowInfo = borrowInfos[_userAddr];
+
         borrowInfo.borrowAmount += _amountToBorrow;
         borrowInfo.normalizedAmount = MathHelper.getNormalizedAmount(
             0,
@@ -574,15 +537,6 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
             _currentRate,
             true
         );
-    }
-
-    function _borrowFor(
-        address _recipient,
-        uint256 _amountToBorrow,
-        BorrowInfo storage borrowInfo
-    ) internal {
-        uint256 _currentRate = _borrowInternal(_amountToBorrow);
-        _updateUserBorrowInfo(borrowInfo, _amountToBorrow, _currentRate);
 
         IERC20(assetAddr).transfer(_recipient, _convertToUnderlyingAsset(_amountToBorrow));
     }
@@ -611,127 +565,19 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
         );
     }
 
-    function _repayBorrowFor(
-        address _userAddr,
-        address _closureAddr,
-        address _vaultTokenAddr,
-        address _borrowerRouterAddr,
-        uint256 _repayAmount,
-        BorrowInfo storage _borrowInfo,
-        bool _isMaxRepay,
-        bool _isIntegration
-    ) internal returns (uint256) {
-        RepayBorrowVars memory _repayBorrowVars = _getRepayBorrowVars(
-            _userAddr,
-            _repayAmount,
-            _borrowInfo,
-            _isMaxRepay,
-            _isIntegration
-        );
-
-        if (_isIntegration && _repayBorrowVars.currentAbsoluteAmount == 0) {
-            return
-                _convertFromUnderlyingAsset(
-                    IBorrowerRouter(_borrowerRouterAddr).withdraw(
-                        assetAddr,
-                        _vaultTokenAddr,
-                        0,
-                        true
-                    )
-                );
-        } else if (_repayBorrowVars.currentAbsoluteAmount == 0) {
-            return 0;
-        }
-
-        IERC20 _assetToken = IERC20(assetAddr);
-        uint256 _repayAmountInUnderlying = _convertToUnderlyingAsset(_repayBorrowVars.repayAmount);
-
-        if (_isIntegration) {
-            IBorrowerRouter _router = IBorrowerRouter(_borrowerRouterAddr);
-
-            uint256 _missingAmount = _repayAmountInUnderlying -
-                _router.withdraw(
-                    address(_assetToken),
-                    _vaultTokenAddr,
-                    _repayAmountInUnderlying,
-                    _isMaxRepay
-                );
-
-            _repayAmountInUnderlying = _missingAmount;
-
-            if (_missingAmount > 0 && _isMaxRepay) {
-                _repayAmountInUnderlying = Math.min(
-                    _missingAmount,
-                    _assetToken.balanceOf(_repayBorrowVars.userAddr)
-                );
-                _repayBorrowVars.repayAmount -= _convertFromUnderlyingAsset(
-                    _missingAmount - _repayAmountInUnderlying
-                );
-            }
-        }
-
-        _closeBorrow(_repayBorrowVars, _borrowInfo);
-
-        if (_repayAmountInUnderlying > 0) {
-            _assetToken.transferFrom(_closureAddr, address(this), _repayAmountInUnderlying);
-        }
-
-        return _repayBorrowVars.repayAmount;
-    }
-
-    function _closeBorrow(RepayBorrowVars memory _repayBorrowVars, BorrowInfo storage borrowInfo)
-        internal
-    {
-        uint256 _currentInterest = _repayBorrowVars.currentAbsoluteAmount -
-            borrowInfo.borrowAmount;
-
-        if (_repayBorrowVars.repayAmount > _currentInterest) {
-            borrowInfo.borrowAmount =
-                _repayBorrowVars.currentAbsoluteAmount -
-                _repayBorrowVars.repayAmount;
-            aggregatedBorrowedAmount -= _repayBorrowVars.repayAmount - _currentInterest;
-        }
-
-        aggregatedNormalizedBorrowedAmount = MathHelper.getNormalizedAmount(
-            aggregatedBorrowedAmount,
-            aggregatedNormalizedBorrowedAmount,
-            _repayBorrowVars.repayAmount,
-            _repayBorrowVars.currentRate,
-            false
-        );
-
-        borrowInfo.normalizedAmount = MathHelper.getNormalizedAmount(
-            borrowInfo.borrowAmount,
-            _repayBorrowVars.normalizedAmount,
-            _repayBorrowVars.repayAmount,
-            _repayBorrowVars.currentRate,
-            false
-        );
-
-        uint256 _reserveFunds = _currentInterest.mulWithPrecision(
-            assetParameters.getReserveFactor(assetKey)
-        );
-
-        totalReserves += _reserveFunds;
-    }
-
     function _getRepayBorrowVars(
         address _userAddr,
         uint256 _repayAmount,
-        BorrowInfo memory _borrowInfo,
-        bool _isMaxRepay,
-        bool _isIntegration
+        bool _isMaxRepay
     ) internal returns (RepayBorrowVars memory _repayBorrowVars) {
         _repayBorrowVars.userAddr = _userAddr;
         _repayBorrowVars.currentRate = updateCompoundRate();
-        _repayBorrowVars.normalizedAmount = _borrowInfo.normalizedAmount;
+        _repayBorrowVars.normalizedAmount = borrowInfos[_userAddr].normalizedAmount;
         _repayBorrowVars.currentAbsoluteAmount = _repayBorrowVars
             .normalizedAmount
             .mulWithPrecision(_repayBorrowVars.currentRate);
 
-        if (_isIntegration && _isMaxRepay) {
-            _repayBorrowVars.repayAmount = _repayBorrowVars.currentAbsoluteAmount;
-        } else if (!_isIntegration && _isMaxRepay) {
+        if (_isMaxRepay) {
             _repayBorrowVars.repayAmount = Math.min(
                 _convertFromUnderlyingAsset(IERC20(assetAddr).balanceOf(_userAddr)),
                 _repayBorrowVars.currentAbsoluteAmount
@@ -754,7 +600,7 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
         address to,
         uint256 amount
     ) internal override {
-        if (from != address(0) && to != address(0) && msg.sender != address(integrationCore)) {
+        if (from != address(0) && to != address(0)) {
             IDefiCore _defiCore = defiCore;
             IRewardsDistribution _rewardsDistribution = rewardsDistribution;
 

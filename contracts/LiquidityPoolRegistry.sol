@@ -75,32 +75,6 @@ contract LiquidityPoolRegistry is ILiquidityPoolRegistry, OwnableUpgradeable, Ab
         }
     }
 
-    function getAllowForIntegrationAssets()
-        external
-        view
-        override
-        returns (bytes32[] memory _resultArr, uint256 _assetsCount)
-    {
-        IAssetParameters _parameters = assetParameters;
-        uint256 _allAssetsCount = _supportedAssets.length();
-
-        _resultArr = new bytes32[](_allAssetsCount);
-
-        uint256 _currentIndex;
-
-        for (uint256 i = 0; i < _allAssetsCount; i++) {
-            bytes32 _currentAssetKey = _supportedAssets.at(i);
-
-            if (_parameters.isAllowForIntegration(_currentAssetKey)) {
-                _resultArr[_currentIndex++] = _currentAssetKey;
-            }
-        }
-
-        if (_currentIndex > 0) {
-            _assetsCount = _currentIndex;
-        }
-    }
-
     function getLiquidityPools(uint256 _offset, uint256 _limit)
         public
         view

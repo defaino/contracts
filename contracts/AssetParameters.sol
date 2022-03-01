@@ -33,7 +33,6 @@ contract AssetParameters is IAssetParameters, OwnableUpgradeable, AbstractDepend
         keccak256("UTILIZATION_BREAKING_POINT");
     bytes32 public constant MAX_UTILIZATION_RATIO_KEY = keccak256("MAX_UTILIZATION_RATIO");
     bytes32 public constant LIQUIDATION_DISCOUNT_KEY = keccak256("LIQUIDATION_DISCOUNT");
-    bytes32 public constant OPTIMIZATION_REWARD_KEY = keccak256("OPTIMIZATION_REWARD");
 
     bytes32 public constant MIN_SUPPLY_DISTRIBUTION_PART_KEY =
         keccak256("MIN_SUPPLY_DISTRIBUTION_PART");
@@ -41,10 +40,7 @@ contract AssetParameters is IAssetParameters, OwnableUpgradeable, AbstractDepend
         keccak256("MIN_BORROW_DISTRIBUTION_PART");
 
     bytes32 public constant COL_RATIO_KEY = keccak256("COL_RATIO");
-    bytes32 public constant INTEGRATION_COL_RATIO_KEY = keccak256("INTEGRATION_COL_RATIO");
-
     bytes32 public constant RESERVE_FACTOR_KEY = keccak256("RESERVE_FACTOR");
-    bytes32 public constant ALLOW_FOR_INTEGRATION_KEY = keccak256("ALLOW_FOR_INTEGRATION");
 
     mapping(bytes32 => mapping(bytes32 => PureParameters.Param)) private _parameters;
 
@@ -109,10 +105,6 @@ contract AssetParameters is IAssetParameters, OwnableUpgradeable, AbstractDepend
         return _getParam(_assetKey, ENABLE_COLLATERAL_KEY).getBoolFromParam();
     }
 
-    function isAllowForIntegration(bytes32 _assetKey) external view override returns (bool) {
-        return _getParam(_assetKey, ALLOW_FOR_INTEGRATION_KEY).getBoolFromParam();
-    }
-
     function getInterestRateParams(bytes32 _assetKey)
         external
         view
@@ -135,10 +127,6 @@ contract AssetParameters is IAssetParameters, OwnableUpgradeable, AbstractDepend
         return _getParam(_assetKey, LIQUIDATION_DISCOUNT_KEY).getUintFromParam();
     }
 
-    function getOptimiztionReward(bytes32 _assetKey) external view override returns (uint256) {
-        return _getParam(_assetKey, OPTIMIZATION_REWARD_KEY).getUintFromParam();
-    }
-
     function getDistributionMinimums(bytes32 _assetKey)
         external
         view
@@ -151,10 +139,6 @@ contract AssetParameters is IAssetParameters, OwnableUpgradeable, AbstractDepend
 
     function getColRatio(bytes32 _assetKey) external view override returns (uint256) {
         return _getParam(_assetKey, COL_RATIO_KEY).getUintFromParam();
-    }
-
-    function getIntegrationColRatio(bytes32 _assetKey) external view override returns (uint256) {
-        return _getParam(_assetKey, INTEGRATION_COL_RATIO_KEY).getUintFromParam();
     }
 
     function getReserveFactor(bytes32 _assetKey) external view override returns (uint256) {
@@ -233,13 +217,6 @@ contract AssetParameters is IAssetParameters, OwnableUpgradeable, AbstractDepend
         _setupMainParameters(_assetKey, _mainParams);
     }
 
-    function setupIntegrationParameters(
-        bytes32 _assetKey,
-        PoolIntegrationParams calldata _integrationParams
-    ) public onlyOwner onlyExists(_assetKey) {
-        _setupIntegrationParameters(_assetKey, _integrationParams);
-    }
-
     function setupDistributionsMinimums(
         bytes32 _assetKey,
         DistributionMinimums calldata _distrMinimums
@@ -254,7 +231,6 @@ contract AssetParameters is IAssetParameters, OwnableUpgradeable, AbstractDepend
     {
         _setupInterestRateParams(_assetKey, _poolParams.interestRateParams);
         _setupMainParameters(_assetKey, _poolParams.mainParams);
-        _setupIntegrationParameters(_assetKey, _poolParams.integrationParams);
         _setupDistributionsMinimums(_assetKey, _poolParams.distrMinimums);
     }
 
@@ -346,43 +322,6 @@ contract AssetParameters is IAssetParameters, OwnableUpgradeable, AbstractDepend
             _mainParams.reserveFactor,
             _mainParams.liquidationDiscount,
             _mainParams.maxUtilizationRatio
-        );
-    }
-
-    function _setupIntegrationParameters(
-        bytes32 _assetKey,
-        PoolIntegrationParams calldata _integrationParams
-    ) internal {
-        require(
-            _integrationParams.integrationColRatio >= ONE_PERCENT * 105 &&
-                _integrationParams.integrationColRatio <= ONE_PERCENT * 200,
-            "AssetParameters: The new value of the integration col ratio is invalid."
-        );
-        require(
-            _integrationParams.integrationColRatio <=
-                _getParam(_assetKey, COL_RATIO_KEY).getUintFromParam(),
-            "AssetParameters: Integration col ratio must be less than or equal to col ratio"
-        );
-        require(
-            _integrationParams.optimizationRewardPercentage <= ONE_PERCENT * 5,
-            "AssetParameters: The new value of the optimization reward is invalid."
-        );
-
-        _parameters[_assetKey][INTEGRATION_COL_RATIO_KEY] = PureParameters.makeUintParam(
-            _integrationParams.integrationColRatio
-        );
-        _parameters[_assetKey][OPTIMIZATION_REWARD_KEY] = PureParameters.makeUintParam(
-            _integrationParams.optimizationRewardPercentage
-        );
-        _parameters[_assetKey][ALLOW_FOR_INTEGRATION_KEY] = PureParameters.makeBoolParam(
-            _integrationParams.allowForIntegration
-        );
-
-        emit IntegrationParamsUpdated(
-            _assetKey,
-            _integrationParams.integrationColRatio,
-            _integrationParams.optimizationRewardPercentage,
-            _integrationParams.allowForIntegration
         );
     }
 

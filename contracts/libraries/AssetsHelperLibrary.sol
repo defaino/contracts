@@ -3,7 +3,7 @@ pragma solidity 0.8.3;
 
 import "@openzeppelin/contracts/utils/math/Math.sol";
 
-import "../interfaces/IBasicCore.sol";
+import "../interfaces/IDefiCore.sol";
 import "../interfaces/IAssetParameters.sol";
 import "../interfaces/ILiquidityPoolRegistry.sol";
 import "../interfaces/ISystemParameters.sol";
@@ -19,7 +19,7 @@ library AssetsHelperLibrary {
         bytes32 _assetKey,
         address _userAddr,
         ILiquidityPoolRegistry _registry,
-        IBasicCore _core
+        IDefiCore _core
     ) internal view returns (uint256) {
         ILiquidityPool _currentLiquidityPool = ILiquidityPool(_registry.liquidityPools(_assetKey));
 

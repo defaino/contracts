@@ -40,16 +40,6 @@ interface ILiquidityPoolRegistry {
         view
         returns (bytes32[] memory _resultArr);
 
-    /**
-     * @notice Returns the keys of all assets that allow for integration
-     * @return _resultArr - keys array
-     * @return _assetsCount - number of allow for integration assets
-     */
-    function getAllowForIntegrationAssets()
-        external
-        view
-        returns (bytes32[] memory _resultArr, uint256 _assetsCount);
-
     function getLiquidityPools(uint256 _offset, uint256 _limit)
         external
         view

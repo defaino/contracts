@@ -26,10 +26,6 @@ contract Registry is AccessControl {
     bytes32 public constant ASSETS_REGISTRY_NAME = keccak256("ASSETS_REGISTRY");
     bytes32 public constant LIQUIDITY_POOL_REGISTRY_NAME = keccak256("LIQUIDITY_POOL_REGISTRY");
     bytes32 public constant LIQUIDITY_POOL_ADMIN_NAME = keccak256("LIQUIDITY_POOL_ADMIN");
-    bytes32 public constant INTEGRATION_CORE_NAME = keccak256("INTEGRATION_CORE");
-
-    bytes32 public constant BORROWER_ROUTER_FACTORY_NAME = keccak256("BORROWER_ROUTER_FACTORY");
-    bytes32 public constant BORROWER_ROUTER_REGISTRY_NAME = keccak256("BORROWER_ROUTER_REGISTRY");
 
     event ContractAdded(bytes32 _name, address _contractAddress);
     event ProxyContractAdded(bytes32 _name, address _proxyAddress, address _implAddress);
@@ -84,18 +80,6 @@ contract Registry is AccessControl {
 
     function getLiquidityPoolAdminContract() external view returns (address) {
         return getContract(LIQUIDITY_POOL_ADMIN_NAME);
-    }
-
-    function getIntegrationCoreContract() external view returns (address) {
-        return getContract(INTEGRATION_CORE_NAME);
-    }
-
-    function getBorrowerRouterFactoryContract() external view returns (address) {
-        return getContract(BORROWER_ROUTER_FACTORY_NAME);
-    }
-
-    function getBorrowerRouterRegistryContract() external view returns (address) {
-        return getContract(BORROWER_ROUTER_REGISTRY_NAME);
     }
 
     function getLiquidityPoolRegistryContract() external view returns (address) {

@@ -7,7 +7,6 @@ import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
 import "./interfaces/IAssetParameters.sol";
-import "./interfaces/IBorrowerRouterRegistry.sol";
 import "./interfaces/IRewardsDistribution.sol";
 import "./interfaces/ILiquidityPoolRegistry.sol";
 import "./interfaces/ILiquidityPool.sol";
@@ -22,10 +21,8 @@ contract RewardsDistribution is IRewardsDistribution, OwnableUpgradeable, Abstra
     using MathHelper for uint256;
 
     IAssetParameters private assetParameters;
-    IBorrowerRouterRegistry private borrowerRouterRegistry;
     ILiquidityPoolRegistry private liquidityPoolsRegistry;
     address private defiCoreAddr;
-    address private integrationCoreAddr;
 
     struct LiquidityPoolStats {
         uint256 supplyRewardPerBlock;
@@ -40,7 +37,6 @@ contract RewardsDistribution is IRewardsDistribution, OwnableUpgradeable, Abstra
     modifier onlyEligibleContracts() {
         require(
             defiCoreAddr == msg.sender ||
-                integrationCoreAddr == msg.sender ||
                 liquidityPoolsRegistry.existingLiquidityPools(msg.sender),
             "RewardsDistribution: Caller not an eligible contract."
         );
@@ -53,11 +49,7 @@ contract RewardsDistribution is IRewardsDistribution, OwnableUpgradeable, Abstra
 
     function setDependencies(Registry _registry) external override onlyInjectorOrZero {
         defiCoreAddr = _registry.getDefiCoreContract();
-        integrationCoreAddr = _registry.getIntegrationCoreContract();
         assetParameters = IAssetParameters(_registry.getAssetParametersContract());
-        borrowerRouterRegistry = IBorrowerRouterRegistry(
-            _registry.getBorrowerRouterRegistryContract()
-        );
         liquidityPoolsRegistry = ILiquidityPoolRegistry(
             _registry.getLiquidityPoolRegistryContract()
         );
@@ -217,15 +209,8 @@ contract RewardsDistribution is IRewardsDistribution, OwnableUpgradeable, Abstra
 
         _newAggregatedReward = userInfo.aggregatedReward;
 
-        ERC20 _lpToken = ERC20(address(_liquidityPool));
-        address _borrowerRouterAddr = borrowerRouterRegistry.borrowerRouters(_userAddr);
-
-        uint256 _liquidityAmount = _lpToken.balanceOf(_userAddr);
-        if (_borrowerRouterAddr != address(0)) {
-            _liquidityAmount += _lpToken.balanceOf(_borrowerRouterAddr);
-        }
-
-        uint256 _borrowAmount = _liquidityPool.getUserTotalBorrowedAmount(_userAddr);
+        uint256 _liquidityAmount = ERC20(address(_liquidityPool)).balanceOf(_userAddr);
+        (uint256 _borrowAmount, ) = _liquidityPool.borrowInfos(_userAddr);
 
         if (_liquidityAmount > 0) {
             _newAggregatedReward += (_newSupplyCumulativeSum - userInfo.lastSupplyCumulativeSum)

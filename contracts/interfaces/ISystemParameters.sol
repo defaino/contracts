@@ -10,24 +10,4 @@ interface ISystemParameters {
      * @return current liquidation boundary parameter value
      */
     function getLiquidationBoundaryParam() external view returns (uint256);
-
-    function getOptimizationPercentageParam() external view returns (uint256);
-
-    /**
-     * @notice Getter for parameter by key YEARN_CONTROLLER_KEY
-     * @return current YEarn controller parameter value
-     */
-    function getYEarnRegistryParam() external view returns (address);
-
-    /**
-     * @notice Getter for parameter by key CURVE_REGISTRY_KEY
-     * @return current cerve pool parameter value
-     */
-    function getCurveRegistryParam() external view returns (address);
-
-    /**
-     * @notice Getter for parameter by key CURVE_DOLLAR_ZAP_KEY
-     * @return current cerve zap parameter value
-     */
-    function getCurveZapParam() external view returns (address);
 }

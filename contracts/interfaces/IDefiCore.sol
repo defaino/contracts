@@ -1,7 +1,33 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.3;
 
-interface IBasicCore {
+interface IDefiCore {
+    struct RewardsDistributionInfo {
+        address assetAddr;
+        uint256 distributionReward;
+        uint256 distributionRewardInUSD;
+        uint256 userBalance;
+        uint256 userBalanceInUSD;
+    }
+
+    struct LiquidationInfo {
+        bytes32[] borrowAssetKeys;
+        bytes32[] supplyAssetKeys;
+        uint256 totalBorrowedAmount;
+    }
+
+    struct UserLiquidationInfo {
+        uint256 borrowAssetPrice;
+        uint256 receiveAssetPrice;
+        uint256 bonusReceiveAssetPrice;
+        uint256 borrowedAmount;
+        uint256 supplyAmount;
+        uint256 maxQuantity;
+    }
+
+    event LiquidateBorrow(bytes32 _paramKey, address _userAddr, uint256 _amount);
+    event LiquidatorPay(bytes32 _paramKey, address _liquidatorAddr, uint256 _amount);
+
     function disabledCollateralAssets(address _userAddr, bytes32 _assetKey)
         external
         view
@@ -32,8 +58,6 @@ interface IBasicCore {
         external
         view
         returns (uint256 _userBorrowedAmount);
-
-    function isBorrowExists(address _userAddr, bytes32 _assetKey) external view returns (bool);
 
     function getTotalSupplyBalanceInUSD(address _userAddr)
         external
@@ -76,51 +100,4 @@ interface IBasicCore {
         uint256 _repayAmount,
         bool _isMaxRepay
     ) external;
-}
-
-interface IIntegrationCore is IBasicCore {
-    struct OptimizationInfo {
-        bytes32[] borrowAssetKeys;
-        uint256 totalBorrowedAmount;
-    }
-
-    struct UserOptimizationInfo {
-        uint256 totalBorrowAmount;
-        uint256 borrowAmountInVault;
-        uint256 rewardAmount;
-        uint256 rewardAmountInUSD;
-    }
-
-    function getUserVaultTokens(address _userAddr, bytes32 _assetKey)
-        external
-        view
-        returns (address[] memory _vaultTokens);
-}
-
-interface IDefiCore is IBasicCore {
-    struct RewardsDistributionInfo {
-        address assetAddr;
-        uint256 distributionReward;
-        uint256 distributionRewardInUSD;
-        uint256 userBalance;
-        uint256 userBalanceInUSD;
-    }
-
-    struct LiquidationInfo {
-        bytes32[] borrowAssetKeys;
-        bytes32[] supplyAssetKeys;
-        uint256 totalBorrowedAmount;
-    }
-
-    struct UserLiquidationInfo {
-        uint256 borrowAssetPrice;
-        uint256 receiveAssetPrice;
-        uint256 bonusReceiveAssetPrice;
-        uint256 borrowedAmount;
-        uint256 supplyAmount;
-        uint256 maxQuantity;
-    }
-
-    event LiquidateBorrow(bytes32 _paramKey, address _userAddr, uint256 _amount);
-    event LiquidatorPay(bytes32 _paramKey, address _liquidatorAddr, uint256 _amount);
 }

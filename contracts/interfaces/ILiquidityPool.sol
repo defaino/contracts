@@ -35,11 +35,6 @@ interface ILiquidityPool {
         view
         returns (uint256 _borrowAmount, uint256 _normalizedAmount);
 
-    function integrationBorrowInfos(address _userAddr)
-        external
-        view
-        returns (uint256 _borrowAmount, uint256 _normalizedAmount);
-
     function aggregatedBorrowedAmount() external view returns (uint256);
 
     function getTotalLiquidity() external view returns (uint256);
@@ -47,8 +42,6 @@ interface ILiquidityPool {
     function getTotalBorrowedAmount() external view returns (uint256);
 
     function getAggregatedLiquidityAmount() external view returns (uint256);
-
-    function getUserTotalBorrowedAmount(address _userAddr) external view returns (uint256);
 
     function getBorrowPercentage() external view returns (uint256);
 
@@ -108,27 +101,11 @@ interface ILiquidityPool {
         bool _isMaxRepay
     ) external returns (uint256);
 
-    function repayBorrowIntegration(
-        address _userAddr,
-        address _vaultTokenAddr,
-        address _borrowerRouterAddr,
-        uint256 _repayAmount,
-        bool _isMaxRepay
-    ) external returns (uint256);
-
     function delegateBorrow(
         address _userAddr,
         address _delegator,
         uint256 _amountToBorrow
     ) external;
-
-    function optimization(
-        address _userAddr,
-        address _optimizatorAddr,
-        address _vaultTokenAddr,
-        address _borrowerRouterAddr,
-        uint256 _optimizationAmount
-    ) external returns (uint256);
 
     function liquidate(
         address _userAddr,

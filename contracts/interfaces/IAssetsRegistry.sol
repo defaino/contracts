@@ -61,37 +61,17 @@ interface IAssetsRegistry {
         view
         returns (bytes32[] memory _userSupplyAssets);
 
-    function getUserIntegrationSupplyAssets(address _userAddr)
-        external
-        view
-        returns (bytes32[] memory _userIntegrationSupplyAssets);
-
     function getUserBorrowAssets(address _userAddr)
         external
         view
         returns (bytes32[] memory _userBorrowAssets);
-
-    function getUserIntegrationBorrowAssets(address _userAddr)
-        external
-        view
-        returns (bytes32[] memory _userIntegrationBorrowAssets);
 
     function getSupplyAssets(address _userAddr)
         external
         view
         returns (bytes32[] memory _availableAssets, bytes32[] memory _userSupplyAssets);
 
-    function getIntegrationSupplyAssets(address _userAddr)
-        external
-        view
-        returns (bytes32[] memory _availableAssets, bytes32[] memory _userSupplyAssets);
-
     function getBorrowAssets(address _userAddr)
-        external
-        view
-        returns (bytes32[] memory _availableAssets, bytes32[] memory _userBorrowAssets);
-
-    function getIntegrationBorrowAssets(address _userAddr)
         external
         view
         returns (bytes32[] memory _availableAssets, bytes32[] memory _userBorrowAssets);
