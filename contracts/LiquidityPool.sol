@@ -9,7 +9,7 @@ import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import "./interfaces/IDefiCore.sol";
 import "./interfaces/ISystemParameters.sol";
 import "./interfaces/IAssetParameters.sol";
-import "./interfaces/IAssetsRegistry.sol";
+import "./interfaces/IUserInfoRegistry.sol";
 import "./interfaces/ILiquidityPool.sol";
 import "./interfaces/IInterestRateLibrary.sol";
 import "./interfaces/IRewardsDistribution.sol";
@@ -30,7 +30,7 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
 
     IDefiCore private defiCore;
     IAssetParameters private assetParameters;
-    IAssetsRegistry private assetsRegistry;
+    IUserInfoRegistry private userInfoRegistry;
     IInterestRateLibrary private interestRateLibrary;
     IRewardsDistribution private rewardsDistribution;
     ILiquidityPoolRegistry private liquidityPoolRegistry;
@@ -49,7 +49,7 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
 
     uint256 public override aggregatedBorrowedAmount;
     uint256 public aggregatedNormalizedBorrowedAmount;
-    uint256 public totalReserves;
+    uint256 public override totalReserves;
 
     event FundsWithdrawn(address _recipient, address _liquidityPool, uint256 _amount);
     event BorrowApproval(address _userAddr, uint256 _borrowAmount, address _delegateeAddr);
@@ -84,7 +84,7 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
     function setDependencies(Registry _registry) external override onlyInjectorOrZero {
         defiCore = IDefiCore(_registry.getDefiCoreContract());
         assetParameters = IAssetParameters(_registry.getAssetParametersContract());
-        assetsRegistry = IAssetsRegistry(_registry.getAssetsRegistryContract());
+        userInfoRegistry = IUserInfoRegistry(_registry.getUserInfoRegistryContract());
         interestRateLibrary = IInterestRateLibrary(_registry.getInterestRateLibraryContract());
         rewardsDistribution = IRewardsDistribution(_registry.getRewardsDistributionContract());
         liquidityPoolRegistry = ILiquidityPoolRegistry(
@@ -617,7 +617,7 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
                 );
             }
 
-            assetsRegistry.updateAssetsAfterTransfer(assetKey, from, to, amount);
+            userInfoRegistry.updateAssetsAfterTransfer(assetKey, from, to, amount);
             _rewardsDistribution.updateCumulativeSums(from, this);
             _rewardsDistribution.updateCumulativeSums(to, this);
         }

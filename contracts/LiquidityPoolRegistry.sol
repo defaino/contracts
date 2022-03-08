@@ -54,6 +54,10 @@ contract LiquidityPoolRegistry is ILiquidityPoolRegistry, OwnableUpgradeable, Ab
         return liquidityPools[_assetKey] != address(0);
     }
 
+    function getSupportedAssetsCount() external view override returns (uint256) {
+        return _supportedAssets.length();
+    }
+
     function getAllSupportedAssets() public view override returns (bytes32[] memory _resultArr) {
         uint256 _assetsCount = _supportedAssets.length();
 
@@ -113,43 +117,23 @@ contract LiquidityPoolRegistry is ILiquidityPoolRegistry, OwnableUpgradeable, Ab
         }
     }
 
-    function getLiquidityPoolsInfo(uint256 _offset, uint256 _limit)
+    function getLiquidityPoolsInfo(bytes32[] calldata _assetKeys)
         external
         view
         override
-        returns (LiquidityPoolInfo[] memory _resultArr)
+        returns (LiquidityPoolInfo[] memory _poolsInfo)
     {
-        IRewardsDistribution _rewardsDistributon = rewardsDistribution;
+        IAssetParameters _assetParametrs = assetParameters;
 
-        bytes32[] memory _assetsKeys = getSupportedAssets(_offset, _limit);
-        _resultArr = new LiquidityPoolInfo[](_assetsKeys.length);
+        _poolsInfo = new LiquidityPoolInfo[](_assetKeys.length);
 
-        for (uint256 i = 0; i < _assetsKeys.length; i++) {
-            bytes32 _currentKey = _assetsKeys[i];
-            ILiquidityPool _currentLiquidityPool = ILiquidityPool(liquidityPools[_currentKey]);
+        for (uint256 i = 0; i < _assetKeys.length; i++) {
+            ILiquidityPool _currentLiquidityPool = ILiquidityPool(liquidityPools[_assetKeys[i]]);
 
-            uint256 _marketSize = _currentLiquidityPool.getTotalLiquidity();
-            uint256 _totalBorrowed = _currentLiquidityPool.getTotalBorrowedAmount();
-
-            (uint256 _distrSupplyAPY, uint256 _distrBorrowAPY) = _rewardsDistributon.getAPY(
-                _currentLiquidityPool
-            );
-
-            PoolAPYInfo memory _poolAPYInfo = PoolAPYInfo(
-                _currentLiquidityPool.getAPY(),
-                _currentLiquidityPool.getAnnualBorrowRate(),
-                _distrSupplyAPY,
-                _distrBorrowAPY
-            );
-
-            _resultArr[i] = LiquidityPoolInfo(
-                _currentKey,
-                _currentLiquidityPool.assetAddr(),
-                _marketSize,
-                _currentLiquidityPool.getAmountInUSD(_marketSize),
-                _totalBorrowed,
-                _currentLiquidityPool.getAmountInUSD(_totalBorrowed),
-                _poolAPYInfo
+            _poolsInfo[i] = _getLiquidityPoolInfo(
+                _assetKeys[i],
+                _currentLiquidityPool,
+                _assetParametrs
             );
         }
     }
@@ -160,34 +144,28 @@ contract LiquidityPoolRegistry is ILiquidityPoolRegistry, OwnableUpgradeable, Ab
         override
         returns (DetailedLiquidityPoolInfo memory)
     {
-        ILiquidityPool _currentLiquidityPool = ILiquidityPool(liquidityPools[_assetKey]);
+        ILiquidityPool _liquidityPool = ILiquidityPool(liquidityPools[_assetKey]);
         IAssetParameters _parameters = assetParameters;
-
-        uint256 _totalBorrowed = _currentLiquidityPool.getTotalBorrowedAmount();
-
-        (uint256 _distrSupplyAPY, uint256 _distrBorrowAPY) = rewardsDistribution.getAPY(
-            _currentLiquidityPool
-        );
 
         IAssetParameters.LiquidityPoolParams memory _liquidityPoolParams = _parameters
             .getLiquidityPoolParams(_assetKey);
 
-        PoolAPYInfo memory _poolAPYInfo = PoolAPYInfo(
-            _currentLiquidityPool.getAPY(),
-            _currentLiquidityPool.getAnnualBorrowRate(),
-            _distrSupplyAPY,
-            _distrBorrowAPY
+        uint256 _availableToBorrow = _liquidityPool.getAvailableToBorrowLiquidity();
+        uint256 _totalReserves = _liquidityPool.totalReserves();
+        (uint256 _distrSupplyAPY, uint256 _distrBorrowAPY) = rewardsDistribution.getAPY(
+            _liquidityPool
         );
 
         return
             DetailedLiquidityPoolInfo(
-                _currentLiquidityPool.getAmountInUSD(_totalBorrowed),
-                _currentLiquidityPool.getAmountInUSD(
-                    _currentLiquidityPool.getAvailableToBorrowLiquidity()
-                ),
-                _currentLiquidityPool.getBorrowPercentage(),
+                _getLiquidityPoolInfo(_assetKey, _liquidityPool, _parameters),
                 _liquidityPoolParams,
-                _poolAPYInfo
+                _availableToBorrow,
+                _liquidityPool.getAmountInUSD(_availableToBorrow),
+                _totalReserves,
+                _liquidityPool.getAmountInUSD(_totalReserves),
+                _distrSupplyAPY,
+                _distrBorrowAPY
             );
     }
 
@@ -300,5 +278,32 @@ contract LiquidityPoolRegistry is ILiquidityPoolRegistry, OwnableUpgradeable, Ab
 
             dependant.setDependencies(_registry);
         }
+    }
+
+    function _getLiquidityPoolInfo(
+        bytes32 _assetKey,
+        ILiquidityPool _liquidityPool,
+        IAssetParameters _parameters
+    ) internal view returns (LiquidityPoolInfo memory) {
+        uint256 _marketSize = _liquidityPool.getTotalLiquidity();
+        uint256 _totalBorrowed = _liquidityPool.getTotalBorrowedAmount();
+
+        BaseInfo memory _baseInfo = BaseInfo(
+            _assetKey,
+            _liquidityPool.assetAddr(),
+            _liquidityPool.getAPY(),
+            _liquidityPool.getAnnualBorrowRate(),
+            _liquidityPool.getBorrowPercentage(),
+            _parameters.isAvailableAsCollateral(_assetKey)
+        );
+
+        return
+            LiquidityPoolInfo(
+                _baseInfo,
+                _marketSize,
+                _liquidityPool.getAmountInUSD(_marketSize),
+                _totalBorrowed,
+                _liquidityPool.getAmountInUSD(_totalBorrowed)
+            );
     }
 }

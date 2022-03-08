@@ -37,6 +37,8 @@ interface ILiquidityPool {
 
     function aggregatedBorrowedAmount() external view returns (uint256);
 
+    function totalReserves() external view returns (uint256);
+
     function getTotalLiquidity() external view returns (uint256);
 
     function getTotalBorrowedAmount() external view returns (uint256);

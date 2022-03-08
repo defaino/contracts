@@ -7,7 +7,7 @@ import "@openzeppelin/contracts/utils/math/Math.sol";
 import "./interfaces/IDefiCore.sol";
 import "./interfaces/ISystemParameters.sol";
 import "./interfaces/IAssetParameters.sol";
-import "./interfaces/IAssetsRegistry.sol";
+import "./interfaces/IUserInfoRegistry.sol";
 import "./interfaces/ILiquidityPoolRegistry.sol";
 import "./interfaces/IRewardsDistribution.sol";
 import "./interfaces/ILiquidityPool.sol";
@@ -26,10 +26,10 @@ contract DefiCore is IDefiCore, AbstractDependant {
     using DecimalsConverter for uint256;
     using MathHelper for uint256;
 
-    IERC20 private governanceToken;
+    IERC20 internal governanceToken;
     IAssetParameters internal assetParameters;
     ISystemParameters internal systemParameters;
-    IAssetsRegistry internal assetsRegistry;
+    IUserInfoRegistry internal userInfoRegistry;
     ILiquidityPoolRegistry internal liquidityPoolRegistry;
     IRewardsDistribution internal rewardsDistribution;
 
@@ -59,7 +59,7 @@ contract DefiCore is IDefiCore, AbstractDependant {
         governanceToken = IERC20(_registry.getGovernanceTokenContract());
         assetParameters = IAssetParameters(_registry.getAssetParametersContract());
         systemParameters = ISystemParameters(_registry.getSystemParametersContract());
-        assetsRegistry = IAssetsRegistry(_registry.getAssetsRegistryContract());
+        userInfoRegistry = IUserInfoRegistry(_registry.getUserInfoRegistryContract());
         rewardsDistribution = IRewardsDistribution(_registry.getRewardsDistributionContract());
         liquidityPoolRegistry = ILiquidityPoolRegistry(
             _registry.getLiquidityPoolRegistryContract()
@@ -177,67 +177,6 @@ contract DefiCore is IDefiCore, AbstractDependant {
         }
     }
 
-    function getLiquidiationInfo(address[] calldata _accounts)
-        external
-        view
-        returns (LiquidationInfo[] memory _resultArr)
-    {
-        IAssetsRegistry _assetsRegistry = assetsRegistry;
-        _resultArr = new LiquidationInfo[](_accounts.length);
-
-        for (uint256 i = 0; i < _accounts.length; i++) {
-            _resultArr[i] = LiquidationInfo(
-                _assetsRegistry.getUserBorrowAssets(_accounts[i]),
-                _assetsRegistry.getUserSupplyAssets(_accounts[i]),
-                getTotalBorrowBalanceInUSD(_accounts[i])
-            );
-        }
-    }
-
-    function getUserLiquidationInfo(
-        address _userAddr,
-        bytes32 _borrowAssetKey,
-        bytes32 _receiveAssetKey
-    ) external view returns (UserLiquidationInfo memory _liquidationInfo) {
-        IAssetParameters _assetParameters = assetParameters;
-        ILiquidityPoolRegistry _poolRegistry = liquidityPoolRegistry;
-
-        ILiquidityPool _borrowLiquidityPool = ILiquidityPool(
-            _poolRegistry.liquidityPools(_borrowAssetKey)
-        );
-        ILiquidityPool _receiveLiquidityPool = ILiquidityPool(
-            _poolRegistry.liquidityPools(_receiveAssetKey)
-        );
-
-        uint256 _receiveAssetPrice = _receiveLiquidityPool.getAssetPrice();
-        uint256 _bonusPrice = _receiveAssetPrice.mulWithPrecision(
-            DECIMAL - _assetParameters.getLiquidationDiscount(_receiveAssetKey)
-        );
-
-        uint256 _liquidationLimitByBorrow = getTotalBorrowBalanceInUSD(_userAddr).mulWithPrecision(
-            systemParameters.getLiquidationBoundaryParam()
-        );
-
-        uint256 _maxQuantityInUSD = _getMaxQuantity(
-            _receiveAssetKey,
-            _borrowAssetKey,
-            _userAddr,
-            _liquidationLimitByBorrow,
-            _receiveLiquidityPool,
-            _borrowLiquidityPool,
-            _assetParameters
-        );
-
-        _liquidationInfo = UserLiquidationInfo(
-            _borrowLiquidityPool.getAssetPrice(),
-            _receiveAssetPrice,
-            _bonusPrice,
-            getUserBorrowedAmount(_userAddr, _borrowAssetKey),
-            getUserLiquidityAmount(_userAddr, _receiveAssetKey),
-            _borrowLiquidityPool.getAmountFromUSD(_maxQuantityInUSD)
-        );
-    }
-
     function getMaxToSupply(address _userAddr, bytes32 _assetKey)
         external
         view
@@ -314,7 +253,7 @@ contract DefiCore is IDefiCore, AbstractDependant {
         returns (uint256 _totalSupplyBalance)
     {
         ILiquidityPoolRegistry _poolRegistry = liquidityPoolRegistry;
-        bytes32[] memory _userSupplyAssets = assetsRegistry.getUserSupplyAssets(_userAddr);
+        bytes32[] memory _userSupplyAssets = userInfoRegistry.getUserSupplyAssets(_userAddr);
 
         for (uint256 i = 0; i < _userSupplyAssets.length; i++) {
             _totalSupplyBalance += _getCurrentSupplyAmountInUSD(
@@ -332,7 +271,7 @@ contract DefiCore is IDefiCore, AbstractDependant {
         returns (uint256 _totalBorrowBalance)
     {
         ILiquidityPoolRegistry _poolRegistry = liquidityPoolRegistry;
-        bytes32[] memory _userBorrowAssets = assetsRegistry.getUserBorrowAssets(_userAddr);
+        bytes32[] memory _userBorrowAssets = userInfoRegistry.getUserBorrowAssets(_userAddr);
 
         for (uint256 i = 0; i < _userBorrowAssets.length; i++) {
             _totalBorrowBalance += _userBorrowAssets[i].getCurrentBorrowAmountInUSD(
@@ -351,7 +290,7 @@ contract DefiCore is IDefiCore, AbstractDependant {
     {
         ILiquidityPoolRegistry _poolRegistry = liquidityPoolRegistry;
         IAssetParameters _parameters = assetParameters;
-        bytes32[] memory _userSupplyAssets = assetsRegistry.getUserSupplyAssets(_userAddr);
+        bytes32[] memory _userSupplyAssets = userInfoRegistry.getUserSupplyAssets(_userAddr);
 
         for (uint256 i = 0; i < _userSupplyAssets.length; i++) {
             bytes32 _currentAssetKey = _userSupplyAssets[i];
@@ -368,43 +307,6 @@ contract DefiCore is IDefiCore, AbstractDependant {
                 );
             }
         }
-    }
-
-    function getUserDistributionRewards(address _userAddr)
-        external
-        view
-        returns (RewardsDistributionInfo memory)
-    {
-        ILiquidityPoolRegistry _poolRegistry = liquidityPoolRegistry;
-        IRewardsDistribution _rewardsDistribution = rewardsDistribution;
-
-        bytes32[] memory _allAssets = _poolRegistry.getAllSupportedAssets();
-
-        uint256 _totalReward;
-
-        for (uint256 i = 0; i < _allAssets.length; i++) {
-            _totalReward += _rewardsDistribution.getUserReward(
-                _allAssets[i],
-                _userAddr,
-                _allAssets[i].getAssetLiquidityPool(_poolRegistry)
-            );
-        }
-
-        ILiquidityPool _governancePool = ILiquidityPool(
-            _poolRegistry.getGovernanceLiquidityPool()
-        );
-        IERC20 _governanceToken = governanceToken;
-
-        uint256 _userBalance = _governanceToken.balanceOf(_userAddr);
-
-        return
-            RewardsDistributionInfo(
-                address(_governanceToken),
-                _totalReward,
-                _governancePool.getAmountInUSD(_totalReward),
-                _userBalance,
-                _governancePool.getAmountInUSD(_userBalance)
-            );
     }
 
     function enableCollateral(bytes32 _assetKey) external override returns (uint256) {
@@ -470,7 +372,7 @@ contract DefiCore is IDefiCore, AbstractDependant {
         _assetLiquidityPool.addLiquidity(msg.sender, _liquidityAmount);
         emit LiquidityAdded(msg.sender, _assetKey, _liquidityAmount);
 
-        assetsRegistry.updateUserAssets(msg.sender, _assetKey, true);
+        userInfoRegistry.updateUserSupplyAssets(msg.sender, _assetKey);
     }
 
     function withdrawLiquidity(
@@ -509,7 +411,7 @@ contract DefiCore is IDefiCore, AbstractDependant {
 
         emit LiquidityWithdrawn(msg.sender, _assetKey, _liquidityAmount);
 
-        assetsRegistry.updateUserAssets(msg.sender, _assetKey, true);
+        userInfoRegistry.updateUserSupplyAssets(msg.sender, _assetKey);
     }
 
     function approveToDelegateBorrow(
@@ -539,7 +441,7 @@ contract DefiCore is IDefiCore, AbstractDependant {
 
         emit Borrowed(msg.sender, _assetKey, _borrowAmount);
 
-        assetsRegistry.updateUserAssets(msg.sender, _assetKey, false);
+        userInfoRegistry.updateUserBorrowAssets(msg.sender, _assetKey);
     }
 
     function delegateBorrow(
@@ -557,7 +459,7 @@ contract DefiCore is IDefiCore, AbstractDependant {
 
         emit Borrowed(_borrowerAddr, _assetKey, _borrowAmount);
 
-        assetsRegistry.updateUserAssets(_borrowerAddr, _assetKey, false);
+        userInfoRegistry.updateUserBorrowAssets(_borrowerAddr, _assetKey);
     }
 
     function borrowFor(
@@ -575,7 +477,7 @@ contract DefiCore is IDefiCore, AbstractDependant {
 
         emit Borrowed(msg.sender, _assetKey, _borrowAmount);
 
-        assetsRegistry.updateUserAssets(msg.sender, _assetKey, false);
+        userInfoRegistry.updateUserBorrowAssets(msg.sender, _assetKey);
     }
 
     function repayBorrow(
@@ -602,7 +504,7 @@ contract DefiCore is IDefiCore, AbstractDependant {
 
         emit BorrowRepaid(msg.sender, _assetKey, _repayAmount);
 
-        assetsRegistry.updateUserAssets(msg.sender, _assetKey, false);
+        userInfoRegistry.updateUserBorrowAssets(msg.sender, _assetKey);
     }
 
     function delegateRepayBorrow(
@@ -623,7 +525,7 @@ contract DefiCore is IDefiCore, AbstractDependant {
 
         emit BorrowRepaid(_recipientAddr, _assetKey, _repayAmount);
 
-        assetsRegistry.updateUserAssets(_recipientAddr, _assetKey, false);
+        userInfoRegistry.updateUserBorrowAssets(_recipientAddr, _assetKey);
     }
 
     function liquidation(
@@ -655,16 +557,10 @@ contract DefiCore is IDefiCore, AbstractDependant {
 
         require(
             _borrowAssetsPool.getAmountInUSD(_liquidationAmount) <=
-                _getMaxQuantity(
-                    _supplyAssetKey,
-                    _borrowAssetKey,
+                userInfoRegistry.getMaxLiquidationQuantity(
                     _userAddr,
-                    _totalBorrowBalanceInUSD.mulWithPrecision(
-                        systemParameters.getLiquidationBoundaryParam()
-                    ),
-                    _supplyAssetsPool,
-                    _borrowAssetsPool,
-                    _parameters
+                    _supplyAssetKey,
+                    _borrowAssetKey
                 ),
             "DefiCore: Liquidation amount should be less then max quantity."
         );
@@ -688,10 +584,10 @@ contract DefiCore is IDefiCore, AbstractDependant {
 
         _supplyAssetsPool.liquidate(_userAddr, msg.sender, _repayAmount);
 
-        IAssetsRegistry _assetsRegistry = assetsRegistry;
+        IUserInfoRegistry _userInfoRegistry = userInfoRegistry;
 
-        _assetsRegistry.updateUserAssets(_userAddr, _supplyAssetKey, true);
-        _assetsRegistry.updateUserAssets(_userAddr, _borrowAssetKey, false);
+        _userInfoRegistry.updateUserSupplyAssets(_userAddr, _supplyAssetKey);
+        _userInfoRegistry.updateUserBorrowAssets(_userAddr, _borrowAssetKey);
     }
 
     function claimPoolDistributionRewards(bytes32 _assetKey) external returns (uint256 _reward) {
@@ -772,30 +668,6 @@ contract DefiCore is IDefiCore, AbstractDependant {
         );
 
         rewardsDistribution.updateCumulativeSums(_borrowerAddr, _assetLiquidityPool);
-    }
-
-    function _getMaxQuantity(
-        bytes32 _supplyAssetKey,
-        bytes32 _borrowAssetKey,
-        address _userAddr,
-        uint256 _maxLiquidatePart,
-        ILiquidityPool _supplyAssetsPool,
-        ILiquidityPool _borrowAssetsPool,
-        IAssetParameters _assetParameters
-    ) internal view returns (uint256 _maxQuantityInUSD) {
-        uint256 _liquidateLimitBySupply = (getUserLiquidityAmount(_userAddr, _supplyAssetKey) *
-            (DECIMAL - _assetParameters.getLiquidationDiscount(_supplyAssetKey))) / DECIMAL;
-
-        uint256 _userBorrowAmountInUSD = _borrowAssetsPool.getAmountInUSD(
-            getUserBorrowedAmount(_userAddr, _borrowAssetKey)
-        );
-
-        _maxQuantityInUSD = Math.min(
-            _supplyAssetsPool.getAmountInUSD(_liquidateLimitBySupply),
-            _userBorrowAmountInUSD
-        );
-
-        _maxQuantityInUSD = Math.min(_maxQuantityInUSD, _maxLiquidatePart);
     }
 
     function _getCurrentSupplyAmountInUSD(

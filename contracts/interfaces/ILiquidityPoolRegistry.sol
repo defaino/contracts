@@ -6,32 +6,37 @@ import "./IAssetParameters.sol";
 interface ILiquidityPoolRegistry {
     event PoolAdded(bytes32 _assetKey, address _assetAddr, address _poolAddr);
 
-    struct PoolAPYInfo {
+    struct BaseInfo {
+        bytes32 assetKey;
+        address assetAddr;
         uint256 supplyAPY;
         uint256 borrowAPY;
+        uint256 utilizationRatio;
+        bool isAvailableAsCollateral;
+    }
+
+    struct LiquidityPoolInfo {
+        BaseInfo baseInfo;
+        uint256 marketSize;
+        uint256 marketSizeInUSD;
+        uint256 totalBorrowBalance;
+        uint256 totalBorrowBalanceInUSD;
+    }
+
+    struct DetailedLiquidityPoolInfo {
+        LiquidityPoolInfo poolInfo;
+        IAssetParameters.LiquidityPoolParams liquidityPoolParams;
+        uint256 availableLiquidity;
+        uint256 availableLiquidityInUSD;
+        uint256 totalReserve;
+        uint256 totalReserveInUSD;
         uint256 distrSupplyAPY;
         uint256 distrBorrowAPY;
     }
 
-    struct LiquidityPoolInfo {
-        bytes32 assetKey;
-        address assetAddr;
-        uint256 marketSize;
-        uint256 marketSizeInUsd;
-        uint256 totalBorrowBalance;
-        uint256 totalBorrowBalanceInUsd;
-        PoolAPYInfo apyInfo;
-    }
-
-    struct DetailedLiquidityPoolInfo {
-        uint256 totalBorrowed;
-        uint256 availableLiquidity;
-        uint256 utilizationRatio;
-        IAssetParameters.LiquidityPoolParams liquidityPoolParams;
-        PoolAPYInfo apyInfo;
-    }
-
     function getLiquidityPoolsBeacon() external view returns (address);
+
+    function getSupportedAssetsCount() external view returns (uint256);
 
     function getAllSupportedAssets() external view returns (bytes32[] memory _resultArr);
 
@@ -71,10 +76,10 @@ interface ILiquidityPoolRegistry {
 
     function getTotalMarketsSize() external view returns (uint256 _totalMarketSize);
 
-    function getLiquidityPoolsInfo(uint256 _offset, uint256 _limit)
+    function getLiquidityPoolsInfo(bytes32[] calldata _assetKeys)
         external
         view
-        returns (LiquidityPoolInfo[] memory _resultArr);
+        returns (LiquidityPoolInfo[] memory _poolsInfo);
 
     function getDetailedLiquidityPoolInfo(bytes32 _assetKey)
         external

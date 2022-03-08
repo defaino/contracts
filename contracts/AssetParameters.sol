@@ -170,8 +170,7 @@ contract AssetParameters is IAssetParameters, OwnableUpgradeable, AbstractDepend
                 _getParam(_assetKey, COL_RATIO_KEY).getUintFromParam(),
                 _getParam(_assetKey, RESERVE_FACTOR_KEY).getUintFromParam(),
                 _getParam(_assetKey, LIQUIDATION_DISCOUNT_KEY).getUintFromParam(),
-                _getParam(_assetKey, MAX_UTILIZATION_RATIO_KEY).getUintFromParam(),
-                _getParam(_assetKey, ENABLE_COLLATERAL_KEY).getBoolFromParam()
+                _getParam(_assetKey, MAX_UTILIZATION_RATIO_KEY).getUintFromParam()
             );
     }
 

@@ -23,8 +23,8 @@ contract Registry is AccessControl {
     bytes32 public constant GOVERNANCE_TOKEN_NAME = keccak256("GOVERNANCE_TOKEN");
     bytes32 public constant REWARDS_DISTRIBUTION_NAME = keccak256("REWARDS_DISTRIBUTION");
     bytes32 public constant PRICE_MANAGER_NAME = keccak256("PRICE_MANAGER");
-    bytes32 public constant ASSETS_REGISTRY_NAME = keccak256("ASSETS_REGISTRY");
     bytes32 public constant LIQUIDITY_POOL_REGISTRY_NAME = keccak256("LIQUIDITY_POOL_REGISTRY");
+    bytes32 public constant USER_INFO_REGISTRY_NAME = keccak256("USER_INFO_REGISTRY");
 
     event ContractAdded(bytes32 _name, address _contractAddress);
     event ProxyContractAdded(bytes32 _name, address _proxyAddress, address _implAddress);
@@ -73,12 +73,12 @@ contract Registry is AccessControl {
         return getContract(PRICE_MANAGER_NAME);
     }
 
-    function getAssetsRegistryContract() external view returns (address) {
-        return getContract(ASSETS_REGISTRY_NAME);
-    }
-
     function getLiquidityPoolRegistryContract() external view returns (address) {
         return getContract(LIQUIDITY_POOL_REGISTRY_NAME);
+    }
+
+    function getUserInfoRegistryContract() external view returns (address) {
+        return getContract(USER_INFO_REGISTRY_NAME);
     }
 
     function getContract(bytes32 _name) public view returns (address) {

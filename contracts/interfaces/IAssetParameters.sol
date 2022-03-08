@@ -42,7 +42,6 @@ interface IAssetParameters {
         uint256 reserveFactor;
         uint256 liquidationDiscount;
         uint256 maxUtilizationRatio;
-        bool isAvailableAsCollateral;
     }
 
     /**
