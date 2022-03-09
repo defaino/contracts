@@ -72,7 +72,7 @@ contract RewardsDistribution is IRewardsDistribution, OwnableUpgradeable, Abstra
             BLOCKS_PER_YEAR *
             DECIMAL;
         uint256 _totalSupplyPoolInUSD = _liquidityPool.getAmountInUSD(
-            _liquidityPool.convertNTokensToAsset(_stats.totalSupplyPool)
+            _liquidityPool.convertLPTokensToAsset(_stats.totalSupplyPool)
         );
 
         if (_totalSupplyPoolInUSD != 0) {
@@ -297,17 +297,6 @@ contract RewardsDistribution is IRewardsDistribution, OwnableUpgradeable, Abstra
 
         _supplyRewardPerBlock = _totalRewardPerBlock.mulWithPrecision(_supplyRewardPerBlockPart);
         _borrowRewardPerBlock = _totalRewardPerBlock - _supplyRewardPerBlock;
-    }
-
-    function _countAPY(
-        uint256 _userAmount,
-        uint256 _totalReward,
-        ILiquidityPool _liquidityPool,
-        ILiquidityPool _governanceLP
-    ) internal view returns (uint256 _resultAPY) {
-        _resultAPY = _governanceLP.getAmountInUSD(_totalReward).divWithPrecision(
-            _liquidityPool.getAmountInUSD(_userAmount)
-        );
     }
 
     function _countNewCumulativeSum(

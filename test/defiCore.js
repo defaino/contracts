@@ -703,7 +703,7 @@ contract("DefiCore", async (accounts) => {
       assert.isTrue(deepCompareKeys(await assetsRegistry.getUserSupplyAssets(USER1), [daiKey]));
     });
 
-    it("should correctly mint NTokens for token with 6 decimal places", async () => {
+    it("should correctly mint LPTokens for token with 6 decimal places", async () => {
       const USER3 = accounts[5];
 
       await tokens[1].setDecimals(6);

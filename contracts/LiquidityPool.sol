@@ -73,8 +73,8 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
         string calldata _tokenSymbol
     ) external override initializer {
         __ERC20_init(
-            string(abi.encodePacked("NewDefi ", _tokenSymbol)),
-            string(abi.encodePacked("n", _tokenSymbol))
+            string(abi.encodePacked("DL Defi Core ", _tokenSymbol)),
+            string(abi.encodePacked("lp", _tokenSymbol))
         );
         compoundRateKeeper = new CompoundRateKeeper();
         assetAddr = _assetAddr;
@@ -93,7 +93,7 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
     }
 
     function getTotalLiquidity() external view override returns (uint256) {
-        return convertNTokensToAsset(totalSupply());
+        return convertLPTokensToAsset(totalSupply());
     }
 
     function getTotalBorrowedAmount() public view override returns (uint256) {
@@ -174,12 +174,17 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
             );
     }
 
-    function convertAssetToNTokens(uint256 _assetAmount) public view override returns (uint256) {
+    function convertAssetToLPTokens(uint256 _assetAmount) public view override returns (uint256) {
         return _assetAmount.divWithPrecision(exchangeRate());
     }
 
-    function convertNTokensToAsset(uint256 _nTokensAmount) public view override returns (uint256) {
-        return _nTokensAmount.mulWithPrecision(exchangeRate());
+    function convertLPTokensToAsset(uint256 _lpTokensAmount)
+        public
+        view
+        override
+        returns (uint256)
+    {
+        return _lpTokensAmount.mulWithPrecision(exchangeRate());
     }
 
     function exchangeRate() public view override returns (uint256) {
@@ -262,7 +267,7 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
 
         updateRateWithInterval();
 
-        uint256 _mintAmount = convertAssetToNTokens(_liquidityAmount);
+        uint256 _mintAmount = convertAssetToLPTokens(_liquidityAmount);
 
         lastLiquidity[_userAddr][block.number] += _mintAmount;
 
@@ -286,21 +291,21 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
             uint256 _toBurnLP;
 
             /// @dev Needed to withdraw all funds without a balance
-            if (convertNTokensToAsset(_userLPBalance) <= _liquidityAmount) {
+            if (convertLPTokensToAsset(_userLPBalance) <= _liquidityAmount) {
                 _toBurnLP = _userLPBalance;
             } else {
-                _toBurnLP = convertAssetToNTokens(_liquidityAmount);
+                _toBurnLP = convertAssetToLPTokens(_liquidityAmount);
             }
 
             _burn(_userAddr, _toBurnLP);
 
             IERC20(assetAddr).transfer(_userAddr, _convertToUnderlyingAsset(_liquidityAmount));
         } else {
-            uint256 _burnAmount = convertAssetToNTokens(_liquidityAmount);
+            uint256 _burnAmount = convertAssetToLPTokens(_liquidityAmount);
 
             require(
                 balanceOf(_userAddr) - lastLiquidity[_userAddr][block.number] >= _burnAmount,
-                "LiquidityPool: Not enough nTokens to withdraw liquidity."
+                "LiquidityPool: Not enough lpTokens to withdraw liquidity."
             );
 
             _burn(_userAddr, _burnAmount);
@@ -424,11 +429,11 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
 
         updateRateWithInterval();
 
-        uint256 _burnAmount = convertAssetToNTokens(_liquidityAmount);
+        uint256 _burnAmount = convertAssetToLPTokens(_liquidityAmount);
 
         require(
             balanceOf(_userAddr) >= _burnAmount,
-            "LiquidityPool: Not enough nTokens to liquidate amount."
+            "LiquidityPool: Not enough lpTokens to liquidate amount."
         );
 
         _burn(_userAddr, _burnAmount);

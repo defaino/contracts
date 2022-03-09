@@ -53,9 +53,9 @@ interface ILiquidityPool {
 
     function getAPY() external view returns (uint256);
 
-    function convertAssetToNTokens(uint256 _assetAmount) external view returns (uint256);
+    function convertAssetToLPTokens(uint256 _assetAmount) external view returns (uint256);
 
-    function convertNTokensToAsset(uint256 _nTokensAmount) external view returns (uint256);
+    function convertLPTokensToAsset(uint256 _lpTokensAmount) external view returns (uint256);
 
     function exchangeRate() external view returns (uint256);
 

@@ -201,7 +201,7 @@ contract DefiCore is IDefiCore, AbstractDependant {
 
         _maxToWithdraw =
             getUserLiquidityAmount(_userAddr, _assetKey) -
-            _liquidityPool.convertNTokensToAsset(
+            _liquidityPool.convertLPTokensToAsset(
                 _liquidityPool.lastLiquidity(_userAddr, block.number)
             );
 
@@ -241,7 +241,7 @@ contract DefiCore is IDefiCore, AbstractDependant {
         ILiquidityPool _liquidityPool = _assetKey.getAssetLiquidityPool(liquidityPoolRegistry);
 
         return
-            _liquidityPool.convertNTokensToAsset(
+            _liquidityPool.convertLPTokensToAsset(
                 IERC20(address(_liquidityPool)).balanceOf(_userAddr)
             );
     }

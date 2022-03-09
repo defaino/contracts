@@ -626,7 +626,7 @@ contract("LiquidityPool", async (accounts) => {
       await defiCore.disableCollateral(tokenKey, { from: USER1 });
 
       await setCurrentTime(withdrawTime);
-      const reason = "LiquidityPool: Not enough nTokens to withdraw liquidity.";
+      const reason = "LiquidityPool: Not enough lpTokens to withdraw liquidity.";
       await truffleAssert.reverts(
         defiCore.withdrawLiquidity(tokenKey, liquidityAmount.plus(100), false, { from: USER1 }),
         reason
