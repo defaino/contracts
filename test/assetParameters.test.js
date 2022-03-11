@@ -1,5 +1,14 @@
+const { assert } = require("chai");
+const { toBytes, fromBytes, compareKeys } = require("./helpers/bytesCompareLibrary");
+const { getInterestRateLibraryData } = require("../migrations/helpers/deployHelper");
+const { toBN, accounts } = require("../scripts/utils");
+
+const truffleAssert = require("truffle-assertions");
+const Reverter = require("./helpers/reverter");
+
 const AssetParameters = artifacts.require("AssetParameters");
 const SystemParameters = artifacts.require("SystemParameters");
+const UserInfoRegistry = artifacts.require("UserInfoRegistry");
 const Registry = artifacts.require("Registry");
 const LiquidityPool = artifacts.require("LiquidityPool");
 const LiquidityPoolFactory = artifacts.require("LiquidityPoolFactory");
@@ -10,35 +19,20 @@ const RewardsDistribution = artifacts.require("RewardsDistributionMock");
 const GovernanceToken = artifacts.require("GovernanceToken");
 const PriceManager = artifacts.require("PriceManagerMock");
 const ChainlinkOracleMock = artifacts.require("ChainlinkOracleMock");
-const AssetsRegistry = artifacts.require("AssetsRegistry");
-const LiquidityPoolAdmin = artifacts.require("LiquidityPoolAdmin");
 const LiquidityPoolRegistry = artifacts.require("LiquidityPoolRegistry");
 
-const IntegrationCore = artifacts.require("IntegrationCore");
-const BorrowerRouter = artifacts.require("BorrowerRouter");
-const BorrowerRouterFactory = artifacts.require("BorrowerRouterFactory");
-const BorrowerRouterRegistry = artifacts.require("BorrowerRouterRegistry");
+DefiCore.numberFormat = "BigNumber";
+AssetParameters.numberFormat = "BigNumber";
+SystemParameters.numberFormat = "BigNumber";
+Registry.numberFormat = "BigNumber";
+LiquidityPool.numberFormat = "BigNumber";
+LiquidityPoolFactory.numberFormat = "BigNumber";
+LiquidityPoolRegistry.numberFormat = "BigNumber";
 
-const { toBytes, fromBytes, deepCompareKeys, compareKeys } = require("./helpers/bytesCompareLibrary");
-const Reverter = require("./helpers/reverter");
-const { assert } = require("chai");
-
-const truffleAssert = require("truffle-assertions");
-
-const { getInterestRateLibraryData } = require("../migrations/helpers/deployHelper");
-const { toBN } = require("../scripts/globals");
-
-contract("AssetParameters", async (accounts) => {
-  const reverter = new Reverter(web3);
+describe("AssetParameters", () => {
+  const reverter = new Reverter();
 
   const ADDRESS_NULL = "0x0000000000000000000000000000000000000000";
-
-  const OWNER = accounts[0];
-  const SOMEBODY = accounts[1];
-  const USER1 = accounts[2];
-  const USER2 = accounts[3];
-  const NOTHING = accounts[8];
-  const TEST_ASSET = accounts[9];
 
   const onePercent = toBN(10).pow(25);
   const decimal = onePercent.times(100);
@@ -57,15 +51,22 @@ contract("AssetParameters", async (accounts) => {
   const minSupplyDistributionPart = onePercent.times(15);
   const minBorrowDistributionPart = onePercent.times(10);
 
+  const governanceTokenKey = toBytes("GTK");
+  const daiKey = toBytes("DAI");
+
+  let OWNER;
+  let SOMEBODY;
+  let USER1;
+  let USER2;
+  let NOTHING;
+  let TEST_ASSET;
+
   let assetParameters;
   let defiCore;
   let registry;
   let rewardsDistribution;
   let priceManager;
   let liquidityPoolRegistry;
-
-  const governanceTokenKey = toBytes("NDG");
-  const daiKey = toBytes("DAI");
 
   async function getTokens(symbols) {
     const neededTokens = [];
@@ -101,15 +102,11 @@ contract("AssetParameters", async (accounts) => {
       [tokensAmount, tokensAmount, tokensAmount]
     );
 
-    await assetParameters.setupInterestRateModel(assetKey, 0, firstSlope, secondSlope, utilizationBreakingPoint);
-    await assetParameters.setupMaxUtilizationRatio(assetKey, maxUR);
-
-    await assetParameters.setupDistributionsMinimums(assetKey, minSupplyDistributionPart, minBorrowDistributionPart);
-
-    await assetParameters.setupLiquidationDiscount(assetKey, liquidationDiscount);
-
-    await assetParameters.setupColRatio(assetKey, colRatio);
-    await assetParameters.setupReserveFactor(assetKey, reserveFactor);
+    await assetParameters.setupAllParameters(assetKey, [
+      [colRatio, reserveFactor, liquidationDiscount, maxUR],
+      [0, firstSlope, secondSlope, utilizationBreakingPoint],
+      [minSupplyDistributionPart, minBorrowDistributionPart],
+    ]);
 
     await priceManager.setPrice(assetKey, 100);
 
@@ -126,22 +123,11 @@ contract("AssetParameters", async (accounts) => {
       true
     );
 
-    await assetParameters.setupInterestRateModel(
-      governanceTokenKey,
-      0,
-      firstSlope,
-      secondSlope,
-      utilizationBreakingPoint
-    );
-    await assetParameters.setupMaxUtilizationRatio(governanceTokenKey, maxUR);
-    await assetParameters.setupDistributionsMinimums(
-      governanceTokenKey,
-      minSupplyDistributionPart,
-      minBorrowDistributionPart
-    );
-
-    await assetParameters.setupColRatio(governanceTokenKey, colRatio);
-    await assetParameters.setupReserveFactor(governanceTokenKey, reserveFactor);
+    await assetParameters.setupAllParameters(governanceTokenKey, [
+      [colRatio, reserveFactor, liquidationDiscount, maxUR],
+      [0, firstSlope, secondSlope, utilizationBreakingPoint],
+      [minSupplyDistributionPart, minBorrowDistributionPart],
+    ]);
 
     await priceManager.setPrice(governanceTokenKey, 10);
 
@@ -149,6 +135,13 @@ contract("AssetParameters", async (accounts) => {
   }
 
   before("setup", async () => {
+    OWNER = await accounts(0);
+    SOMEBODY = await accounts(1);
+    USER1 = await accounts(2);
+    USER2 = await accounts(3);
+    NOTHING = await accounts(8);
+    TEST_ASSET = await accounts(9);
+
     const interestRateLibrary = await InterestRateLibrary.new(
       getInterestRateLibraryData("scripts/InterestRatesExactData.txt"),
       getInterestRateLibraryData("scripts/InterestRatesData.txt")
@@ -159,34 +152,23 @@ contract("AssetParameters", async (accounts) => {
     const _defiCore = await DefiCore.new();
     const _systemParameters = await SystemParameters.new();
     const _assetParameters = await AssetParameters.new();
+    const _userInfoRegistry = await UserInfoRegistry.new();
     const _liquidityPoolFactory = await LiquidityPoolFactory.new();
     const _rewardsDistribution = await RewardsDistribution.new();
-    const _assetsRegistry = await AssetsRegistry.new();
     const _priceManager = await PriceManager.new();
-    const _liquidityPoolAdmin = await LiquidityPoolAdmin.new();
     const _liquidityPoolImpl = await LiquidityPool.new();
     const _liquidityPoolRegistry = await LiquidityPoolRegistry.new();
-
-    const _integrationCore = await IntegrationCore.new();
-    const _borrowerRouterImpl = await BorrowerRouter.new();
-    const _borrowerRouterFactory = await BorrowerRouterFactory.new();
-    const _borrowerRouterRegistry = await BorrowerRouterRegistry.new();
 
     const daiToken = (await getTokens("DAI"))[0];
 
     await registry.addProxyContract(await registry.DEFI_CORE_NAME(), _defiCore.address);
     await registry.addProxyContract(await registry.ASSET_PARAMETERS_NAME(), _assetParameters.address);
     await registry.addProxyContract(await registry.SYSTEM_PARAMETERS_NAME(), _systemParameters.address);
+    await registry.addProxyContract(await registry.USER_INFO_REGISTRY_NAME(), _userInfoRegistry.address);
     await registry.addProxyContract(await registry.LIQUIDITY_POOL_FACTORY_NAME(), _liquidityPoolFactory.address);
     await registry.addProxyContract(await registry.REWARDS_DISTRIBUTION_NAME(), _rewardsDistribution.address);
     await registry.addProxyContract(await registry.PRICE_MANAGER_NAME(), _priceManager.address);
-    await registry.addProxyContract(await registry.ASSETS_REGISTRY_NAME(), _assetsRegistry.address);
-    await registry.addProxyContract(await registry.LIQUIDITY_POOL_ADMIN_NAME(), _liquidityPoolAdmin.address);
     await registry.addProxyContract(await registry.LIQUIDITY_POOL_REGISTRY_NAME(), _liquidityPoolRegistry.address);
-
-    await registry.addProxyContract(await registry.INTEGRATION_CORE_NAME(), _integrationCore.address);
-    await registry.addProxyContract(await registry.BORROWER_ROUTER_FACTORY_NAME(), _borrowerRouterFactory.address);
-    await registry.addProxyContract(await registry.BORROWER_ROUTER_REGISTRY_NAME(), _borrowerRouterRegistry.address);
 
     await registry.addContract(await registry.INTEREST_RATE_LIBRARY_NAME(), interestRateLibrary.address);
     await registry.addContract(await registry.GOVERNANCE_TOKEN_NAME(), governanceToken.address);
@@ -198,29 +180,20 @@ contract("AssetParameters", async (accounts) => {
     liquidityPoolRegistry = await LiquidityPoolRegistry.at(await registry.getLiquidityPoolRegistryContract());
 
     const systemParameters = await SystemParameters.at(await registry.getSystemParametersContract());
-    const liquidityPoolAdmin = await LiquidityPoolAdmin.at(await registry.getLiquidityPoolAdminContract());
-    const borrowerRouterRegistry = await BorrowerRouterRegistry.at(await registry.getBorrowerRouterRegistryContract());
 
     await registry.injectDependencies(await registry.DEFI_CORE_NAME());
     await registry.injectDependencies(await registry.ASSET_PARAMETERS_NAME());
     await registry.injectDependencies(await registry.LIQUIDITY_POOL_FACTORY_NAME());
     await registry.injectDependencies(await registry.REWARDS_DISTRIBUTION_NAME());
-    await registry.injectDependencies(await registry.ASSETS_REGISTRY_NAME());
     await registry.injectDependencies(await registry.PRICE_MANAGER_NAME());
-    await registry.injectDependencies(await registry.LIQUIDITY_POOL_ADMIN_NAME());
     await registry.injectDependencies(await registry.LIQUIDITY_POOL_REGISTRY_NAME());
-
-    await registry.injectDependencies(await registry.INTEGRATION_CORE_NAME());
-    await registry.injectDependencies(await registry.BORROWER_ROUTER_FACTORY_NAME());
-    await registry.injectDependencies(await registry.BORROWER_ROUTER_REGISTRY_NAME());
+    await registry.injectDependencies(await registry.USER_INFO_REGISTRY_NAME());
 
     await systemParameters.systemParametersInitialize();
-    await liquidityPoolRegistry.liquidityPoolRegistryInitialize();
     await assetParameters.assetParametersInitialize();
     await rewardsDistribution.rewardsDistributionInitialize();
+    await liquidityPoolRegistry.liquidityPoolRegistryInitialize(_liquidityPoolImpl.address);
     await priceManager.priceManagerInitialize(daiKey, daiToken.address);
-    await liquidityPoolAdmin.liquidityPoolAdminInitialize(_liquidityPoolImpl.address);
-    await borrowerRouterRegistry.borrowerRouterRegistryInitialize(_borrowerRouterImpl.address);
 
     await deployGovernancePool(governanceToken.address, await governanceToken.symbol());
 
@@ -231,7 +204,7 @@ contract("AssetParameters", async (accounts) => {
 
   afterEach("revert", reverter.revert);
 
-  describe("isPoolFrozen", async () => {
+  describe("isPoolFrozen", () => {
     const assetKey = toBytes("SOME_ASSET");
 
     beforeEach("setup", async () => {
@@ -249,7 +222,7 @@ contract("AssetParameters", async (accounts) => {
     });
   });
 
-  describe("isAvailableAsCollateral", async () => {
+  describe("isAvailableAsCollateral", () => {
     const daiKey = toBytes("DAI");
     const wEthKey = toBytes("WETH");
 
@@ -274,7 +247,7 @@ contract("AssetParameters", async (accounts) => {
     });
   });
 
-  describe("getInterestRateParams", async () => {
+  describe("getInterestRateParams", () => {
     const daiKey = toBytes("DAI");
 
     it("should return correct interest rate params", async () => {
@@ -289,7 +262,7 @@ contract("AssetParameters", async (accounts) => {
     });
   });
 
-  describe("getMaxUtilizationRatio", async () => {
+  describe("getMaxUtilizationRatio", () => {
     const daiKey = toBytes("DAI");
 
     it("should return correct max utilization ratio", async () => {
@@ -299,7 +272,7 @@ contract("AssetParameters", async (accounts) => {
     });
   });
 
-  describe("getLiquidationDiscount", async () => {
+  describe("getLiquidationDiscount", () => {
     const daiKey = toBytes("DAI");
 
     it("should return correct liquidation discount", async () => {
@@ -312,7 +285,7 @@ contract("AssetParameters", async (accounts) => {
     });
   });
 
-  describe("getDistributionMinimums", async () => {
+  describe("getDistributionMinimums", () => {
     const daiKey = toBytes("DAI");
 
     it("should return correct distribution minimums", async () => {
@@ -325,7 +298,7 @@ contract("AssetParameters", async (accounts) => {
     });
   });
 
-  describe("getAssetPrice", async () => {
+  describe("getAssetPrice", () => {
     const daiKey = toBytes("DAI");
     const usdtKey = toBytes("USDT");
     const wEthKey = toBytes("WETH");
@@ -366,7 +339,7 @@ contract("AssetParameters", async (accounts) => {
     });
   });
 
-  describe("freeze", async () => {
+  describe("freeze", () => {
     const paramKey = "SUPPLY";
     const paramKeyBytes = toBytes(paramKey);
 
@@ -394,7 +367,7 @@ contract("AssetParameters", async (accounts) => {
     });
   });
 
-  describe("enableCollateral", async () => {
+  describe("enableCollateral", () => {
     const assetKeyRow = "DAI";
     const assetKeyBytes = toBytes(assetKeyRow);
 
@@ -416,7 +389,7 @@ contract("AssetParameters", async (accounts) => {
     });
   });
 
-  describe("setupInterestRateModel", async () => {
+  describe("setupInterestRateModel", () => {
     const daiKey = toBytes("DAI");
 
     beforeEach("setup", async () => {
@@ -424,7 +397,7 @@ contract("AssetParameters", async (accounts) => {
     });
 
     it("should correct setup interest rate model", async () => {
-      await assetParameters.setupInterestRateModel(daiKey, 0, firstSlope, secondSlope, utilizationBreakingPoint);
+      await assetParameters.setupInterestRateModel(daiKey, [0, firstSlope, secondSlope, utilizationBreakingPoint]);
 
       const params = await assetParameters.getInterestRateParams(daiKey);
 
@@ -438,13 +411,12 @@ contract("AssetParameters", async (accounts) => {
       const reason = "AssetParameters: The new value of the base percentage is invalid.";
 
       await truffleAssert.reverts(
-        assetParameters.setupInterestRateModel(
-          daiKey,
+        assetParameters.setupInterestRateModel(daiKey, [
           onePercent.times(4),
           firstSlope,
           secondSlope,
-          utilizationBreakingPoint
-        ),
+          utilizationBreakingPoint,
+        ]),
         reason
       );
     });
@@ -453,11 +425,16 @@ contract("AssetParameters", async (accounts) => {
       const reason = "AssetParameters: The new value of the first slope is invalid.";
 
       await truffleAssert.reverts(
-        assetParameters.setupInterestRateModel(daiKey, 0, onePercent.times(22), secondSlope, utilizationBreakingPoint),
+        assetParameters.setupInterestRateModel(daiKey, [
+          0,
+          onePercent.times(22),
+          secondSlope,
+          utilizationBreakingPoint,
+        ]),
         reason
       );
       await truffleAssert.reverts(
-        assetParameters.setupInterestRateModel(daiKey, 0, onePercent.times(2), secondSlope, utilizationBreakingPoint),
+        assetParameters.setupInterestRateModel(daiKey, [0, onePercent.times(2), secondSlope, utilizationBreakingPoint]),
         reason
       );
     });
@@ -466,11 +443,16 @@ contract("AssetParameters", async (accounts) => {
       const reason = "AssetParameters: The new value of the second slope is invalid.";
 
       await truffleAssert.reverts(
-        assetParameters.setupInterestRateModel(daiKey, 0, firstSlope, onePercent.times(40), utilizationBreakingPoint),
+        assetParameters.setupInterestRateModel(daiKey, [0, firstSlope, onePercent.times(40), utilizationBreakingPoint]),
         reason
       );
       await truffleAssert.reverts(
-        assetParameters.setupInterestRateModel(daiKey, 0, firstSlope, onePercent.times(120), utilizationBreakingPoint),
+        assetParameters.setupInterestRateModel(daiKey, [
+          0,
+          firstSlope,
+          onePercent.times(120),
+          utilizationBreakingPoint,
+        ]),
         reason
       );
     });
@@ -479,61 +461,79 @@ contract("AssetParameters", async (accounts) => {
       const reason = "AssetParameters: The new value of the utilization breaking point is invalid.";
 
       await truffleAssert.reverts(
-        assetParameters.setupInterestRateModel(daiKey, 0, firstSlope, secondSlope, onePercent.times(55)),
+        assetParameters.setupInterestRateModel(daiKey, [0, firstSlope, secondSlope, onePercent.times(55)]),
         reason
       );
       await truffleAssert.reverts(
-        assetParameters.setupInterestRateModel(daiKey, 0, firstSlope, secondSlope, onePercent.times(95)),
+        assetParameters.setupInterestRateModel(daiKey, [0, firstSlope, secondSlope, onePercent.times(95)]),
         reason
       );
     });
   });
 
-  describe("setupMaxUtilizationRatio", async () => {
+  describe("setupMainParameters", () => {
     const daiKey = toBytes("DAI");
 
     beforeEach("setup", async () => {
       await liquidityPoolRegistry.addLiquidityPool(TEST_ASSET, daiKey, NOTHING, NOTHING, "DAI", true);
     });
 
-    it("should correct setup max utilization ratio", async () => {
-      await assetParameters.setupMaxUtilizationRatio(daiKey, maxUR);
+    it("should correct setup main parameters", async () => {
+      await assetParameters.setupMainParameters(daiKey, [colRatio, reserveFactor, liquidationDiscount, maxUR]);
 
-      assert.equal(toBN(await assetParameters.getMaxUtilizationRatio(daiKey)).toString(), maxUR.toString());
+      assert.equal((await assetParameters.getColRatio(daiKey)).toString(), colRatio.toString());
+      assert.equal((await assetParameters.getReserveFactor(daiKey)).toString(), reserveFactor.toString());
+      assert.equal((await assetParameters.getLiquidationDiscount(daiKey)).toString(), liquidationDiscount.toString());
+      assert.equal((await assetParameters.getMaxUtilizationRatio(daiKey)).toString(), maxUR.toString());
     });
 
     it("should get exception if max utilization ratio is invalid", async () => {
       const reason = "AssetParameters: The new value of the max utilization ratio is invalid.";
 
-      await truffleAssert.reverts(assetParameters.setupMaxUtilizationRatio(daiKey, onePercent.times(90)), reason);
-      await truffleAssert.reverts(assetParameters.setupMaxUtilizationRatio(daiKey, onePercent.times(99)), reason);
-    });
-  });
-
-  describe("setupLiquidationDiscount", async () => {
-    const daiKey = toBytes("DAI");
-
-    beforeEach("setup", async () => {
-      await liquidityPoolRegistry.addLiquidityPool(TEST_ASSET, daiKey, NOTHING, NOTHING, "DAI", true);
-    });
-
-    it("should correct setup liquidation discount", async () => {
-      await assetParameters.setupLiquidationDiscount(daiKey, liquidationDiscount);
-
-      assert.equal(
-        toBN(await assetParameters.getLiquidationDiscount(daiKey)).toString(),
-        liquidationDiscount.toString()
+      await truffleAssert.reverts(
+        assetParameters.setupMainParameters(daiKey, [
+          colRatio,
+          reserveFactor,
+          liquidationDiscount,
+          onePercent.times(90),
+        ]),
+        reason
       );
     });
 
     it("should get exception if liquidation discount is invalid", async () => {
       const reason = "AssetParameters: The new value of the liquidation discount is invalid.";
 
-      await truffleAssert.reverts(assetParameters.setupLiquidationDiscount(daiKey, onePercent.times(15)), reason);
+      await truffleAssert.reverts(
+        assetParameters.setupMainParameters(daiKey, [colRatio, reserveFactor, onePercent.times(15), maxUR]),
+        reason
+      );
+    });
+
+    it("should get exception if collateralization ratio is invalid", async () => {
+      const reason = "AssetParameters: The new value of the collateralization ratio is invalid.";
+
+      await truffleAssert.reverts(
+        assetParameters.setupMainParameters(daiKey, [onePercent.times(90), reserveFactor, liquidationDiscount, maxUR]),
+        reason
+      );
+      await truffleAssert.reverts(
+        assetParameters.setupMainParameters(daiKey, [onePercent.times(201), reserveFactor, liquidationDiscount, maxUR]),
+        reason
+      );
+    });
+
+    it("should get exception if reserve factor is invalid", async () => {
+      const reason = "AssetParameters: The new value of the reserve factor is invalid.";
+
+      await truffleAssert.reverts(
+        assetParameters.setupMainParameters(daiKey, [colRatio, onePercent.times(7), liquidationDiscount, maxUR]),
+        reason
+      );
     });
   });
 
-  describe("setupDistributionsMinimums", async () => {
+  describe("setupDistributionsMinimums", () => {
     const daiKey = toBytes("DAI");
 
     beforeEach("setup", async () => {
@@ -541,7 +541,7 @@ contract("AssetParameters", async (accounts) => {
     });
 
     it("should correct setup distribution minimums", async () => {
-      await assetParameters.setupDistributionsMinimums(daiKey, minSupplyDistributionPart, minBorrowDistributionPart);
+      await assetParameters.setupDistributionsMinimums(daiKey, [minSupplyDistributionPart, minBorrowDistributionPart]);
 
       const minimums = await assetParameters.getDistributionMinimums(daiKey);
 
@@ -553,11 +553,11 @@ contract("AssetParameters", async (accounts) => {
       const reason = "AssetParameters: The new value of the minimum supply part is invalid.";
 
       await truffleAssert.reverts(
-        assetParameters.setupDistributionsMinimums(daiKey, onePercent.times(2), minBorrowDistributionPart),
+        assetParameters.setupDistributionsMinimums(daiKey, [onePercent.times(2), minBorrowDistributionPart]),
         reason
       );
       await truffleAssert.reverts(
-        assetParameters.setupDistributionsMinimums(daiKey, onePercent.times(35), minBorrowDistributionPart),
+        assetParameters.setupDistributionsMinimums(daiKey, [onePercent.times(35), minBorrowDistributionPart]),
         reason
       );
     });
@@ -566,11 +566,11 @@ contract("AssetParameters", async (accounts) => {
       const reason = "AssetParameters: The new value of the minimum borrow part is invalid.";
 
       await truffleAssert.reverts(
-        assetParameters.setupDistributionsMinimums(daiKey, minSupplyDistributionPart, onePercent.times(2)),
+        assetParameters.setupDistributionsMinimums(daiKey, [minSupplyDistributionPart, onePercent.times(2)]),
         reason
       );
       await truffleAssert.reverts(
-        assetParameters.setupDistributionsMinimums(daiKey, minSupplyDistributionPart, onePercent.times(35)),
+        assetParameters.setupDistributionsMinimums(daiKey, [minSupplyDistributionPart, onePercent.times(35)]),
         reason
       );
     });

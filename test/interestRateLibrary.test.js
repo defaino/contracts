@@ -1,14 +1,15 @@
-const InterestRateLibrary = artifacts.require("InterestRateLibrary");
-
-const Reverter = require("./helpers/reverter");
-
 const { getInterestRateLibraryData } = require("../migrations/helpers/deployHelper");
-const { toBN } = require("../scripts/globals");
+const { toBN } = require("../scripts/utils");
 
 const truffleAssert = require("truffle-assertions");
+const Reverter = require("./helpers/reverter");
 
-contract("InterestRateLibrary", async (accounts) => {
-  const reverter = new Reverter(web3);
+const InterestRateLibrary = artifacts.require("InterestRateLibrary");
+
+InterestRateLibrary.numberFormat = "BigNumber";
+
+describe("InterestRateLibrary", () => {
+  const reverter = new Reverter();
 
   const libraryPrecision = toBN(10);
 
@@ -25,21 +26,21 @@ contract("InterestRateLibrary", async (accounts) => {
 
   afterEach("revert", reverter.revert);
 
-  describe("creation", async () => {
+  describe("creation", () => {
     it("should fill in data correctly", async () => {
-      assert.equal(toBN(await interestRateLibrary.maxSupportedPercentage()).toString(), libraryPrecision.times(100));
+      assert.equal((await interestRateLibrary.maxSupportedPercentage()).toString(), libraryPrecision.times(100));
 
       const percent = libraryPrecision.times(35);
-      assert.equal(toBN(await interestRateLibrary.ratesPerSecond(percent)).toString(), toBN("9.51625e18").toString());
+      assert.equal((await interestRateLibrary.ratesPerSecond(percent)).toString(), toBN("9.51625e18").toString());
     });
 
     it("should get correct precise values", async () => {
       const percent = libraryPrecision.times(3.8);
-      assert.equal(toBN(await interestRateLibrary.ratesPerSecond(percent)).toString(), toBN("1.18264e18").toString());
+      assert.equal((await interestRateLibrary.ratesPerSecond(percent)).toString(), toBN("1.18264e18").toString());
     });
   });
 
-  describe("addNewRates", async () => {
+  describe("addNewRates", () => {
     it("should correctly add new rates", async () => {
       const newRates = [
         toBN("2.21377e19").toString(),
@@ -53,12 +54,12 @@ contract("InterestRateLibrary", async (accounts) => {
       await interestRateLibrary.addNewRates(startPercentage, newRates);
 
       assert.equal(
-        toBN(await interestRateLibrary.maxSupportedPercentage()).toString(),
+        (await interestRateLibrary.maxSupportedPercentage()).toString(),
         libraryPrecision.times(105).toString()
       );
 
       const percent = libraryPrecision.times(103);
-      assert.equal(toBN(await interestRateLibrary.ratesPerSecond(percent)).toString(), toBN("2.24517e19").toString());
+      assert.equal((await interestRateLibrary.ratesPerSecond(percent)).toString(), toBN("2.24517e19").toString());
     });
 
     it("should get exception if start percentage is invalid", async () => {

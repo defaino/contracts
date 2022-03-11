@@ -1,66 +1,57 @@
-const AssetParameters = artifacts.require("AssetParameters");
-const SystemParameters = artifacts.require("SystemParameters");
-const Registry = artifacts.require("Registry");
-const LiquidityPool = artifacts.require("LiquidityPool");
-const LiquidityPoolFactory = artifacts.require("LiquidityPoolFactory");
-const InterestRateLibrary = artifacts.require("InterestRateLibrary");
-const MockERC20 = artifacts.require("MockERC20");
-const DefiCore = artifacts.require("DefiCore");
-const RewardsDistribution = artifacts.require("RewardsDistributionMock");
-const GovernanceToken = artifacts.require("GovernanceToken");
-const PriceManager = artifacts.require("PriceManagerMock");
-const ChainlinkOracleMock = artifacts.require("ChainlinkOracleMock");
-const AssetsRegistry = artifacts.require("AssetsRegistry");
-const LiquidityPoolAdmin = artifacts.require("LiquidityPoolAdmin");
-const LiquidityPoolRegistry = artifacts.require("LiquidityPoolRegistry");
-
-const IntegrationCore = artifacts.require("IntegrationCore");
-const BorrowerRouter = artifacts.require("BorrowerRouterMock");
-const BorrowerRouterRegistry = artifacts.require("BorrowerRouterRegistry");
-const BorrowerRouterFactory = artifacts.require("BorrowerRouterFactory");
-
-const { advanceBlockAtTime } = require("./helpers/ganacheTimeTraveler");
+const { setNextBlockTime, getCurrentBlockTime } = require("./helpers/hardhatTimeTraveller");
 const { toBytes, fromBytes, deepCompareKeys, compareKeys } = require("./helpers/bytesCompareLibrary");
-const Reverter = require("./helpers/reverter");
-const { assert } = require("chai");
-
-const setCurrentTime = advanceBlockAtTime;
+const { getInterestRateLibraryData } = require("../migrations/helpers/deployHelper");
+const { toBN, accounts, getOnePercent, getDecimal, wei } = require("../scripts/utils");
 
 const truffleAssert = require("truffle-assertions");
+const Reverter = require("./helpers/reverter");
 
-const { getInterestRateLibraryData } = require("../migrations/helpers/deployHelper");
-const { toBN } = require("../scripts/globals");
+const Registry = artifacts.require("Registry");
+const DefiCore = artifacts.require("DefiCore");
+const SystemParameters = artifacts.require("SystemParameters");
+const AssetParameters = artifacts.require("AssetParameters");
+const RewardsDistribution = artifacts.require("RewardsDistributionMock");
+const UserInfoRegistry = artifacts.require("UserInfoRegistry");
+const LiquidityPoolRegistry = artifacts.require("LiquidityPoolRegistry");
+const LiquidityPoolFactory = artifacts.require("LiquidityPoolFactory");
+const LiquidityPool = artifacts.require("LiquidityPool");
+const PriceManager = artifacts.require("PriceManagerMock");
+const InterestRateLibrary = artifacts.require("InterestRateLibrary");
+const GovernanceToken = artifacts.require("GovernanceToken");
 
-contract("LiquidityPoolRegistry", async (accounts) => {
-  const reverter = new Reverter(web3);
+const MockERC20 = artifacts.require("MockERC20");
+const ChainlinkOracleMock = artifacts.require("ChainlinkOracleMock");
+
+LiquidityPool.numberFormat = "BigNumber";
+LiquidityPoolRegistry.numberFormat = "BigNumber";
+
+describe("LiquidityPoolRegistry", () => {
+  const reverter = new Reverter();
 
   const ADDRESS_NULL = "0x0000000000000000000000000000000000000000";
 
-  const OWNER = accounts[0];
-  const SOMEBODY = accounts[1];
-  const USER1 = accounts[2];
-  const USER2 = accounts[3];
-  const NOTHING = accounts[8];
-  const TEST_ASSET = accounts[9];
-
-  const onePercent = toBN(10).pow(25);
-  const decimal = onePercent.times(100);
-  const colRatio = decimal.times("1.25");
+  const colRatio = getDecimal().times("1.25");
   const oneToken = toBN(10).pow(18);
-  const tokensAmount = oneToken.times(100000);
-  const reserveFactor = onePercent.times("15");
+  const tokensAmount = wei(100000);
+  const reserveFactor = getOnePercent().times("15");
   const priceDecimals = toBN(10).pow(8);
   const price = toBN(100);
 
-  const firstSlope = onePercent.times(4);
-  const secondSlope = decimal;
-  const utilizationBreakingPoint = onePercent.times(80);
-  const maxUR = onePercent.times(95);
+  const firstSlope = getOnePercent().times(4);
+  const secondSlope = getDecimal();
+  const utilizationBreakingPoint = getOnePercent().times(80);
+  const maxUR = getOnePercent().times(95);
 
-  const liquidationDiscount = onePercent.times(8);
+  const liquidationDiscount = getOnePercent().times(8);
 
-  const minSupplyDistributionPart = onePercent.times(15);
-  const minBorrowDistributionPart = onePercent.times(10);
+  const minSupplyDistributionPart = getOnePercent().times(15);
+  const minBorrowDistributionPart = getOnePercent().times(10);
+
+  let OWNER;
+  let USER1;
+  let USER2;
+  let NOTHING;
+  let TEST_ASSET;
 
   let assetParameters;
   let defiCore;
@@ -69,7 +60,7 @@ contract("LiquidityPoolRegistry", async (accounts) => {
   let priceManager;
   let liquidityPoolRegistry;
 
-  const governanceTokenKey = toBytes("NDG");
+  const governanceTokenKey = toBytes("GTK");
   const daiKey = toBytes("DAI");
 
   async function getTokens(symbols) {
@@ -106,15 +97,11 @@ contract("LiquidityPoolRegistry", async (accounts) => {
       [tokensAmount, tokensAmount, tokensAmount]
     );
 
-    await assetParameters.setupInterestRateModel(assetKey, 0, firstSlope, secondSlope, utilizationBreakingPoint);
-    await assetParameters.setupMaxUtilizationRatio(assetKey, maxUR);
-
-    await assetParameters.setupDistributionsMinimums(assetKey, minSupplyDistributionPart, minBorrowDistributionPart);
-
-    await assetParameters.setupLiquidationDiscount(assetKey, liquidationDiscount);
-
-    await assetParameters.setupColRatio(assetKey, colRatio);
-    await assetParameters.setupReserveFactor(assetKey, reserveFactor);
+    await assetParameters.setupAllParameters(assetKey, [
+      [colRatio, reserveFactor, liquidationDiscount, maxUR],
+      [0, firstSlope, secondSlope, utilizationBreakingPoint],
+      [minSupplyDistributionPart, minBorrowDistributionPart],
+    ]);
 
     await priceManager.setPrice(assetKey, 100);
 
@@ -131,22 +118,11 @@ contract("LiquidityPoolRegistry", async (accounts) => {
       true
     );
 
-    await assetParameters.setupInterestRateModel(
-      governanceTokenKey,
-      0,
-      firstSlope,
-      secondSlope,
-      utilizationBreakingPoint
-    );
-    await assetParameters.setupMaxUtilizationRatio(governanceTokenKey, maxUR);
-    await assetParameters.setupDistributionsMinimums(
-      governanceTokenKey,
-      minSupplyDistributionPart,
-      minBorrowDistributionPart
-    );
-
-    await assetParameters.setupColRatio(governanceTokenKey, colRatio);
-    await assetParameters.setupReserveFactor(governanceTokenKey, reserveFactor);
+    await assetParameters.setupAllParameters(governanceTokenKey, [
+      [colRatio, reserveFactor, liquidationDiscount, maxUR],
+      [0, firstSlope, secondSlope, utilizationBreakingPoint],
+      [minSupplyDistributionPart, minBorrowDistributionPart],
+    ]);
 
     await priceManager.setPrice(governanceTokenKey, 10);
 
@@ -154,6 +130,12 @@ contract("LiquidityPoolRegistry", async (accounts) => {
   }
 
   before("setup", async () => {
+    OWNER = await accounts(0);
+    USER1 = await accounts(1);
+    USER2 = await accounts(2);
+    NOTHING = await accounts(8);
+    TEST_ASSET = await accounts(9);
+
     const interestRateLibrary = await InterestRateLibrary.new(
       getInterestRateLibraryData("scripts/InterestRatesExactData.txt"),
       getInterestRateLibraryData("scripts/InterestRatesData.txt")
@@ -164,67 +146,49 @@ contract("LiquidityPoolRegistry", async (accounts) => {
     const _defiCore = await DefiCore.new();
     const _systemParameters = await SystemParameters.new();
     const _assetParameters = await AssetParameters.new();
-    const _liquidityPoolFactory = await LiquidityPoolFactory.new();
     const _rewardsDistribution = await RewardsDistribution.new();
-    const _assetsRegistry = await AssetsRegistry.new();
-    const _priceManager = await PriceManager.new();
-    const _liquidityPoolAdmin = await LiquidityPoolAdmin.new();
-    const _liquidityPoolImpl = await LiquidityPool.new();
+    const _userInfoRegistry = await UserInfoRegistry.new();
     const _liquidityPoolRegistry = await LiquidityPoolRegistry.new();
-
-    const _integrationCore = await IntegrationCore.new();
-    const _borrowerRouterImpl = await BorrowerRouter.new();
-    const _borrowerRouterFactory = await BorrowerRouterFactory.new();
-    const _borrowerRouterRegistry = await BorrowerRouterRegistry.new();
+    const _liquidityPoolFactory = await LiquidityPoolFactory.new();
+    const _liquidityPoolImpl = await LiquidityPool.new();
+    const _priceManager = await PriceManager.new();
 
     const daiToken = (await getTokens("DAI"))[0];
 
     await registry.addProxyContract(await registry.DEFI_CORE_NAME(), _defiCore.address);
-    await registry.addProxyContract(await registry.ASSET_PARAMETERS_NAME(), _assetParameters.address);
     await registry.addProxyContract(await registry.SYSTEM_PARAMETERS_NAME(), _systemParameters.address);
-    await registry.addProxyContract(await registry.LIQUIDITY_POOL_FACTORY_NAME(), _liquidityPoolFactory.address);
+    await registry.addProxyContract(await registry.ASSET_PARAMETERS_NAME(), _assetParameters.address);
     await registry.addProxyContract(await registry.REWARDS_DISTRIBUTION_NAME(), _rewardsDistribution.address);
-    await registry.addProxyContract(await registry.PRICE_MANAGER_NAME(), _priceManager.address);
-    await registry.addProxyContract(await registry.ASSETS_REGISTRY_NAME(), _assetsRegistry.address);
-    await registry.addProxyContract(await registry.LIQUIDITY_POOL_ADMIN_NAME(), _liquidityPoolAdmin.address);
+    await registry.addProxyContract(await registry.USER_INFO_REGISTRY_NAME(), _userInfoRegistry.address);
     await registry.addProxyContract(await registry.LIQUIDITY_POOL_REGISTRY_NAME(), _liquidityPoolRegistry.address);
-
-    await registry.addProxyContract(await registry.INTEGRATION_CORE_NAME(), _integrationCore.address);
-    await registry.addProxyContract(await registry.BORROWER_ROUTER_FACTORY_NAME(), _borrowerRouterFactory.address);
-    await registry.addProxyContract(await registry.BORROWER_ROUTER_REGISTRY_NAME(), _borrowerRouterRegistry.address);
+    await registry.addProxyContract(await registry.LIQUIDITY_POOL_FACTORY_NAME(), _liquidityPoolFactory.address);
+    await registry.addProxyContract(await registry.PRICE_MANAGER_NAME(), _priceManager.address);
 
     await registry.addContract(await registry.INTEREST_RATE_LIBRARY_NAME(), interestRateLibrary.address);
     await registry.addContract(await registry.GOVERNANCE_TOKEN_NAME(), governanceToken.address);
 
     defiCore = await DefiCore.at(await registry.getDefiCoreContract());
     assetParameters = await AssetParameters.at(await registry.getAssetParametersContract());
+    userInfoRegistry = await UserInfoRegistry.at(await registry.getUserInfoRegistryContract());
+    liquidityPoolRegistry = await LiquidityPoolRegistry.at(await registry.getLiquidityPoolRegistryContract());
     rewardsDistribution = await RewardsDistribution.at(await registry.getRewardsDistributionContract());
     priceManager = await PriceManager.at(await registry.getPriceManagerContract());
-    liquidityPoolRegistry = await LiquidityPoolRegistry.at(await registry.getLiquidityPoolRegistryContract());
 
     const systemParameters = await SystemParameters.at(await registry.getSystemParametersContract());
-    const liquidityPoolAdmin = await LiquidityPoolAdmin.at(await registry.getLiquidityPoolAdminContract());
-    const borrowerRouterRegistry = await BorrowerRouterRegistry.at(await registry.getBorrowerRouterRegistryContract());
 
     await registry.injectDependencies(await registry.DEFI_CORE_NAME());
     await registry.injectDependencies(await registry.ASSET_PARAMETERS_NAME());
-    await registry.injectDependencies(await registry.LIQUIDITY_POOL_FACTORY_NAME());
     await registry.injectDependencies(await registry.REWARDS_DISTRIBUTION_NAME());
-    await registry.injectDependencies(await registry.ASSETS_REGISTRY_NAME());
-    await registry.injectDependencies(await registry.PRICE_MANAGER_NAME());
-    await registry.injectDependencies(await registry.LIQUIDITY_POOL_ADMIN_NAME());
+    await registry.injectDependencies(await registry.USER_INFO_REGISTRY_NAME());
     await registry.injectDependencies(await registry.LIQUIDITY_POOL_REGISTRY_NAME());
-    await registry.injectDependencies(await registry.INTEGRATION_CORE_NAME());
-    await registry.injectDependencies(await registry.BORROWER_ROUTER_FACTORY_NAME());
-    await registry.injectDependencies(await registry.BORROWER_ROUTER_REGISTRY_NAME());
+    await registry.injectDependencies(await registry.LIQUIDITY_POOL_FACTORY_NAME());
+    await registry.injectDependencies(await registry.PRICE_MANAGER_NAME());
 
     await systemParameters.systemParametersInitialize();
-    await liquidityPoolRegistry.liquidityPoolRegistryInitialize();
     await assetParameters.assetParametersInitialize();
     await rewardsDistribution.rewardsDistributionInitialize();
+    await liquidityPoolRegistry.liquidityPoolRegistryInitialize(_liquidityPoolImpl.address);
     await priceManager.priceManagerInitialize(daiKey, daiToken.address);
-    await liquidityPoolAdmin.liquidityPoolAdminInitialize(_liquidityPoolImpl.address);
-    await borrowerRouterRegistry.borrowerRouterRegistryInitialize(_borrowerRouterImpl.address);
 
     await deployGovernancePool(governanceToken.address, await governanceToken.symbol());
 
@@ -235,7 +199,7 @@ contract("LiquidityPoolRegistry", async (accounts) => {
 
   afterEach("revert", reverter.revert);
 
-  describe("getAllSupportedAssets", async () => {
+  describe("getAllSupportedAssets", () => {
     it("should return zero supported assets", async () => {
       assert.isTrue(deepCompareKeys(await liquidityPoolRegistry.getAllSupportedAssets(), [governanceTokenKey]));
     });
@@ -257,7 +221,7 @@ contract("LiquidityPoolRegistry", async (accounts) => {
     });
   });
 
-  describe("getAllLiquidityPools", async () => {
+  describe("getAllLiquidityPools", () => {
     it("should return liquidity pool for governance token", async () => {
       assert.deepEqual(
         [await liquidityPoolRegistry.liquidityPools(governanceTokenKey)],
@@ -287,57 +251,7 @@ contract("LiquidityPoolRegistry", async (accounts) => {
     });
   });
 
-  describe("getAllowForIntegrationAssets", async () => {
-    beforeEach("setup", async () => {
-      await assetParameters.setupAllowForIntegration(governanceTokenKey, true);
-    });
-
-    it("should return zero allow for integration assets", async () => {
-      const result = await liquidityPoolRegistry.getAllowForIntegrationAssets();
-
-      assert.equal(toBN(result[1]).toString(), 1);
-      assert.isTrue(deepCompareKeys(result[0], [governanceTokenKey]));
-    });
-
-    it("should return correct allow for integration assets", async () => {
-      const assetKey1 = toBytes("DAI");
-      const assetKey2 = toBytes("WETH");
-      const assetKey3 = toBytes("USDT");
-      const assetKey4 = toBytes("USDC");
-
-      let expectedList = [governanceTokenKey, assetKey1, assetKey2, assetKey3, assetKey4];
-
-      await liquidityPoolRegistry.addLiquidityPool(TEST_ASSET, assetKey1, NOTHING, NOTHING, "DAI", false);
-      await liquidityPoolRegistry.addLiquidityPool(TEST_ASSET, assetKey2, NOTHING, NOTHING, "WETH", false);
-      await liquidityPoolRegistry.addLiquidityPool(TEST_ASSET, assetKey3, NOTHING, NOTHING, "USDT", false);
-      await liquidityPoolRegistry.addLiquidityPool(TEST_ASSET, assetKey4, NOTHING, NOTHING, "USDC", false);
-
-      await assetParameters.setupAllowForIntegration(assetKey1, true);
-      await assetParameters.setupAllowForIntegration(assetKey2, true);
-      await assetParameters.setupAllowForIntegration(assetKey3, true);
-      await assetParameters.setupAllowForIntegration(assetKey4, true);
-
-      let result = await liquidityPoolRegistry.getAllowForIntegrationAssets();
-
-      assert.equal(toBN(result[1]).toString(), 5);
-      assert.isTrue(deepCompareKeys(result[0], expectedList));
-
-      await assetParameters.setupAllowForIntegration(assetKey2, false);
-      await assetParameters.setupAllowForIntegration(assetKey3, false);
-
-      expectedList = [governanceTokenKey, assetKey1, assetKey4];
-
-      result = await liquidityPoolRegistry.getAllowForIntegrationAssets();
-
-      assert.equal(toBN(result[1]).toString(), 3);
-
-      for (let i = 0; i < result[1]; i++) {
-        assert.isTrue(compareKeys(result[0][i], expectedList[i]));
-      }
-    });
-  });
-
-  describe("addLiquidityPool", async () => {
+  describe("addLiquidityPool", () => {
     const assetKeyRow = "DAI";
     const assetKeyBytes = toBytes(assetKeyRow);
 
@@ -395,25 +309,29 @@ contract("LiquidityPoolRegistry", async (accounts) => {
     });
   });
 
-  describe("withdrawAllReservedFunds/withdrawReservedFunds", async () => {
+  describe("withdrawAllReservedFunds/withdrawReservedFunds", () => {
     const firstKey = toBytes("FIRST_KEY");
     const secondKey = toBytes("SECOND_KEY");
     const thirdKey = toBytes("THIRD_KEY");
     const symbols = ["FIRST", "SECOND", "THIRD"];
     const keys = [firstKey, secondKey, thirdKey];
-    const RECIPIENT = accounts[4];
 
     const tokens = [];
     const liquidityPools = [];
     const reservedAmounts = [];
 
-    const liquidityAmount = oneToken.times(100);
-    const borrowAmount = oneToken.times(60);
+    const liquidityAmount = wei(100);
+    const borrowAmount = wei(60);
     const startTime = toBN(10000);
 
+    let RECIPIENT;
+
     beforeEach("setup", async () => {
+      RECIPIENT = await accounts(4);
+
       for (let i = 0; i < keys.length; i++) {
-        await setCurrentTime(startTime);
+        const currentTime = toBN(await getCurrentBlockTime());
+        await setNextBlockTime(currentTime.plus(startTime).toNumber());
         tokens.push(await createLiquidityPool(keys[i], symbols[i], true));
 
         const currentLiquidityPool = await LiquidityPool.at(await liquidityPoolRegistry.liquidityPools(keys[i]));
@@ -422,12 +340,12 @@ contract("LiquidityPoolRegistry", async (accounts) => {
         await defiCore.addLiquidity(keys[i], liquidityAmount.times(i + 1), { from: USER1 });
         await defiCore.borrow(keys[i], borrowAmount.times(i + 1), { from: USER1 });
 
-        await setCurrentTime(startTime.times(1000));
+        await setNextBlockTime(currentTime.plus(startTime.times(1000)).toNumber());
         await currentLiquidityPool.updateCompoundRate();
 
         await defiCore.repayBorrow(keys[i], borrowAmount.times(i + 3), true, { from: USER1 });
 
-        reservedAmounts.push(toBN(await currentLiquidityPool.totalReserves()));
+        reservedAmounts.push(await currentLiquidityPool.totalReserves());
       }
     });
 
@@ -435,7 +353,7 @@ contract("LiquidityPoolRegistry", async (accounts) => {
       await liquidityPoolRegistry.withdrawAllReservedFunds(RECIPIENT, 0, 10);
 
       for (let i = 0; i < keys.length; i++) {
-        assert.equal(reservedAmounts[i].toString(), toBN(await tokens[i].balanceOf(RECIPIENT)).toString());
+        assert.equal(reservedAmounts[i].toString(), (await tokens[i].balanceOf(RECIPIENT)).toString());
       }
     });
 
@@ -444,7 +362,7 @@ contract("LiquidityPoolRegistry", async (accounts) => {
 
       await liquidityPoolRegistry.withdrawReservedFunds(RECIPIENT, keys[1], amountToWithdraw, false);
 
-      assert.equal(amountToWithdraw.toString(), toBN(await tokens[1].balanceOf(RECIPIENT)).toString());
+      assert.equal(amountToWithdraw.toString(), (await tokens[1].balanceOf(RECIPIENT)).toString());
     });
 
     it("should get exception if the asset doesn't exist", async () => {
@@ -457,7 +375,7 @@ contract("LiquidityPoolRegistry", async (accounts) => {
     });
   });
 
-  describe("getLiquidityPoolsInfo", async () => {
+  describe("getLiquidityPoolsInfo", () => {
     const firstKey = toBytes("FIRST_KEY");
     const secondKey = toBytes("SECOND_KEY");
     const thirdKey = toBytes("THIRD_KEY");
@@ -467,13 +385,14 @@ contract("LiquidityPoolRegistry", async (accounts) => {
     const tokens = [];
     const liquidityPools = [];
 
-    const liquidityAmount = oneToken.times(100);
-    const borrowAmount = oneToken.times(60);
+    const liquidityAmount = wei(100);
+    const borrowAmount = wei(60);
     const startTime = toBN(10000);
 
     beforeEach("setup", async () => {
       for (let i = 0; i < keys.length; i++) {
-        await setCurrentTime(startTime);
+        const currentTime = toBN(await getCurrentBlockTime());
+        await setNextBlockTime(currentTime.plus(startTime).toNumber());
         tokens.push(await createLiquidityPool(keys[i], symbols[i], true));
 
         const currentLiquidityPool = await LiquidityPool.at(await liquidityPoolRegistry.liquidityPools(keys[i]));
@@ -485,44 +404,44 @@ contract("LiquidityPoolRegistry", async (accounts) => {
     });
 
     it("should return correct data", async () => {
-      const liquidityPoolsInfo = await liquidityPoolRegistry.getLiquidityPoolsInfo(0, 10);
+      const liquidityPoolsInfo = await liquidityPoolRegistry.getLiquidityPoolsInfo(keys);
 
-      for (let i = 1; i < liquidityPoolsInfo.length; i++) {
+      for (let i = 0; i < liquidityPoolsInfo.length; i++) {
         const currentInfo = liquidityPoolsInfo[i];
 
-        assert.isTrue(compareKeys(currentInfo.assetKey, keys[i - 1]));
+        assert.isTrue(compareKeys(currentInfo.baseInfo.assetKey, keys[i]));
 
-        assert.equal(currentInfo.assetAddr, tokens[i - 1].address);
+        assert.equal(currentInfo.baseInfo.assetAddr, tokens[i].address);
 
-        const totalPoolLiquidity = liquidityAmount.times(i);
-        assert.equal(toBN(currentInfo.marketSize).toString(), totalPoolLiquidity.toString());
+        const totalPoolLiquidity = liquidityAmount.times(i + 1);
+        assert.equal(currentInfo.marketSize.toString(), totalPoolLiquidity.toString());
         assert.equal(
-          toBN(currentInfo.marketSizeInUsd).toString(),
-          toBN(await liquidityPools[i - 1].getAmountInUSD(totalPoolLiquidity)).toString()
+          currentInfo.marketSizeInUSD.toString(),
+          (await liquidityPools[i].getAmountInUSD(totalPoolLiquidity)).toString()
         );
 
-        const totalBorrowedAmount = borrowAmount.times(i);
-        assert.equal(toBN(currentInfo.totalBorrowBalance).toString(), totalBorrowedAmount.toString());
+        const totalBorrowedAmount = borrowAmount.times(i + 1);
+        assert.equal(currentInfo.totalBorrowBalance.toString(), totalBorrowedAmount.toString());
         assert.equal(
-          toBN(currentInfo.totalBorrowBalanceInUsd).toString(),
-          toBN(await liquidityPools[i - 1].getAmountInUSD(totalBorrowedAmount)).toString()
+          currentInfo.totalBorrowBalanceInUSD.toString(),
+          (await liquidityPools[i].getAmountInUSD(totalBorrowedAmount)).toString()
         );
 
-        const expectedSupplyAPY = onePercent.times(1.53);
-        const expectedBorrowAPY = onePercent.times(3);
+        const expectedSupplyAPY = getOnePercent().times(1.53);
+        const expectedBorrowAPY = getOnePercent().times(3);
 
-        assert.equal(toBN(currentInfo.apyInfo.supplyAPY).toString(), expectedSupplyAPY.toString());
-        assert.equal(toBN(currentInfo.apyInfo.borrowAPY).toString(), expectedBorrowAPY.toString());
+        assert.equal(currentInfo.baseInfo.supplyAPY.toString(), expectedSupplyAPY.toFixed());
+        assert.equal(currentInfo.baseInfo.borrowAPY.toString(), expectedBorrowAPY.toFixed());
       }
     });
   });
 
-  describe("getDetailedLiquidityPoolInfo", async () => {
+  describe("getDetailedLiquidityPoolInfo", () => {
     const symbols = ["FIRST", "SECOND", "THIRD"];
     const keys = [toBytes("FIRST_KEY"), toBytes("SECOND_KEY"), toBytes("THIRD_KEY")];
 
-    const liquidityAmount = oneToken.times(100);
-    const borrowAmount = oneToken.times(60);
+    const liquidityAmount = wei(100);
+    const borrowAmount = wei(60);
     const pricePerToken = price.times(priceDecimals);
 
     beforeEach("setup", async () => {
@@ -532,6 +451,8 @@ contract("LiquidityPoolRegistry", async (accounts) => {
         await defiCore.addLiquidity(keys[i], liquidityAmount.times(i + 1), { from: USER1 });
         await defiCore.borrow(keys[i], borrowAmount.times(i + 1), { from: USER1 });
       }
+
+      await rewardsDistribution.setupRewardsPerBlockBatch(keys, [wei(2), oneToken, wei(3)]);
     });
 
     it("should return correct detailed info", async () => {
@@ -542,39 +463,39 @@ contract("LiquidityPoolRegistry", async (accounts) => {
         const availableLiquidity = liquidityAmount
           .times(i + 1)
           .times(maxUR)
-          .idiv(decimal)
-          .minus(totalBorrowedAmount)
-          .idiv(oneToken)
-          .times(pricePerToken);
+          .idiv(getDecimal())
+          .minus(totalBorrowedAmount);
 
+        assert.equal(detailedInfo.poolInfo.totalBorrowBalance.toString(), totalBorrowedAmount.toString());
         assert.equal(
-          toBN(detailedInfo.totalBorrowed).toString(),
+          detailedInfo.poolInfo.totalBorrowBalanceInUSD.toString(),
           totalBorrowedAmount.idiv(oneToken).times(pricePerToken).toString()
         );
 
-        assert.equal(toBN(detailedInfo.availableLiquidity).toString(), availableLiquidity.toString());
-        assert.equal(toBN(detailedInfo.utilizationRatio).toString(), onePercent.times(60).toString());
-
-        assert.equal(toBN(detailedInfo.liquidityPoolParams.collateralizationRatio).toString(), colRatio.toString());
-        assert.equal(toBN(detailedInfo.liquidityPoolParams.reserveFactor).toString(), reserveFactor.toString());
+        assert.equal(detailedInfo.availableLiquidity.toString(), availableLiquidity.toString());
         assert.equal(
-          toBN(detailedInfo.liquidityPoolParams.liquidationDiscount).toString(),
-          liquidationDiscount.toString()
+          detailedInfo.availableLiquidityInUSD.toString(),
+          availableLiquidity.idiv(oneToken).times(pricePerToken).toString()
         );
-        assert.equal(toBN(detailedInfo.liquidityPoolParams.maxUtilizationRatio).toString(), maxUR.toString());
-        assert.equal(detailedInfo.liquidityPoolParams.isAvailableAsCollateral, true);
+        assert.equal(detailedInfo.poolInfo.baseInfo.utilizationRatio.toString(), getOnePercent().times(60).toFixed());
+        assert.equal(detailedInfo.poolInfo.baseInfo.isAvailableAsCollateral, true);
 
-        const expectedSupplyAPY = onePercent.times(1.53);
-        const expectedBorrowAPY = onePercent.times(3);
+        assert.equal(detailedInfo.liquidityPoolParams.collateralizationRatio.toString(), colRatio.toFixed());
+        assert.equal(detailedInfo.liquidityPoolParams.reserveFactor.toString(), reserveFactor.toFixed());
+        assert.equal(detailedInfo.liquidityPoolParams.liquidationDiscount.toString(), liquidationDiscount.toFixed());
+        assert.equal(detailedInfo.liquidityPoolParams.maxUtilizationRatio.toString(), maxUR.toFixed());
 
-        assert.equal(toBN(detailedInfo.apyInfo.supplyAPY).toString(), expectedSupplyAPY.toString());
-        assert.equal(toBN(detailedInfo.apyInfo.borrowAPY).toString(), expectedBorrowAPY.toString());
+        const expectedSupplyAPY = getOnePercent().times(1.53);
+        const expectedBorrowAPY = getOnePercent().times(3);
+
+        assert.equal(detailedInfo.poolInfo.baseInfo.supplyAPY.toString(), expectedSupplyAPY.toFixed());
+        assert.equal(detailedInfo.poolInfo.baseInfo.borrowAPY.toString(), expectedBorrowAPY.toFixed());
       }
     });
   });
 
-  describe("getTotalMarketsSize", async () => {
-    const liquidityAmount = oneToken.times(100);
+  describe("getTotalMarketsSize", () => {
+    const liquidityAmount = wei(100);
 
     it("should return zero if there were no deposits in the system", async () => {
       assert.equal(toBN(await liquidityPoolRegistry.getTotalMarketsSize()).toString(), 0);

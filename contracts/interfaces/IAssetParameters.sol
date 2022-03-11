@@ -12,12 +12,6 @@ interface IAssetParameters {
         uint256 maxUtilizationRatio;
     }
 
-    struct PoolIntegrationParams {
-        uint256 integrationColRatio;
-        uint256 optimizationRewardPercentage;
-        bool allowForIntegration;
-    }
-
     struct InterestRateParams {
         uint256 basePercentage;
         uint256 firstSlope;
@@ -32,7 +26,6 @@ interface IAssetParameters {
 
     struct AllPoolParams {
         MainPoolParams mainParams;
-        PoolIntegrationParams integrationParams;
         InterestRateParams interestRateParams;
         DistributionMinimums distrMinimums;
     }

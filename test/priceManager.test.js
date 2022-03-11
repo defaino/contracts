@@ -1,28 +1,22 @@
+const { setNextBlockTime, getCurrentBlockTime } = require("./helpers/hardhatTimeTraveller");
+const { toBytes, compareKeys } = require("./helpers/bytesCompareLibrary");
+const { toBN, accounts, wei } = require("../scripts/utils");
+
+const truffleAssert = require("truffle-assertions");
+const Reverter = require("./helpers/reverter");
+
 const PriceManager = artifacts.require("PriceManagerMock");
 const Registry = artifacts.require("Registry");
 const MockERC20 = artifacts.require("MockERC20");
 const ChainlinkOracle = artifacts.require("ChainlinkOracleMock");
 
-const { advanceBlockAtTime } = require("./helpers/ganacheTimeTraveler");
-const { toBytes, compareKeys } = require("./helpers/bytesCompareLibrary");
-const Reverter = require("./helpers/reverter");
-const { assert } = require("chai");
-
-const setCurrentTime = advanceBlockAtTime;
-
-const truffleAssert = require("truffle-assertions");
-
-const { toBN } = require("../scripts/globals");
-
-contract("PriceManager", async (accounts) => {
-  const reverter = new Reverter(web3);
+describe("PriceManager", async () => {
+  const reverter = new Reverter();
 
   const ADDRESS_NULL = "0x0000000000000000000000000000000000000000";
 
-  const NOTHING = accounts[8];
-  const LIQUIDITY_POOL_REGISTRY = accounts[9];
-
-  const onePercent = toBN(10).pow(25);
+  let NOTHING;
+  let LIQUIDITY_POOL_REGISTRY;
 
   let registry;
   let priceManager;
@@ -34,6 +28,9 @@ contract("PriceManager", async (accounts) => {
   const usdcKey = toBytes("USDC");
 
   before("setup", async () => {
+    NOTHING = await accounts(8);
+    LIQUIDITY_POOL_REGISTRY = await accounts(9);
+
     registry = await Registry.new();
 
     dai = await MockERC20.new("MockDAI", "DAI");
@@ -53,7 +50,7 @@ contract("PriceManager", async (accounts) => {
 
   afterEach("revert", reverter.revert);
 
-  describe("addOracle", async () => {
+  describe("addOracle", () => {
     it("should correctly add new oracle", async () => {
       const chainlinkOracle = await ChainlinkOracle.new(10, 1);
       const txReceipt = await priceManager.addOracle(wEthKey, NOTHING, chainlinkOracle.address, NOTHING, {
@@ -81,7 +78,7 @@ contract("PriceManager", async (accounts) => {
     });
   });
 
-  describe("addChainlinkOracle", async () => {
+  describe("addChainlinkOracle", () => {
     let chainlinkOracle;
 
     beforeEach("setup", async () => {
@@ -115,17 +112,17 @@ contract("PriceManager", async (accounts) => {
     });
   });
 
-  describe("updateRedirectToUniswap", async () => {
+  describe("updateRedirectToUniswap", () => {
     it("should update the redirect correctly", async () => {
       let newValue = true;
-      let currentTime = 1;
+      let currentTime = await getCurrentBlockTime();
 
-      await setCurrentTime(currentTime);
+      await setNextBlockTime(currentTime + 1);
 
       let txReceipt = await priceManager.updateRedirectToUniswap(newValue);
 
       assert.equal(txReceipt.receipt.logs[0].event, "RedirectUpdated");
-      assert.equal(txReceipt.receipt.logs[0].args._updateTimestamp, currentTime);
+      assert.equal(txReceipt.receipt.logs[0].args._updateTimestamp, currentTime + 1);
       assert.equal(txReceipt.receipt.logs[0].args._newValue, newValue);
 
       assert.equal(await priceManager.redirectToUniswap(), newValue);
@@ -133,7 +130,7 @@ contract("PriceManager", async (accounts) => {
       newValue = false;
       currentTime = 10000;
 
-      await setCurrentTime(currentTime);
+      await setNextBlockTime(currentTime);
 
       txReceipt = await priceManager.updateRedirectToUniswap(newValue);
 
@@ -145,10 +142,10 @@ contract("PriceManager", async (accounts) => {
     });
   });
 
-  describe("getPrice", async () => {
+  describe("getPrice", () => {
     const decimals = toBN(8);
-    let wEthChainlinkPrice = toBN(10).times(toBN(10).pow(decimals));
-    let daiChainlinkPrice = toBN(10).pow(decimals);
+    let wEthChainlinkPrice = wei(10, decimals);
+    let daiChainlinkPrice = wei(1, 8);
     let usdcPrice = toBN(30);
     let wEthPrice = toBN(9);
 

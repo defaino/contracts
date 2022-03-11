@@ -1,22 +1,23 @@
+const { accounts } = require("../scripts/utils");
+
+const truffleAssert = require("truffle-assertions");
+const Reverter = require("./helpers/reverter");
+
 const Registry = artifacts.require("Registry");
 const GovernanceToken = artifacts.require("GovernanceToken");
 const GovernanceTokenMock = artifacts.require("GovernanceTokenMock");
 
-const Reverter = require("./helpers/reverter");
-const { assert } = require("chai");
-
-const truffleAssert = require("truffle-assertions");
-
-contract("Registry", async (accounts) => {
+describe("Registry", () => {
   const reverter = new Reverter(web3);
 
   const ADDRESS_NULL = "0x0000000000000000000000000000000000000000";
 
-  const OWNER = accounts[0];
+  let OWNER;
 
   let registry;
 
   before("setup", async () => {
+    OWNER = await accounts(0);
     registry = await Registry.new();
 
     await reverter.snapshot();
@@ -24,7 +25,7 @@ contract("Registry", async (accounts) => {
 
   afterEach("revert", reverter.revert);
 
-  describe("addContract", async () => {
+  describe("addContract", () => {
     let governanceToken;
 
     beforeEach("setup", async () => {
@@ -57,7 +58,7 @@ contract("Registry", async (accounts) => {
     });
   });
 
-  describe("addProxyContract", async () => {
+  describe("addProxyContract", () => {
     let governanceTokenImpl;
 
     beforeEach("setup", async () => {
@@ -95,7 +96,7 @@ contract("Registry", async (accounts) => {
     });
   });
 
-  describe("upgradeContract", async () => {
+  describe("upgradeContract", () => {
     it("should correctlry upgrade contract", async () => {
       const oldImplementation = await GovernanceToken.new(OWNER);
       const newImplementation = await GovernanceTokenMock.new(OWNER);
@@ -108,7 +109,7 @@ contract("Registry", async (accounts) => {
         await registry.getImplementation(await registry.REWARDS_DISTRIBUTION_NAME()),
         oldImplementation.address
       );
-      await truffleAssert.reverts((await GovernanceTokenMock.at(proxyAddr)).mintArbitrary(accounts[1], 1000));
+      await truffleAssert.reverts((await GovernanceTokenMock.at(proxyAddr)).mintArbitrary(await accounts(1), 1000));
 
       await registry.upgradeContract(await registry.REWARDS_DISTRIBUTION_NAME(), newImplementation.address);
 
@@ -119,9 +120,9 @@ contract("Registry", async (accounts) => {
       );
 
       const governanceToken = await GovernanceTokenMock.at(proxyAddr);
-      await governanceToken.mintArbitrary(accounts[1], 1000);
+      await governanceToken.mintArbitrary(await accounts(1), 1000);
 
-      assert.equal(await governanceToken.balanceOf(accounts[1]), 1000);
+      assert.equal(await governanceToken.balanceOf(await accounts(1)), 1000);
     });
   });
 });

@@ -1,10 +1,12 @@
-const PureParametersMock = artifacts.require("PureParametersMock.sol");
+const { toBytes, fromBytes } = require("./helpers/bytesCompareLibrary");
+const { accounts } = require("../scripts/utils");
 
 const Reverter = require("./helpers/reverter");
-const { assert } = require("chai");
 
-contract("PureParametersMock", async (accounts) => {
-  const reverter = new Reverter(web3);
+const PureParametersMock = artifacts.require("PureParametersMock.sol");
+
+describe("PureParametersMock", () => {
+  const reverter = new Reverter();
 
   const ParamType = {
     NOT_EXIST: 0,
@@ -14,19 +16,13 @@ contract("PureParametersMock", async (accounts) => {
     BOOL: 4,
   };
 
-  const NOTHING = accounts[5];
+  let NOTHING;
 
   let pureParameters;
 
-  function toBytes(string) {
-    return web3.utils.asciiToHex(string);
-  }
-
-  function fromBytes(bytes) {
-    return web3.utils.hexToAscii(bytes).replace(/\0/g, "");
-  }
-
   before("setup", async () => {
+    NOTHING = await accounts(5);
+
     pureParameters = await PureParametersMock.new();
 
     await reverter.snapshot();
@@ -44,7 +40,7 @@ contract("PureParametersMock", async (accounts) => {
     });
   });
 
-  describe("getUintFromParam()", async () => {
+  describe("getUintFromParam()", () => {
     it("Should get from struct param empty uint", async () => {
       const num = 7;
       const mock = await pureParameters.makeUintParam(num);
@@ -54,7 +50,7 @@ contract("PureParametersMock", async (accounts) => {
     });
   });
 
-  describe("makeAdrressParam()", async () => {
+  describe("makeAdrressParam()", () => {
     it("Should make struct param with not empty address", async () => {
       const address = NOTHING;
       const result = await pureParameters.makeAdrressParam(address);
@@ -64,7 +60,7 @@ contract("PureParametersMock", async (accounts) => {
     });
   });
 
-  describe("getAdrressFromParam()", async () => {
+  describe("getAdrressFromParam()", () => {
     it("Should get from struct param empty address", async () => {
       const address = NOTHING;
       const mock = await pureParameters.makeAdrressParam(address);
@@ -74,7 +70,7 @@ contract("PureParametersMock", async (accounts) => {
     });
   });
 
-  describe("makeBytes32Param()", async () => {
+  describe("makeBytes32Param()", () => {
     it("Should make struct param with not empty bytes32", async () => {
       const text = "text";
       const bytes = toBytes(text);
@@ -85,7 +81,7 @@ contract("PureParametersMock", async (accounts) => {
     });
   });
 
-  describe("getBytes32FromParam()", async () => {
+  describe("getBytes32FromParam()", () => {
     it("Should get from struct param empty bytes32", async () => {
       const text = "text";
       const bytes = toBytes(text);
@@ -96,7 +92,7 @@ contract("PureParametersMock", async (accounts) => {
     });
   });
 
-  describe("makeBoolParam()", async () => {
+  describe("makeBoolParam()", () => {
     it("Should make struct param with not false bool", async () => {
       const result = await pureParameters.makeBoolParam(true);
 
@@ -105,7 +101,7 @@ contract("PureParametersMock", async (accounts) => {
     });
   });
 
-  describe("getBoolParam()", async () => {
+  describe("getBoolParam()", () => {
     it("Should get boolfrom struct param", async () => {
       const mock = await pureParameters.makeBoolParam(true);
       const result = await pureParameters.getBoolParam(mock);
@@ -114,7 +110,7 @@ contract("PureParametersMock", async (accounts) => {
     });
   });
 
-  describe("paramExists()", async () => {
+  describe("paramExists()", () => {
     it("Should return true if struct param exist", async () => {
       const num = 7;
       const mock = await pureParameters.makeUintParam(num);

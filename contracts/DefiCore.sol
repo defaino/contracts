@@ -312,12 +312,12 @@ contract DefiCore is IDefiCore, AbstractDependant {
     function enableCollateral(bytes32 _assetKey) external override returns (uint256) {
         require(
             assetParameters.isAvailableAsCollateral(_assetKey),
-            "AbstractCore: Asset is blocked for collateral."
+            "DefiCore: Asset is blocked for collateral."
         );
 
         require(
             disabledCollateralAssets[msg.sender][_assetKey],
-            "AbstractCore: Asset already enabled as collateral."
+            "DefiCore: Asset already enabled as collateral."
         );
 
         delete disabledCollateralAssets[msg.sender][_assetKey];
@@ -328,7 +328,7 @@ contract DefiCore is IDefiCore, AbstractDependant {
     function disableCollateral(bytes32 _assetKey) external override returns (uint256) {
         require(
             !disabledCollateralAssets[msg.sender][_assetKey],
-            "AbstractCore: Asset must be enabled as collateral."
+            "DefiCore: Asset must be enabled as collateral."
         );
 
         IAssetParameters _parameters = assetParameters;
@@ -347,7 +347,7 @@ contract DefiCore is IDefiCore, AbstractDependant {
 
             require(
                 _availableLiquidity >= _currentLimitPart,
-                "AbstractCore: It is impossible to disable the asset as a collateral."
+                "DefiCore: It is impossible to disable the asset as a collateral."
             );
         }
 
@@ -600,7 +600,7 @@ contract DefiCore is IDefiCore, AbstractDependant {
             ILiquidityPool(_poolRegistry.liquidityPools(_assetKey))
         );
 
-        require(_reward > 0, "DefiCore: User have not rewards from this pool");
+        require(_reward > 0, "DefiCore: User have not rewards from this pool.");
 
         IERC20 _governanceToken = governanceToken;
 

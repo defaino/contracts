@@ -1,15 +1,17 @@
+const { getInterestRateLibraryData } = require("../migrations/helpers/deployHelper");
+const { toBN } = require("../scripts/utils");
+
+const truffleAssert = require("truffle-assertions");
+const Reverter = require("./helpers/reverter");
+
 const AnnualRatesConverter = artifacts.require("AnnualRatesConverterMock");
 const InterestRateLibrary = artifacts.require("InterestRateLibrary");
 
-const Reverter = require("./helpers/reverter");
+AnnualRatesConverter.numberFormat = "BigNumber";
+InterestRateLibrary.numberFormat = "BigNumber";
 
-const { getInterestRateLibraryData } = require("../migrations/helpers/deployHelper");
-const { toBN } = require("../scripts/globals");
-
-const truffleAssert = require("truffle-assertions");
-
-contract("AnnualRatesConverter", async (accounts) => {
-  const reverter = new Reverter(web3);
+describe("AnnualRatesConverter", () => {
+  const reverter = new Reverter();
 
   const onePercent = toBN(10).pow(25);
   const decimal = onePercent.times(100);
@@ -29,7 +31,7 @@ contract("AnnualRatesConverter", async (accounts) => {
 
   afterEach("revert", reverter.revert);
 
-  describe("getAnnualRate", async () => {
+  describe("getAnnualRate", () => {
     const firstSlope = onePercent.times(5);
     const secondSlope = onePercent.times(100);
     const breakingPoint = onePercent.times(70);
@@ -44,7 +46,7 @@ contract("AnnualRatesConverter", async (accounts) => {
       const currentUR = onePercent.times(55);
 
       const expectedAnnualRate = toBN("39285714280000000000000000");
-      const result = toBN(await annualRatesConverter.getAnnualRate(0, firstSlope, currentUR, 0, breakingPoint));
+      const result = await annualRatesConverter.getAnnualRate(0, firstSlope, currentUR, 0, breakingPoint);
 
       assert.closeTo(result.toNumber(), expectedAnnualRate.toNumber(), onePercent.idiv(1000).toNumber());
     });
@@ -53,21 +55,25 @@ contract("AnnualRatesConverter", async (accounts) => {
       const currentUR = onePercent.times(85);
 
       const expectedAnnualRate = toBN("525000000000000000000000000");
-      const result = toBN(
-        await annualRatesConverter.getAnnualRate(firstSlope, secondSlope, currentUR, breakingPoint, decimal)
+      const result = await annualRatesConverter.getAnnualRate(
+        firstSlope,
+        secondSlope,
+        currentUR,
+        breakingPoint,
+        decimal
       );
 
       assert.closeTo(result.toNumber(), expectedAnnualRate.toNumber(), 10);
     });
   });
 
-  describe("convertToRatePerSecond", async () => {
+  describe("convertToRatePerSecond", () => {
     it("should return correct rate per second if rate per year is an integer", async () => {
       let ratePerYear = onePercent.times(13);
       let dataArr = getInterestRateLibraryData("scripts/InterestRatesData.txt");
 
       assert.equal(
-        toBN(await annualRatesConverter.convertToRatePerSecond(interestRateLibrary.address, ratePerYear)).toString(),
+        (await annualRatesConverter.convertToRatePerSecond(interestRateLibrary.address, ratePerYear)).toString(),
         toBN(dataArr[3]).toString()
       );
 
@@ -75,7 +81,7 @@ contract("AnnualRatesConverter", async (accounts) => {
       dataArr = getInterestRateLibraryData("scripts/InterestRatesExactData.txt");
 
       assert.equal(
-        toBN(await annualRatesConverter.convertToRatePerSecond(interestRateLibrary.address, ratePerYear)).toString(),
+        (await annualRatesConverter.convertToRatePerSecond(interestRateLibrary.address, ratePerYear)).toString(),
         toBN(dataArr[40]).toString()
       );
     });
@@ -85,7 +91,7 @@ contract("AnnualRatesConverter", async (accounts) => {
 
       const expectedPercentage = toBN("7623946000000000000");
       assert.equal(
-        toBN(await annualRatesConverter.convertToRatePerSecond(interestRateLibrary.address, ratePerYear)).toString(),
+        (await annualRatesConverter.convertToRatePerSecond(interestRateLibrary.address, ratePerYear)).toString(),
         expectedPercentage.toString()
       );
     });
@@ -95,7 +101,7 @@ contract("AnnualRatesConverter", async (accounts) => {
 
       let expectedPercentage = toBN("690052000000000000");
       assert.equal(
-        toBN(await annualRatesConverter.convertToRatePerSecond(interestRateLibrary.address, ratePerYear)).toString(),
+        (await annualRatesConverter.convertToRatePerSecond(interestRateLibrary.address, ratePerYear)).toString(),
         expectedPercentage.toString()
       );
 
@@ -103,7 +109,7 @@ contract("AnnualRatesConverter", async (accounts) => {
 
       expectedPercentage = toBN("1106170000000000000");
       assert.equal(
-        toBN(await annualRatesConverter.convertToRatePerSecond(interestRateLibrary.address, ratePerYear)).toString(),
+        (await annualRatesConverter.convertToRatePerSecond(interestRateLibrary.address, ratePerYear)).toString(),
         expectedPercentage.toString()
       );
 
@@ -111,7 +117,7 @@ contract("AnnualRatesConverter", async (accounts) => {
 
       expectedPercentage = toBN("2082851900000000000");
       assert.equal(
-        toBN(await annualRatesConverter.convertToRatePerSecond(interestRateLibrary.address, ratePerYear)).toString(),
+        (await annualRatesConverter.convertToRatePerSecond(interestRateLibrary.address, ratePerYear)).toString(),
         expectedPercentage.toString()
       );
     });
