@@ -3,6 +3,7 @@ require("@nomiclabs/hardhat-truffle5");
 require("@nomiclabs/hardhat-etherscan");
 require("hardhat-contract-sizer");
 require("hardhat-gas-reporter");
+require("./scripts/hardhat-run-with-args");
 
 const dotenv = require("dotenv");
 dotenv.config();

@@ -1,5 +1,5 @@
 function logTransaction(tx, name) {
-  console.log(`Transaction ${name}: gas used ${tx.receipt.gasUsed}, hash ${tx.tx}`);
+  console.log(`Transaction ${name}: Gas used ${tx.receipt.gasUsed}, Hash ${tx.tx}\n`);
 }
 
 function logAddress(name, address) {
