@@ -25,19 +25,9 @@ contract PriceManagerMock is IPriceManager, OwnableUpgradeable, AbstractDependan
     bytes32 public quoteAssetKey;
     uint8 public quoteTokenDecimals;
 
-    struct PriceFeed {
-        address assetAddr;
-        AggregatorV2V3Interface chainlinkOracle;
-        address uniswapPool;
-    }
-
     mapping(bytes32 => PriceFeed) public priceFeeds;
 
     mapping(bytes32 => uint256) public uniswapPrices;
-
-    event OracleAdded(bytes32 _assetKey, address _chainlinkOracleAddr, address _uniswapPoolAddr);
-    event ChainlinkOracleAdded(bytes32 _assetKey, address _chainlinkOracleAddr);
-    event RedirectUpdated(uint256 _updateTimestamp, bool _newValue);
 
     function priceManagerInitialize(bytes32 _quoteAssetKey, address _quoteToken)
         external
@@ -98,6 +88,7 @@ contract PriceManagerMock is IPriceManager, OwnableUpgradeable, AbstractDependan
 
     function addChainlinkOracle(bytes32 _assetKey, address _newChainlinkOracle)
         external
+        override
         onlyExistingAssets(_assetKey)
         onlyOwner
     {
@@ -115,7 +106,7 @@ contract PriceManagerMock is IPriceManager, OwnableUpgradeable, AbstractDependan
         emit ChainlinkOracleAdded(_assetKey, _newChainlinkOracle);
     }
 
-    function updateRedirectToUniswap(bool _newValue) external onlyOwner {
+    function updateRedirectToUniswap(bool _newValue) external override onlyOwner {
         redirectToUniswap = _newValue;
 
         emit RedirectUpdated(block.timestamp, _newValue);

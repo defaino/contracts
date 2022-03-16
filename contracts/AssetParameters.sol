@@ -5,8 +5,8 @@ import "@openzeppelin/contracts-upgradeable/utils/structs/EnumerableSetUpgradeab
 import "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
-import "./interfaces/ILiquidityPoolRegistry.sol";
 import "./interfaces/IAssetParameters.sol";
+import "./interfaces/ILiquidityPoolRegistry.sol";
 import "./interfaces/IPriceManager.sol";
 
 import "./libraries/PureParameters.sol";
@@ -19,9 +19,6 @@ contract AssetParameters is IAssetParameters, OwnableUpgradeable, AbstractDepend
     using PureParameters for PureParameters.Param;
     using MathUpgradeable for uint256;
     using DecimalsConverter for uint256;
-
-    ILiquidityPoolRegistry private liquidityPoolRegistry;
-    IPriceManager private priceManager;
 
     bytes32 public constant FREEZE_KEY = keccak256("FREEZE");
     bytes32 public constant ENABLE_COLLATERAL_KEY = keccak256("ENABLE_COLLATERAL");
@@ -42,33 +39,10 @@ contract AssetParameters is IAssetParameters, OwnableUpgradeable, AbstractDepend
     bytes32 public constant COL_RATIO_KEY = keccak256("COL_RATIO");
     bytes32 public constant RESERVE_FACTOR_KEY = keccak256("RESERVE_FACTOR");
 
-    mapping(bytes32 => mapping(bytes32 => PureParameters.Param)) private _parameters;
+    ILiquidityPoolRegistry private liquidityPoolRegistry;
+    IPriceManager private priceManager;
 
-    event InterestRateParamsUpdated(
-        bytes32 _assetKey,
-        uint256 _basePercentage,
-        uint256 _firstSlope,
-        uint256 _secondSlope,
-        uint256 _utilizationBreakingPoint
-    );
-    event MainParamsUpdated(
-        bytes32 _assetKey,
-        uint256 _colRatio,
-        uint256 _reserveFactor,
-        uint256 _liquidationDiscount,
-        uint256 _maxUR
-    );
-    event IntegrationParamsUpdated(
-        bytes32 _assetKey,
-        uint256 _integrationColRatio,
-        uint256 _optimizationReward,
-        bool _allowForIntegration
-    );
-    event DistributionMinimumsUpdated(
-        bytes32 _assetKey,
-        uint256 _supplyDistrPart,
-        uint256 _borrowDistrPart
-    );
+    mapping(bytes32 => mapping(bytes32 => PureParameters.Param)) private _parameters;
 
     modifier onlyExists(bytes32 _assetKey) {
         require(
@@ -97,6 +71,73 @@ contract AssetParameters is IAssetParameters, OwnableUpgradeable, AbstractDepend
         priceManager = IPriceManager(_registry.getPriceManagerContract());
     }
 
+    function setPoolInitParams(bytes32 _assetKey, bool _isCollateral)
+        external
+        override
+        onlyLiquidityPoolRegistry
+    {
+        _parameters[_assetKey][FREEZE_KEY] = PureParameters.makeBoolParam(false);
+        emit FreezeParamUpdated(_assetKey, false);
+
+        _parameters[_assetKey][ENABLE_COLLATERAL_KEY] = PureParameters.makeBoolParam(
+            _isCollateral
+        );
+        emit CollateralParamUpdated(_assetKey, _isCollateral);
+    }
+
+    function setupMainParameters(bytes32 _assetKey, MainPoolParams calldata _mainParams)
+        external
+        override
+        onlyOwner
+        onlyExists(_assetKey)
+    {
+        _setupMainParameters(_assetKey, _mainParams);
+    }
+
+    function setupInterestRateModel(bytes32 _assetKey, InterestRateParams calldata _interestParams)
+        external
+        override
+        onlyOwner
+        onlyExists(_assetKey)
+    {
+        _setupInterestRateParams(_assetKey, _interestParams);
+    }
+
+    function setupDistributionsMinimums(
+        bytes32 _assetKey,
+        DistributionMinimums calldata _distrMinimums
+    ) external override onlyOwner onlyExists(_assetKey) {
+        _setupDistributionsMinimums(_assetKey, _distrMinimums);
+    }
+
+    function setupAllParameters(bytes32 _assetKey, AllPoolParams calldata _poolParams)
+        external
+        override
+        onlyOwner
+        onlyExists(_assetKey)
+    {
+        _setupInterestRateParams(_assetKey, _poolParams.interestRateParams);
+        _setupMainParameters(_assetKey, _poolParams.mainParams);
+        _setupDistributionsMinimums(_assetKey, _poolParams.distrMinimums);
+    }
+
+    function freeze(bytes32 _assetKey) external override onlyOwner onlyExists(_assetKey) {
+        _parameters[_assetKey][FREEZE_KEY] = PureParameters.makeBoolParam(true);
+
+        emit FreezeParamUpdated(_assetKey, true);
+    }
+
+    function enableCollateral(bytes32 _assetKey)
+        external
+        override
+        onlyOwner
+        onlyExists(_assetKey)
+    {
+        _parameters[_assetKey][ENABLE_COLLATERAL_KEY] = PureParameters.makeBoolParam(true);
+
+        emit CollateralParamUpdated(_assetKey, true);
+    }
+
     function isPoolFrozen(bytes32 _assetKey) external view override returns (bool) {
         return _getParam(_assetKey, FREEZE_KEY).getBoolFromParam();
     }
@@ -105,36 +146,47 @@ contract AssetParameters is IAssetParameters, OwnableUpgradeable, AbstractDepend
         return _getParam(_assetKey, ENABLE_COLLATERAL_KEY).getBoolFromParam();
     }
 
+    function getMainPoolParams(bytes32 _assetKey)
+        external
+        view
+        override
+        returns (MainPoolParams memory)
+    {
+        return
+            MainPoolParams(
+                _getParam(_assetKey, COL_RATIO_KEY).getUintFromParam(),
+                _getParam(_assetKey, RESERVE_FACTOR_KEY).getUintFromParam(),
+                _getParam(_assetKey, LIQUIDATION_DISCOUNT_KEY).getUintFromParam(),
+                _getParam(_assetKey, MAX_UTILIZATION_RATIO_KEY).getUintFromParam()
+            );
+    }
+
     function getInterestRateParams(bytes32 _assetKey)
         external
         view
         override
-        returns (InterestRateParams memory _params)
+        returns (InterestRateParams memory)
     {
-        _params = InterestRateParams(
-            _getParam(_assetKey, BASE_PERCENTAGE_KEY).getUintFromParam(),
-            _getParam(_assetKey, FIRST_SLOPE_KEY).getUintFromParam(),
-            _getParam(_assetKey, SECOND_SLOPE_KEY).getUintFromParam(),
-            _getParam(_assetKey, UTILIZATION_BREAKING_POINT_KEY).getUintFromParam()
-        );
-    }
-
-    function getMaxUtilizationRatio(bytes32 _assetKey) external view override returns (uint256) {
-        return _getParam(_assetKey, MAX_UTILIZATION_RATIO_KEY).getUintFromParam();
-    }
-
-    function getLiquidationDiscount(bytes32 _assetKey) external view override returns (uint256) {
-        return _getParam(_assetKey, LIQUIDATION_DISCOUNT_KEY).getUintFromParam();
+        return
+            InterestRateParams(
+                _getParam(_assetKey, BASE_PERCENTAGE_KEY).getUintFromParam(),
+                _getParam(_assetKey, FIRST_SLOPE_KEY).getUintFromParam(),
+                _getParam(_assetKey, SECOND_SLOPE_KEY).getUintFromParam(),
+                _getParam(_assetKey, UTILIZATION_BREAKING_POINT_KEY).getUintFromParam()
+            );
     }
 
     function getDistributionMinimums(bytes32 _assetKey)
         external
         view
         override
-        returns (uint256 _minSupplyPart, uint256 _minBorrowPart)
+        returns (DistributionMinimums memory)
     {
-        _minSupplyPart = _getParam(_assetKey, MIN_SUPPLY_DISTRIBUTION_PART_KEY).getUintFromParam();
-        _minBorrowPart = _getParam(_assetKey, MIN_BORROW_DISTRIBUTION_PART_KEY).getUintFromParam();
+        return
+            DistributionMinimums(
+                _getParam(_assetKey, MIN_SUPPLY_DISTRIBUTION_PART_KEY).getUintFromParam(),
+                _getParam(_assetKey, MIN_BORROW_DISTRIBUTION_PART_KEY).getUintFromParam()
+            );
     }
 
     function getColRatio(bytes32 _assetKey) external view override returns (uint256) {
@@ -145,92 +197,12 @@ contract AssetParameters is IAssetParameters, OwnableUpgradeable, AbstractDepend
         return _getParam(_assetKey, RESERVE_FACTOR_KEY).getUintFromParam();
     }
 
-    function getAssetPrice(bytes32 _assetKey, uint8 _assetDecimals)
-        external
-        view
-        override
-        returns (uint256)
-    {
-        (uint256 _price, uint8 _currentPriceDecimals) = priceManager.getPrice(
-            _assetKey,
-            _assetDecimals
-        );
-
-        return _price.convert(_currentPriceDecimals, PRICE_DECIMALS);
+    function getLiquidationDiscount(bytes32 _assetKey) external view override returns (uint256) {
+        return _getParam(_assetKey, LIQUIDATION_DISCOUNT_KEY).getUintFromParam();
     }
 
-    function getLiquidityPoolParams(bytes32 _assetKey)
-        external
-        view
-        override
-        returns (LiquidityPoolParams memory)
-    {
-        return
-            LiquidityPoolParams(
-                _getParam(_assetKey, COL_RATIO_KEY).getUintFromParam(),
-                _getParam(_assetKey, RESERVE_FACTOR_KEY).getUintFromParam(),
-                _getParam(_assetKey, LIQUIDATION_DISCOUNT_KEY).getUintFromParam(),
-                _getParam(_assetKey, MAX_UTILIZATION_RATIO_KEY).getUintFromParam()
-            );
-    }
-
-    function addLiquidityPoolAssetInfo(bytes32 _assetKey, bool _isCollateral)
-        external
-        override
-        onlyLiquidityPoolRegistry
-    {
-        _parameters[_assetKey][FREEZE_KEY] = PureParameters.makeBoolParam(false);
-        emit BoolParamUpdated(_assetKey, FREEZE_KEY, false);
-
-        _parameters[_assetKey][ENABLE_COLLATERAL_KEY] = PureParameters.makeBoolParam(
-            _isCollateral
-        );
-        emit BoolParamUpdated(_assetKey, ENABLE_COLLATERAL_KEY, _isCollateral);
-    }
-
-    function freeze(bytes32 _assetKey) external onlyOwner onlyExists(_assetKey) {
-        _parameters[_assetKey][FREEZE_KEY] = PureParameters.makeBoolParam(true);
-
-        emit BoolParamUpdated(_assetKey, FREEZE_KEY, true);
-    }
-
-    function enableCollateral(bytes32 _assetKey) external onlyOwner onlyExists(_assetKey) {
-        _parameters[_assetKey][ENABLE_COLLATERAL_KEY] = PureParameters.makeBoolParam(true);
-
-        emit BoolParamUpdated(_assetKey, ENABLE_COLLATERAL_KEY, true);
-    }
-
-    function setupInterestRateModel(bytes32 _assetKey, InterestRateParams calldata _interestParams)
-        public
-        onlyOwner
-        onlyExists(_assetKey)
-    {
-        _setupInterestRateParams(_assetKey, _interestParams);
-    }
-
-    function setupMainParameters(bytes32 _assetKey, MainPoolParams calldata _mainParams)
-        public
-        onlyOwner
-        onlyExists(_assetKey)
-    {
-        _setupMainParameters(_assetKey, _mainParams);
-    }
-
-    function setupDistributionsMinimums(
-        bytes32 _assetKey,
-        DistributionMinimums calldata _distrMinimums
-    ) public onlyOwner onlyExists(_assetKey) {
-        _setupDistributionsMinimums(_assetKey, _distrMinimums);
-    }
-
-    function setupAllParameters(bytes32 _assetKey, AllPoolParams calldata _poolParams)
-        external
-        onlyOwner
-        onlyExists(_assetKey)
-    {
-        _setupInterestRateParams(_assetKey, _poolParams.interestRateParams);
-        _setupMainParameters(_assetKey, _poolParams.mainParams);
-        _setupDistributionsMinimums(_assetKey, _poolParams.distrMinimums);
+    function getMaxUtilizationRatio(bytes32 _assetKey) external view override returns (uint256) {
+        return _getParam(_assetKey, MAX_UTILIZATION_RATIO_KEY).getUintFromParam();
     }
 
     function _setupInterestRateParams(

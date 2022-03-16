@@ -3,7 +3,18 @@ pragma solidity 0.8.3;
 
 import "../interfaces/IInterestRateLibrary.sol";
 
+/**
+ * This library is needed to convert annual rates and work with them
+ */
 library AnnualRatesConverter {
+    /// @notice Function to get the annual percentage
+    /// @param _lowInterestPercentage lower boundary of annual interest
+    /// @param _highInterestPercentage upper boundary of annual interest
+    /// @param _currentUR current utilization ratio
+    /// @param _lowURPercentage lower boundary of utilization ratio
+    /// @param _highURPercentage upper boundary of utilization ratio
+    /// @param _decimal current decimal
+    /// @return a calculated annual percentage
     function getAnnualRate(
         uint256 _lowInterestPercentage,
         uint256 _highInterestPercentage,
@@ -21,6 +32,11 @@ library AnnualRatesConverter {
             _lowInterestPercentage;
     }
 
+    /// @notice Function to convert annual rate to second rate
+    /// @param _library address of the InterestRateLibrary
+    /// @param _interestRatePerYear annual rate to be converted to a second rate
+    /// @param _onePercent current one percentage value
+    /// @return a calculated second rate
     function convertToRatePerSecond(
         IInterestRateLibrary _library,
         uint256 _interestRatePerYear,

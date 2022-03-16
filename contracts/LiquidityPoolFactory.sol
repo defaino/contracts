@@ -3,13 +3,14 @@ pragma solidity 0.8.3;
 
 import "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
 
-import "./interfaces/ILiquidityPool.sol";
 import "./interfaces/ILiquidityPoolRegistry.sol";
+import "./interfaces/ILiquidityPoolFactory.sol";
+import "./interfaces/ILiquidityPool.sol";
 
 import "./Registry.sol";
 import "./abstract/AbstractDependant.sol";
 
-contract LiquidityPoolFactory is AbstractDependant {
+contract LiquidityPoolFactory is ILiquidityPoolFactory, AbstractDependant {
     Registry private registry;
     ILiquidityPoolRegistry private liquidityPoolRegistry;
 
@@ -24,7 +25,7 @@ contract LiquidityPoolFactory is AbstractDependant {
         address _assetAddr,
         bytes32 _assetKey,
         string calldata _tokenSymbol
-    ) external returns (address) {
+    ) external override returns (address) {
         ILiquidityPoolRegistry _liquidityPoolRegistry = liquidityPoolRegistry;
 
         require(

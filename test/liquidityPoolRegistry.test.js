@@ -480,10 +480,10 @@ describe("LiquidityPoolRegistry", () => {
         assert.equal(detailedInfo.poolInfo.baseInfo.utilizationRatio.toString(), getOnePercent().times(60).toFixed());
         assert.equal(detailedInfo.poolInfo.baseInfo.isAvailableAsCollateral, true);
 
-        assert.equal(detailedInfo.liquidityPoolParams.collateralizationRatio.toString(), colRatio.toFixed());
-        assert.equal(detailedInfo.liquidityPoolParams.reserveFactor.toString(), reserveFactor.toFixed());
-        assert.equal(detailedInfo.liquidityPoolParams.liquidationDiscount.toString(), liquidationDiscount.toFixed());
-        assert.equal(detailedInfo.liquidityPoolParams.maxUtilizationRatio.toString(), maxUR.toFixed());
+        assert.equal(detailedInfo.mainPoolParams.collateralizationRatio.toString(), colRatio.toFixed());
+        assert.equal(detailedInfo.mainPoolParams.reserveFactor.toString(), reserveFactor.toFixed());
+        assert.equal(detailedInfo.mainPoolParams.liquidationDiscount.toString(), liquidationDiscount.toFixed());
+        assert.equal(detailedInfo.mainPoolParams.maxUtilizationRatio.toString(), maxUR.toFixed());
 
         const expectedSupplyAPY = getOnePercent().times(1.53);
         const expectedBorrowAPY = getOnePercent().times(3);

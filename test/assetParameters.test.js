@@ -293,49 +293,8 @@ describe("AssetParameters", () => {
 
       const minimums = await assetParameters.getDistributionMinimums(daiKey);
 
-      assert.equal(toBN(minimums[0]).toString(), minSupplyDistributionPart.toString());
-      assert.equal(toBN(minimums[1]).toString(), minBorrowDistributionPart.toString());
-    });
-  });
-
-  describe("getAssetPrice", () => {
-    const daiKey = toBytes("DAI");
-    const usdtKey = toBytes("USDT");
-    const wEthKey = toBytes("WETH");
-
-    const priceDecimals = toBN(10).pow(8);
-
-    beforeEach("setup", async () => {
-      await createLiquidityPool(daiKey, "DAI", true);
-      await createLiquidityPool(usdtKey, "USDT", true);
-      await createLiquidityPool(wEthKey, "WETH", true);
-
-      let chainlinkOracle = (await priceManager.priceFeeds(daiKey)).chainlinkOracle;
-      await (await ChainlinkOracleMock.at(chainlinkOracle)).setPrice(0);
-
-      chainlinkOracle = (await priceManager.priceFeeds(usdtKey)).chainlinkOracle;
-      await (await ChainlinkOracleMock.at(chainlinkOracle)).setPrice(0);
-
-      chainlinkOracle = (await priceManager.priceFeeds(wEthKey)).chainlinkOracle;
-      await (await ChainlinkOracleMock.at(chainlinkOracle)).setPrice(0);
-    });
-
-    it("should return correct price for quote asset", async () => {
-      assert.equal(toBN(await assetParameters.getAssetPrice(daiKey, 18)).toString(), priceDecimals.toString());
-    });
-
-    it("should return correct price for asset with 6 decimals", async () => {
-      assert.equal(
-        toBN(await assetParameters.getAssetPrice(usdtKey, 6)).toString(),
-        priceDecimals.times(100).toString()
-      );
-    });
-
-    it("should return correct price for asset with 18 decimals", async () => {
-      assert.equal(
-        toBN(await assetParameters.getAssetPrice(wEthKey, 18)).toString(),
-        priceDecimals.times(100).toString()
-      );
+      assert.equal(toBN(minimums.minSupplyDistrPart).toString(), minSupplyDistributionPart.toString());
+      assert.equal(toBN(minimums.minBorrowDistrPart).toString(), minBorrowDistributionPart.toString());
     });
   });
 

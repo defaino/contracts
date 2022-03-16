@@ -7,12 +7,11 @@ import "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.so
 import "./abstract/AbstractDependant.sol";
 import "./common/Upgrader.sol";
 
+/**
+ * This is the main register of the system, which stores the addresses of all the necessary contracts of the system.
+ * With this contract you can add new contracts, update the implementation of proxy contracts
+ */
 contract Registry is AccessControl {
-    Upgrader private immutable upgrader;
-
-    mapping(bytes32 => address) private _contracts;
-    mapping(address => bool) private _isProxy;
-
     bytes32 public constant REGISTRY_ADMIN_ROLE = keccak256("REGISTRY_ADMIN_ROLE");
 
     bytes32 public constant SYSTEM_PARAMETERS_NAME = keccak256("SYSTEM_PARAMETERS");
@@ -26,8 +25,10 @@ contract Registry is AccessControl {
     bytes32 public constant LIQUIDITY_POOL_REGISTRY_NAME = keccak256("LIQUIDITY_POOL_REGISTRY");
     bytes32 public constant USER_INFO_REGISTRY_NAME = keccak256("USER_INFO_REGISTRY");
 
-    event ContractAdded(bytes32 _name, address _contractAddress);
-    event ProxyContractAdded(bytes32 _name, address _proxyAddress, address _implAddress);
+    Upgrader private immutable upgrader;
+
+    mapping(bytes32 => address) private _contracts;
+    mapping(address => bool) private _isProxy;
 
     modifier onlyAdmin() {
         require(hasRole(REGISTRY_ADMIN_ROLE, msg.sender), "Registry: Caller is not an admin");
@@ -39,6 +40,54 @@ contract Registry is AccessControl {
         _setRoleAdmin(REGISTRY_ADMIN_ROLE, REGISTRY_ADMIN_ROLE);
 
         upgrader = new Upgrader();
+    }
+
+    function addContract(bytes32 _name, address _contractAddress) external onlyAdmin {
+        require(_contractAddress != address(0), "Registry: Null address is forbidden.");
+        require(_contracts[_name] == address(0), "Registry: Unable to change the contract.");
+
+        _contracts[_name] = _contractAddress;
+    }
+
+    function addProxyContract(bytes32 _name, address _contractAddress) external onlyAdmin {
+        require(_contractAddress != address(0), "Registry: Null address is forbidden.");
+        require(_contracts[_name] == address(0), "Registry: Unable to change the contract.");
+
+        TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
+            _contractAddress,
+            address(upgrader),
+            ""
+        );
+
+        _contracts[_name] = address(proxy);
+        _isProxy[address(proxy)] = true;
+    }
+
+    function upgradeContract(bytes32 _name, address _newImplementation) external onlyAdmin {
+        _upgradeContract(_name, _newImplementation, "");
+    }
+
+    /// @notice can only call functions that have no parameters
+    function upgradeContractAndCall(
+        bytes32 _name,
+        address _newImplementation,
+        string calldata _functionSignature
+    ) external onlyAdmin {
+        _upgradeContract(_name, _newImplementation, _functionSignature);
+    }
+
+    function injectDependencies(bytes32 _name) external onlyAdmin {
+        address contractAddress = _contracts[_name];
+
+        require(contractAddress != address(0), "Registry: This mapping doesn't exist.");
+
+        AbstractDependant dependant = AbstractDependant(contractAddress);
+
+        if (dependant.injector() == address(0)) {
+            dependant.setInjector(address(this));
+        }
+
+        dependant.setDependencies(this);
     }
 
     function getSystemParametersContract() external view returns (address) {
@@ -106,33 +155,6 @@ contract Registry is AccessControl {
         return upgrader.getImplementation(_contractProxy);
     }
 
-    function injectDependencies(bytes32 _name) external onlyAdmin {
-        address contractAddress = _contracts[_name];
-
-        require(contractAddress != address(0), "Registry: This mapping doesn't exist.");
-
-        AbstractDependant dependant = AbstractDependant(contractAddress);
-
-        if (dependant.injector() == address(0)) {
-            dependant.setInjector(address(this));
-        }
-
-        dependant.setDependencies(this);
-    }
-
-    function upgradeContract(bytes32 _name, address _newImplementation) external onlyAdmin {
-        _upgradeContract(_name, _newImplementation, "");
-    }
-
-    /// @notice can only call functions that have no parameters
-    function upgradeContractAndCall(
-        bytes32 _name,
-        address _newImplementation,
-        string calldata _functionSignature
-    ) external onlyAdmin {
-        _upgradeContract(_name, _newImplementation, _functionSignature);
-    }
-
     function _upgradeContract(
         bytes32 _name,
         address _newImplementation,
@@ -152,30 +174,5 @@ contract Registry is AccessControl {
         } else {
             upgrader.upgrade(_contractToUpgrade, _newImplementation);
         }
-    }
-
-    function addContract(bytes32 _name, address _contractAddress) external onlyAdmin {
-        require(_contractAddress != address(0), "Registry: Null address is forbidden.");
-        require(_contracts[_name] == address(0), "Registry: Unable to change the contract.");
-
-        _contracts[_name] = _contractAddress;
-
-        emit ContractAdded(_name, _contractAddress);
-    }
-
-    function addProxyContract(bytes32 _name, address _contractAddress) external onlyAdmin {
-        require(_contractAddress != address(0), "Registry: Null address is forbidden.");
-        require(_contracts[_name] == address(0), "Registry: Unable to change the contract.");
-
-        TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
-            _contractAddress,
-            address(upgrader),
-            ""
-        );
-
-        _contracts[_name] = address(proxy);
-        _isProxy[address(proxy)] = true;
-
-        emit ProxyContractAdded(_name, address(proxy), _contractAddress);
     }
 }

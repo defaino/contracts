@@ -25,16 +25,9 @@ contract InterestRateLibrary is IInterestRateLibrary, Ownable {
         _addRates(0, _exactRatesPerSecond, 1);
     }
 
-    function getLibraryPrecision() public view virtual override returns (uint256) {
-        return 10;
-    }
-
-    function getLimitOfExactValues() public view virtual override returns (uint256) {
-        return 10 * getLibraryPrecision();
-    }
-
     function addNewRates(uint256 _startPercentage, uint256[] calldata _ratesPerSecond)
         external
+        override
         onlyOwner
     {
         uint256 _maxSupportedPercentage = maxSupportedPercentage;
@@ -48,6 +41,14 @@ contract InterestRateLibrary is IInterestRateLibrary, Ownable {
         );
 
         _addRates(_startPercentage, _ratesPerSecond, _libraryPrecision);
+    }
+
+    function getLibraryPrecision() public view virtual override returns (uint256) {
+        return 10;
+    }
+
+    function getLimitOfExactValues() public view virtual override returns (uint256) {
+        return 10 * getLibraryPrecision();
     }
 
     function _addRates(

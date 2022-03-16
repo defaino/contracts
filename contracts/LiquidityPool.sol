@@ -1,19 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.3;
 
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
-
+import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 
 import "./interfaces/IDefiCore.sol";
-import "./interfaces/ISystemParameters.sol";
 import "./interfaces/IAssetParameters.sol";
-import "./interfaces/IUserInfoRegistry.sol";
-import "./interfaces/ILiquidityPool.sol";
-import "./interfaces/IInterestRateLibrary.sol";
 import "./interfaces/IRewardsDistribution.sol";
+import "./interfaces/IUserInfoRegistry.sol";
 import "./interfaces/ILiquidityPoolRegistry.sol";
+import "./interfaces/ILiquidityPool.sol";
+import "./interfaces/IPriceManager.sol";
+import "./interfaces/IInterestRateLibrary.sol";
 
 import "./libraries/AnnualRatesConverter.sol";
 import "./libraries/DecimalsConverter.sol";
@@ -28,31 +27,28 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
     using DecimalsConverter for uint256;
     using MathHelper for uint256;
 
+    uint256 public constant UPDATE_RATE_INTERVAL = 1 hours;
+
     IDefiCore private defiCore;
     IAssetParameters private assetParameters;
-    IUserInfoRegistry private userInfoRegistry;
-    IInterestRateLibrary private interestRateLibrary;
     IRewardsDistribution private rewardsDistribution;
+    IUserInfoRegistry private userInfoRegistry;
     ILiquidityPoolRegistry private liquidityPoolRegistry;
+    IPriceManager private priceManager;
+    IInterestRateLibrary private interestRateLibrary;
 
     CompoundRateKeeper public compoundRateKeeper;
 
-    uint256 public constant UPDATE_RATE_INTERVAL = 1 hours;
-
     address public override assetAddr;
     bytes32 public override assetKey;
-
-    mapping(address => mapping(uint256 => uint256)) public override lastLiquidity;
-    mapping(address => mapping(address => uint256)) public borrowAllowances;
-
-    mapping(address => BorrowInfo) public override borrowInfos;
 
     uint256 public override aggregatedBorrowedAmount;
     uint256 public aggregatedNormalizedBorrowedAmount;
     uint256 public override totalReserves;
 
-    event FundsWithdrawn(address _recipient, address _liquidityPool, uint256 _amount);
-    event BorrowApproval(address _userAddr, uint256 _borrowAmount, address _delegateeAddr);
+    mapping(address => mapping(uint256 => uint256)) public override lastLiquidity;
+    mapping(address => mapping(address => uint256)) public borrowAllowances;
+    mapping(address => BorrowInfo) public override borrowInfos;
 
     modifier onlyDefiCore() {
         require(address(defiCore) == msg.sender, "LiquidityPool: Caller not a DefiCore.");
@@ -84,173 +80,13 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
     function setDependencies(Registry _registry) external override onlyInjectorOrZero {
         defiCore = IDefiCore(_registry.getDefiCoreContract());
         assetParameters = IAssetParameters(_registry.getAssetParametersContract());
-        userInfoRegistry = IUserInfoRegistry(_registry.getUserInfoRegistryContract());
-        interestRateLibrary = IInterestRateLibrary(_registry.getInterestRateLibraryContract());
         rewardsDistribution = IRewardsDistribution(_registry.getRewardsDistributionContract());
+        userInfoRegistry = IUserInfoRegistry(_registry.getUserInfoRegistryContract());
         liquidityPoolRegistry = ILiquidityPoolRegistry(
             _registry.getLiquidityPoolRegistryContract()
         );
-    }
-
-    function getTotalLiquidity() external view override returns (uint256) {
-        return convertLPTokensToAsset(totalSupply());
-    }
-
-    function getTotalBorrowedAmount() public view override returns (uint256) {
-        return
-            aggregatedNormalizedBorrowedAmount.mulWithPrecision(
-                compoundRateKeeper.getCurrentRate()
-            );
-    }
-
-    function getAggregatedLiquidityAmount() public view override returns (uint256) {
-        return
-            _convertFromUnderlyingAsset(IERC20(assetAddr).balanceOf(address(this))) -
-            totalReserves;
-    }
-
-    function getBorrowPercentage() public view override returns (uint256) {
-        return _getBorrowPercentage(0);
-    }
-
-    function getAvailableToBorrowLiquidity() public view override returns (uint256) {
-        uint256 _maxUR = assetParameters.getMaxUtilizationRatio(assetKey);
-        uint256 _absoluteBorrowAmount = aggregatedBorrowedAmount;
-
-        return
-            (_absoluteBorrowAmount + getAggregatedLiquidityAmount()).mulWithPrecision(_maxUR) -
-            _absoluteBorrowAmount;
-    }
-
-    function getAnnualBorrowRate() public view override returns (uint256 _annualBorrowRate) {
-        uint256 _utilizationRatio = getBorrowPercentage();
-
-        if (_utilizationRatio == 0) {
-            return 0;
-        }
-
-        IAssetParameters.InterestRateParams memory _params = assetParameters.getInterestRateParams(
-            assetKey
-        );
-        uint256 _utilizationBreakingPoint = _params.utilizationBreakingPoint;
-
-        if (_utilizationRatio < _utilizationBreakingPoint) {
-            _annualBorrowRate = AnnualRatesConverter.getAnnualRate(
-                0,
-                _params.firstSlope,
-                _utilizationRatio,
-                0,
-                _utilizationBreakingPoint,
-                DECIMAL
-            );
-        } else {
-            _annualBorrowRate = AnnualRatesConverter.getAnnualRate(
-                _params.firstSlope,
-                _params.secondSlope,
-                _utilizationRatio,
-                _utilizationBreakingPoint,
-                DECIMAL,
-                DECIMAL
-            );
-        }
-    }
-
-    function getAPY() external view override returns (uint256) {
-        uint256 _totalBorrowedAmount = aggregatedBorrowedAmount;
-        uint256 _currentTotalSupply = totalSupply();
-
-        if (_currentTotalSupply == 0) {
-            return 0;
-        }
-
-        uint256 _currentInterest = _totalBorrowedAmount.mulWithPrecision(
-            DECIMAL + getAnnualBorrowRate()
-        ) - _totalBorrowedAmount;
-
-        return
-            _currentInterest.mulDiv(
-                DECIMAL - assetParameters.getReserveFactor(assetKey),
-                _currentTotalSupply
-            );
-    }
-
-    function convertAssetToLPTokens(uint256 _assetAmount) public view override returns (uint256) {
-        return _assetAmount.divWithPrecision(exchangeRate());
-    }
-
-    function convertLPTokensToAsset(uint256 _lpTokensAmount)
-        public
-        view
-        override
-        returns (uint256)
-    {
-        return _lpTokensAmount.mulWithPrecision(exchangeRate());
-    }
-
-    function exchangeRate() public view override returns (uint256) {
-        uint256 _totalSupply = totalSupply();
-
-        if (_totalSupply == 0) {
-            return DECIMAL;
-        }
-
-        uint256 _aggregatedBorrowedAmount = aggregatedBorrowedAmount;
-        uint256 _currentBorrowInterest = (getTotalBorrowedAmount() - _aggregatedBorrowedAmount)
-            .mulWithPrecision(DECIMAL - assetParameters.getReserveFactor(assetKey));
-
-        return
-            (_currentBorrowInterest + _aggregatedBorrowedAmount + getAggregatedLiquidityAmount())
-                .divWithPrecision(_totalSupply);
-    }
-
-    function getAmountInUSD(uint256 _assetAmount) public view override returns (uint256) {
-        return _assetAmount.mulDiv(getAssetPrice(), ONE_TOKEN);
-    }
-
-    function getAmountFromUSD(uint256 _usdAmount) public view override returns (uint256) {
-        return _usdAmount.mulDiv(ONE_TOKEN, getAssetPrice());
-    }
-
-    function getAssetPrice() public view override returns (uint256) {
-        return assetParameters.getAssetPrice(assetKey, getUnderlyingDecimals());
-    }
-
-    function getUnderlyingDecimals() public view override returns (uint8) {
-        return ERC20(assetAddr).decimals();
-    }
-
-    function getCurrentRate() public view override returns (uint256) {
-        return compoundRateKeeper.getCurrentRate();
-    }
-
-    function getNewCompoundRate() public view override returns (uint256) {
-        return
-            compoundRateKeeper.getNewCompoundRate(
-                AnnualRatesConverter.convertToRatePerSecond(
-                    interestRateLibrary,
-                    getAnnualBorrowRate(),
-                    ONE_PERCENT
-                )
-            );
-    }
-
-    function updateCompoundRate() public override returns (uint256) {
-        return
-            compoundRateKeeper.update(
-                AnnualRatesConverter.convertToRatePerSecond(
-                    interestRateLibrary,
-                    getAnnualBorrowRate(),
-                    ONE_PERCENT
-                )
-            );
-    }
-
-    function updateRateWithInterval() public override returns (uint256) {
-        if (compoundRateKeeper.getLastUpdate() + UPDATE_RATE_INTERVAL > block.timestamp) {
-            return compoundRateKeeper.getCurrentRate();
-        } else {
-            return updateCompoundRate();
-        }
+        priceManager = IPriceManager(_registry.getPriceManagerContract());
+        interestRateLibrary = IInterestRateLibrary(_registry.getInterestRateLibraryContract());
     }
 
     function addLiquidity(address _userAddr, uint256 _liquidityAmount)
@@ -265,7 +101,7 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
             "LiquidityPool: Not enough tokens on account."
         );
 
-        updateRateWithInterval();
+        updateCompoundRate(true);
 
         uint256 _mintAmount = convertAssetToLPTokens(_liquidityAmount);
 
@@ -321,7 +157,7 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
 
     function approveToBorrow(
         address _userAddr,
-        uint256 _borrowAmount,
+        uint256 _approveAmount,
         address _delegateeAddr,
         uint256 _currentAllowance
     ) external override onlyDefiCore {
@@ -329,9 +165,15 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
             borrowAllowances[_userAddr][_delegateeAddr] == _currentAllowance,
             "LiquidityPool: The current allowance is not the same as expected."
         );
-        borrowAllowances[_userAddr][_delegateeAddr] = _borrowAmount;
+        borrowAllowances[_userAddr][_delegateeAddr] = _approveAmount;
+    }
 
-        emit BorrowApproval(_userAddr, _borrowAmount, _delegateeAddr);
+    function borrowFor(
+        address _userAddr,
+        address _recipient,
+        uint256 _amountToBorrow
+    ) external override onlyDefiCore {
+        _borrowFor(_userAddr, _recipient, _amountToBorrow);
     }
 
     function delegateBorrow(
@@ -349,14 +191,6 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
         borrowAllowances[_userAddr][_delegatee] = borrowAllowance - _amountToBorrow;
 
         _borrowFor(_userAddr, _delegatee, _amountToBorrow);
-    }
-
-    function borrowFor(
-        address _userAddr,
-        address _recipient,
-        uint256 _amountToBorrow
-    ) external override onlyDefiCore {
-        _borrowFor(_userAddr, _recipient, _amountToBorrow);
     }
 
     function repayBorrowFor(
@@ -427,7 +261,7 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
             "LiquidityPool: Not enough liquidity available on the contract."
         );
 
-        updateRateWithInterval();
+        updateCompoundRate(true);
 
         uint256 _burnAmount = convertAssetToLPTokens(_liquidityAmount);
 
@@ -464,45 +298,170 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
         totalReserves = _currentReserveAmount - _amountToWithdraw;
 
         IERC20(assetAddr).transfer(_recipientAddr, _convertToUnderlyingAsset(_amountToWithdraw));
-
-        emit FundsWithdrawn(_recipientAddr, address(this), _amountToWithdraw);
     }
 
-    function _getBorrowPercentage(uint256 _additionalBorrowAmount)
-        internal
-        view
-        returns (uint256)
-    {
-        uint256 _absoluteBorrowAmount = aggregatedBorrowedAmount + _additionalBorrowAmount;
-        uint256 _aggregatedLiquidityAmount = getAggregatedLiquidityAmount() -
-            _additionalBorrowAmount;
+    function updateCompoundRate(bool _withInterval) public override returns (uint256) {
+        CompoundRateKeeper _cr = compoundRateKeeper;
 
-        if (_aggregatedLiquidityAmount == 0 && _absoluteBorrowAmount == 0) {
+        if (_withInterval && _cr.getLastUpdate() + UPDATE_RATE_INTERVAL > block.timestamp) {
+            return _cr.getCurrentRate();
+        } else {
+            return
+                _cr.update(
+                    AnnualRatesConverter.convertToRatePerSecond(
+                        interestRateLibrary,
+                        getAnnualBorrowRate(),
+                        ONE_PERCENT
+                    )
+                );
+        }
+    }
+
+    function getAPY() external view override returns (uint256) {
+        uint256 _totalBorrowedAmount = aggregatedBorrowedAmount;
+        uint256 _currentTotalSupply = totalSupply();
+
+        if (_currentTotalSupply == 0) {
             return 0;
         }
 
+        uint256 _currentInterest = _totalBorrowedAmount.mulWithPrecision(
+            DECIMAL + getAnnualBorrowRate()
+        ) - _totalBorrowedAmount;
+
         return
-            _absoluteBorrowAmount.divWithPrecision(
-                _absoluteBorrowAmount + _aggregatedLiquidityAmount
+            _currentInterest.mulDiv(
+                DECIMAL - assetParameters.getReserveFactor(assetKey),
+                _currentTotalSupply
             );
     }
 
-    function _convertToUnderlyingAsset(uint256 _amountToConvert)
-        internal
-        view
-        returns (uint256 _assetAmount)
-    {
-        _assetAmount = _amountToConvert.convertFrom18(getUnderlyingDecimals());
-
-        require(_assetAmount > 0, "LiquidityPool: Incorrect asset amount after conversion.");
+    function getTotalLiquidity() external view override returns (uint256) {
+        return convertLPTokensToAsset(totalSupply());
     }
 
-    function _convertFromUnderlyingAsset(uint256 _amountToConvert)
-        internal
+    function getTotalBorrowedAmount() public view override returns (uint256) {
+        return
+            aggregatedNormalizedBorrowedAmount.mulWithPrecision(
+                compoundRateKeeper.getCurrentRate()
+            );
+    }
+
+    function getAggregatedLiquidityAmount() public view override returns (uint256) {
+        return
+            _convertFromUnderlyingAsset(IERC20(assetAddr).balanceOf(address(this))) -
+            totalReserves;
+    }
+
+    function getBorrowPercentage() public view override returns (uint256) {
+        return _getBorrowPercentage(0);
+    }
+
+    function getAvailableToBorrowLiquidity() public view override returns (uint256) {
+        uint256 _maxUR = assetParameters.getMaxUtilizationRatio(assetKey);
+        uint256 _absoluteBorrowAmount = aggregatedBorrowedAmount;
+
+        return
+            (_absoluteBorrowAmount + getAggregatedLiquidityAmount()).mulWithPrecision(_maxUR) -
+            _absoluteBorrowAmount;
+    }
+
+    function getAnnualBorrowRate() public view override returns (uint256 _annualBorrowRate) {
+        uint256 _utilizationRatio = getBorrowPercentage();
+
+        if (_utilizationRatio == 0) {
+            return 0;
+        }
+
+        IAssetParameters.InterestRateParams memory _params = assetParameters.getInterestRateParams(
+            assetKey
+        );
+        uint256 _utilizationBreakingPoint = _params.utilizationBreakingPoint;
+
+        if (_utilizationRatio < _utilizationBreakingPoint) {
+            _annualBorrowRate = AnnualRatesConverter.getAnnualRate(
+                0,
+                _params.firstSlope,
+                _utilizationRatio,
+                0,
+                _utilizationBreakingPoint,
+                DECIMAL
+            );
+        } else {
+            _annualBorrowRate = AnnualRatesConverter.getAnnualRate(
+                _params.firstSlope,
+                _params.secondSlope,
+                _utilizationRatio,
+                _utilizationBreakingPoint,
+                DECIMAL,
+                DECIMAL
+            );
+        }
+    }
+
+    function convertAssetToLPTokens(uint256 _assetAmount) public view override returns (uint256) {
+        return _assetAmount.divWithPrecision(exchangeRate());
+    }
+
+    function convertLPTokensToAsset(uint256 _lpTokensAmount)
+        public
         view
-        returns (uint256 _assetAmount)
+        override
+        returns (uint256)
     {
-        return _amountToConvert.convertTo18(getUnderlyingDecimals());
+        return _lpTokensAmount.mulWithPrecision(exchangeRate());
+    }
+
+    function exchangeRate() public view override returns (uint256) {
+        uint256 _totalSupply = totalSupply();
+
+        if (_totalSupply == 0) {
+            return DECIMAL;
+        }
+
+        uint256 _aggregatedBorrowedAmount = aggregatedBorrowedAmount;
+        uint256 _currentBorrowInterest = (getTotalBorrowedAmount() - _aggregatedBorrowedAmount)
+            .mulWithPrecision(DECIMAL - assetParameters.getReserveFactor(assetKey));
+
+        return
+            (_currentBorrowInterest + _aggregatedBorrowedAmount + getAggregatedLiquidityAmount())
+                .divWithPrecision(_totalSupply);
+    }
+
+    function getAmountInUSD(uint256 _assetAmount) public view override returns (uint256) {
+        return _assetAmount.mulDiv(getAssetPrice(), ONE_TOKEN);
+    }
+
+    function getAmountFromUSD(uint256 _usdAmount) public view override returns (uint256) {
+        return _usdAmount.mulDiv(ONE_TOKEN, getAssetPrice());
+    }
+
+    function getAssetPrice() public view override returns (uint256) {
+        (uint256 _price, uint8 _currentPriceDecimals) = priceManager.getPrice(
+            assetKey,
+            getUnderlyingDecimals()
+        );
+
+        return _price.convert(_currentPriceDecimals, PRICE_DECIMALS);
+    }
+
+    function getUnderlyingDecimals() public view override returns (uint8) {
+        return IERC20Metadata(assetAddr).decimals();
+    }
+
+    function getCurrentRate() public view override returns (uint256) {
+        return compoundRateKeeper.getCurrentRate();
+    }
+
+    function getNewCompoundRate() public view override returns (uint256) {
+        return
+            compoundRateKeeper.getNewCompoundRate(
+                AnnualRatesConverter.convertToRatePerSecond(
+                    interestRateLibrary,
+                    getAnnualBorrowRate(),
+                    ONE_PERCENT
+                )
+            );
     }
 
     function _borrowFor(
@@ -515,7 +474,7 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
             "LiquidityPool: Not enough available to borrow amount."
         );
 
-        uint256 _currentRate = updateRateWithInterval();
+        uint256 _currentRate = updateCompoundRate(true);
 
         require(
             _getBorrowPercentage(_amountToBorrow) <=
@@ -552,7 +511,7 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
             "LiquidityPool: Not enough available to borrow amount."
         );
 
-        _currentRate = updateRateWithInterval();
+        _currentRate = updateCompoundRate(true);
 
         require(
             _getBorrowPercentage(_amountToBorrow) <=
@@ -576,7 +535,7 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
         bool _isMaxRepay
     ) internal returns (RepayBorrowVars memory _repayBorrowVars) {
         _repayBorrowVars.userAddr = _userAddr;
-        _repayBorrowVars.currentRate = updateCompoundRate();
+        _repayBorrowVars.currentRate = updateCompoundRate(false);
         _repayBorrowVars.normalizedAmount = borrowInfos[_userAddr].normalizedAmount;
         _repayBorrowVars.currentAbsoluteAmount = _repayBorrowVars
             .normalizedAmount
@@ -626,5 +585,42 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
             _rewardsDistribution.updateCumulativeSums(from, this);
             _rewardsDistribution.updateCumulativeSums(to, this);
         }
+    }
+
+    function _getBorrowPercentage(uint256 _additionalBorrowAmount)
+        internal
+        view
+        returns (uint256)
+    {
+        uint256 _absoluteBorrowAmount = aggregatedBorrowedAmount + _additionalBorrowAmount;
+        uint256 _aggregatedLiquidityAmount = getAggregatedLiquidityAmount() -
+            _additionalBorrowAmount;
+
+        if (_aggregatedLiquidityAmount == 0 && _absoluteBorrowAmount == 0) {
+            return 0;
+        }
+
+        return
+            _absoluteBorrowAmount.divWithPrecision(
+                _absoluteBorrowAmount + _aggregatedLiquidityAmount
+            );
+    }
+
+    function _convertToUnderlyingAsset(uint256 _amountToConvert)
+        internal
+        view
+        returns (uint256 _assetAmount)
+    {
+        _assetAmount = _amountToConvert.convertFrom18(getUnderlyingDecimals());
+
+        require(_assetAmount > 0, "LiquidityPool: Incorrect asset amount after conversion.");
+    }
+
+    function _convertFromUnderlyingAsset(uint256 _amountToConvert)
+        internal
+        view
+        returns (uint256 _assetAmount)
+    {
+        return _amountToConvert.convertTo18(getUnderlyingDecimals());
     }
 }

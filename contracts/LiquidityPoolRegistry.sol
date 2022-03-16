@@ -1,29 +1,30 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.3;
 
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 
+import "./interfaces/IAssetParameters.sol";
+import "./interfaces/IRewardsDistribution.sol";
 import "./interfaces/ILiquidityPoolRegistry.sol";
 import "./interfaces/ILiquidityPool.sol";
 import "./interfaces/IPriceManager.sol";
-import "./interfaces/IRewardsDistribution.sol";
-import "./interfaces/IAssetParameters.sol";
+import "./interfaces/ILiquidityPoolFactory.sol";
 
-import "./LiquidityPoolFactory.sol";
-import "./AssetParameters.sol";
+import "./abstract/AbstractDependant.sol";
 
 contract LiquidityPoolRegistry is ILiquidityPoolRegistry, OwnableUpgradeable, AbstractDependant {
     using EnumerableSet for EnumerableSet.Bytes32Set;
     using Math for uint256;
 
     Registry private registry;
-    UpgradeableBeacon private liquidityPoolsBeacon;
-    LiquidityPoolFactory private liquidityPoolFactory;
-    IRewardsDistribution private rewardsDistribution;
     IAssetParameters private assetParameters;
+    IRewardsDistribution private rewardsDistribution;
+    ILiquidityPoolFactory private liquidityPoolFactory;
     IPriceManager private priceManager;
+    UpgradeableBeacon private liquidityPoolsBeacon;
 
     EnumerableSet.Bytes32Set private _supportedAssets;
 
@@ -40,10 +41,121 @@ contract LiquidityPoolRegistry is ILiquidityPoolRegistry, OwnableUpgradeable, Ab
 
     function setDependencies(Registry _registry) external override onlyInjectorOrZero {
         registry = _registry;
-        liquidityPoolFactory = LiquidityPoolFactory(_registry.getLiquidityPoolFactoryContract());
+        liquidityPoolFactory = ILiquidityPoolFactory(_registry.getLiquidityPoolFactoryContract());
         assetParameters = IAssetParameters(_registry.getAssetParametersContract());
         priceManager = IPriceManager(_registry.getPriceManagerContract());
         rewardsDistribution = IRewardsDistribution(_registry.getRewardsDistributionContract());
+    }
+
+    function addLiquidityPool(
+        address _assetAddr,
+        bytes32 _assetKey,
+        address _mainOracle,
+        address _backupOracle,
+        string calldata _tokenSymbol,
+        bool _isCollateral
+    ) external override onlyOwner {
+        require(_assetKey > 0, "LiquidityPoolRegistry: Unable to add an asset without a key.");
+        require(
+            _assetAddr != address(0),
+            "LiquidityPoolRegistry: Unable to add an asset with a zero address."
+        );
+        require(
+            !onlyExistingPool(_assetKey),
+            "LiquidityPoolRegistry: Liquidity pool with such a key already exists."
+        );
+
+        address _poolAddr = liquidityPoolFactory.newLiquidityPool(
+            _assetAddr,
+            _assetKey,
+            _tokenSymbol
+        );
+
+        liquidityPools[_assetKey] = _poolAddr;
+
+        _supportedAssets.add(_assetKey);
+
+        assetParameters.setPoolInitParams(_assetKey, _isCollateral);
+
+        existingLiquidityPools[_poolAddr] = true;
+
+        priceManager.addOracle(_assetKey, _assetAddr, _mainOracle, _backupOracle);
+
+        emit PoolAdded(_assetKey, _assetAddr, _poolAddr);
+    }
+
+    function withdrawReservedFunds(
+        address _recipientAddr,
+        bytes32 _assetKey,
+        uint256 _amountToWithdraw,
+        bool _isAllFunds
+    ) external override onlyOwner {
+        require(onlyExistingPool(_assetKey), "LiquidityPoolRegistry: Pool doesn't exist.");
+
+        if (!_isAllFunds) {
+            require(
+                _amountToWithdraw > 0,
+                "LiquidityPoolRegistry: Amount to withdraw must be greater than zero."
+            );
+        }
+
+        ILiquidityPool(liquidityPools[_assetKey]).withdrawReservedFunds(
+            _recipientAddr,
+            _amountToWithdraw,
+            _isAllFunds
+        );
+    }
+
+    function withdrawAllReservedFunds(
+        address _recipientAddr,
+        uint256 _offset,
+        uint256 _limit
+    ) external override onlyOwner {
+        bytes32[] memory _assetsKeys = getSupportedAssets(_offset, _limit);
+
+        for (uint256 i = 0; i < _assetsKeys.length; i++) {
+            ILiquidityPool(liquidityPools[_assetsKeys[i]]).withdrawReservedFunds(
+                _recipientAddr,
+                0,
+                true
+            );
+        }
+    }
+
+    function upgradeLiquidityPoolsImpl(address _newLiquidityPoolImpl) external override onlyOwner {
+        liquidityPoolsBeacon.upgradeTo(_newLiquidityPoolImpl);
+    }
+
+    function injectDependenciesToExistingLiquidityPools() external override onlyOwner {
+        Registry _registry = registry;
+
+        address[] memory _liquidityPools = getAllLiquidityPools();
+
+        for (uint256 i = 0; i < _liquidityPools.length; i++) {
+            AbstractDependant dependant = AbstractDependant(_liquidityPools[i]);
+
+            if (dependant.injector() == address(0)) {
+                dependant.setInjector(address(this));
+            }
+
+            dependant.setDependencies(_registry);
+        }
+    }
+
+    function injectDependencies(uint256 _offset, uint256 _limit) external override onlyOwner {
+        Registry _registry = registry;
+
+        bytes32[] memory _assets = getSupportedAssets(_offset, _limit);
+
+        for (uint256 i = 0; i < _assets.length; i++) {
+            AbstractDependant dependant = AbstractDependant(liquidityPools[_assets[i]]);
+
+            if (dependant.injector() == address(0)) {
+                dependant.setInjector(address(this));
+            }
+
+            dependant.setDependencies(_registry);
+        }
     }
 
     function getLiquidityPoolsBeacon() external view override returns (address) {
@@ -147,8 +259,9 @@ contract LiquidityPoolRegistry is ILiquidityPoolRegistry, OwnableUpgradeable, Ab
         ILiquidityPool _liquidityPool = ILiquidityPool(liquidityPools[_assetKey]);
         IAssetParameters _parameters = assetParameters;
 
-        IAssetParameters.LiquidityPoolParams memory _liquidityPoolParams = _parameters
-            .getLiquidityPoolParams(_assetKey);
+        IAssetParameters.MainPoolParams memory _mainPoolParams = _parameters.getMainPoolParams(
+            _assetKey
+        );
 
         uint256 _availableToBorrow = _liquidityPool.getAvailableToBorrowLiquidity();
         uint256 _totalReserves = _liquidityPool.totalReserves();
@@ -159,7 +272,7 @@ contract LiquidityPoolRegistry is ILiquidityPoolRegistry, OwnableUpgradeable, Ab
         return
             DetailedLiquidityPoolInfo(
                 _getLiquidityPoolInfo(_assetKey, _liquidityPool, _parameters),
-                _liquidityPoolParams,
+                _mainPoolParams,
                 _availableToBorrow,
                 _liquidityPool.getAmountInUSD(_availableToBorrow),
                 _totalReserves,
@@ -167,117 +280,6 @@ contract LiquidityPoolRegistry is ILiquidityPoolRegistry, OwnableUpgradeable, Ab
                 _distrSupplyAPY,
                 _distrBorrowAPY
             );
-    }
-
-    function addLiquidityPool(
-        address _assetAddr,
-        bytes32 _assetKey,
-        address _mainOracle,
-        address _backupOracle,
-        string calldata _tokenSymbol,
-        bool _isCollateral
-    ) external onlyOwner {
-        require(_assetKey > 0, "LiquidityPoolRegistry: Unable to add an asset without a key.");
-        require(
-            _assetAddr != address(0),
-            "LiquidityPoolRegistry: Unable to add an asset with a zero address."
-        );
-        require(
-            !onlyExistingPool(_assetKey),
-            "LiquidityPoolRegistry: Liquidity pool with such a key already exists."
-        );
-
-        address _poolAddr = liquidityPoolFactory.newLiquidityPool(
-            _assetAddr,
-            _assetKey,
-            _tokenSymbol
-        );
-
-        liquidityPools[_assetKey] = _poolAddr;
-
-        _supportedAssets.add(_assetKey);
-
-        assetParameters.addLiquidityPoolAssetInfo(_assetKey, _isCollateral);
-
-        existingLiquidityPools[_poolAddr] = true;
-
-        priceManager.addOracle(_assetKey, _assetAddr, _mainOracle, _backupOracle);
-
-        emit PoolAdded(_assetKey, _assetAddr, _poolAddr);
-    }
-
-    function withdrawReservedFunds(
-        address _recipientAddr,
-        bytes32 _assetKey,
-        uint256 _amountToWithdraw,
-        bool _isAllFunds
-    ) external onlyOwner {
-        require(onlyExistingPool(_assetKey), "LiquidityPoolRegistry: Pool doesn't exist.");
-
-        if (!_isAllFunds) {
-            require(
-                _amountToWithdraw > 0,
-                "LiquidityPoolRegistry: Amount to withdraw must be greater than zero."
-            );
-        }
-
-        ILiquidityPool(liquidityPools[_assetKey]).withdrawReservedFunds(
-            _recipientAddr,
-            _amountToWithdraw,
-            _isAllFunds
-        );
-    }
-
-    function withdrawAllReservedFunds(
-        address _recipientAddr,
-        uint256 _offset,
-        uint256 _limit
-    ) external onlyOwner {
-        bytes32[] memory _assetsKeys = getSupportedAssets(_offset, _limit);
-
-        for (uint256 i = 0; i < _assetsKeys.length; i++) {
-            ILiquidityPool(liquidityPools[_assetsKeys[i]]).withdrawReservedFunds(
-                _recipientAddr,
-                0,
-                true
-            );
-        }
-    }
-
-    function upgradeLiquidityPoolsImpl(address _newLiquidityPoolImpl) external onlyOwner {
-        liquidityPoolsBeacon.upgradeTo(_newLiquidityPoolImpl);
-    }
-
-    function injectDependenciesToExistingLiquidityPools() external onlyOwner {
-        Registry _registry = registry;
-
-        address[] memory _liquidityPools = getAllLiquidityPools();
-
-        for (uint256 i = 0; i < _liquidityPools.length; i++) {
-            AbstractDependant dependant = AbstractDependant(_liquidityPools[i]);
-
-            if (dependant.injector() == address(0)) {
-                dependant.setInjector(address(this));
-            }
-
-            dependant.setDependencies(_registry);
-        }
-    }
-
-    function injectDependencies(uint256 _offset, uint256 _limit) external onlyOwner {
-        Registry _registry = registry;
-
-        bytes32[] memory _assets = getSupportedAssets(_offset, _limit);
-
-        for (uint256 i = 0; i < _assets.length; i++) {
-            AbstractDependant dependant = AbstractDependant(liquidityPools[_assets[i]]);
-
-            if (dependant.injector() == address(0)) {
-                dependant.setInjector(address(this));
-            }
-
-            dependant.setDependencies(_registry);
-        }
     }
 
     function _getLiquidityPoolInfo(

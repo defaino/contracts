@@ -2,8 +2,6 @@
 pragma solidity 0.8.3;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "@openzeppelin/contracts/utils/Strings.sol";
-
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
 import "./interfaces/IAssetParameters.sol";
@@ -20,16 +18,9 @@ import "./common/Globals.sol";
 contract RewardsDistribution is IRewardsDistribution, OwnableUpgradeable, AbstractDependant {
     using MathHelper for uint256;
 
+    address private defiCoreAddr;
     IAssetParameters private assetParameters;
     ILiquidityPoolRegistry private liquidityPoolsRegistry;
-    address private defiCoreAddr;
-
-    struct LiquidityPoolStats {
-        uint256 supplyRewardPerBlock;
-        uint256 borrowRewardPerBlock;
-        uint256 totalSupplyPool;
-        uint256 totalBorrowPool;
-    }
 
     mapping(bytes32 => LiquidityPoolInfo) public liquidityPoolsInfo;
     mapping(bytes32 => mapping(address => UserDistributionInfo)) public usersDistributionInfo;
@@ -52,58 +43,6 @@ contract RewardsDistribution is IRewardsDistribution, OwnableUpgradeable, Abstra
         assetParameters = IAssetParameters(_registry.getAssetParametersContract());
         liquidityPoolsRegistry = ILiquidityPoolRegistry(
             _registry.getLiquidityPoolRegistryContract()
-        );
-    }
-
-    function getAPY(ILiquidityPool _liquidityPool)
-        external
-        view
-        override
-        returns (uint256 _supplyAPY, uint256 _borrowAPY)
-    {
-        ILiquidityPool _governanceLP = ILiquidityPool(
-            liquidityPoolsRegistry.getGovernanceLiquidityPool()
-        );
-        bytes32 _assetKey = _liquidityPool.assetKey();
-
-        LiquidityPoolStats memory _stats = _getLiquidityPoolStats(_assetKey, _liquidityPool);
-
-        uint256 _annualSupplyReward = _governanceLP.getAmountInUSD(_stats.supplyRewardPerBlock) *
-            BLOCKS_PER_YEAR *
-            DECIMAL;
-        uint256 _totalSupplyPoolInUSD = _liquidityPool.getAmountInUSD(
-            _liquidityPool.convertLPTokensToAsset(_stats.totalSupplyPool)
-        );
-
-        if (_totalSupplyPoolInUSD != 0) {
-            _supplyAPY = _annualSupplyReward / _totalSupplyPoolInUSD;
-        }
-
-        uint256 _annualBorrowReward = _governanceLP.getAmountInUSD(_stats.borrowRewardPerBlock) *
-            BLOCKS_PER_YEAR *
-            DECIMAL;
-        uint256 _totalBorrowPoolInUSD = _liquidityPool.getAmountInUSD(_stats.totalBorrowPool);
-
-        if (_totalBorrowPoolInUSD != 0) {
-            _borrowAPY = _annualBorrowReward / _totalBorrowPoolInUSD;
-        }
-    }
-
-    function getUserReward(
-        bytes32 _assetKey,
-        address _userAddr,
-        ILiquidityPool _liquidityPool
-    ) external view override returns (uint256 _userReward) {
-        (uint256 _newSupplyCumulativeSum, uint256 _newBorrowCumulativeSum) = _getNewCumulativeSums(
-            _assetKey,
-            _liquidityPool
-        );
-        _userReward = _getNewUserReward(
-            _userAddr,
-            _assetKey,
-            _liquidityPool,
-            _newSupplyCumulativeSum,
-            _newBorrowCumulativeSum
         );
     }
 
@@ -156,6 +95,58 @@ contract RewardsDistribution is IRewardsDistribution, OwnableUpgradeable, Abstra
 
             liquidityPoolsInfo[_currentKey].rewardPerBlock = _rewardsPerBlock[i];
         }
+    }
+
+    function getAPY(ILiquidityPool _liquidityPool)
+        external
+        view
+        override
+        returns (uint256 _supplyAPY, uint256 _borrowAPY)
+    {
+        ILiquidityPool _governanceLP = ILiquidityPool(
+            liquidityPoolsRegistry.getGovernanceLiquidityPool()
+        );
+        bytes32 _assetKey = _liquidityPool.assetKey();
+
+        LiquidityPoolStats memory _stats = _getLiquidityPoolStats(_assetKey, _liquidityPool);
+
+        uint256 _annualSupplyReward = _governanceLP.getAmountInUSD(_stats.supplyRewardPerBlock) *
+            BLOCKS_PER_YEAR *
+            DECIMAL;
+        uint256 _totalSupplyPoolInUSD = _liquidityPool.getAmountInUSD(
+            _liquidityPool.convertLPTokensToAsset(_stats.totalSupplyPool)
+        );
+
+        if (_totalSupplyPoolInUSD != 0) {
+            _supplyAPY = _annualSupplyReward / _totalSupplyPoolInUSD;
+        }
+
+        uint256 _annualBorrowReward = _governanceLP.getAmountInUSD(_stats.borrowRewardPerBlock) *
+            BLOCKS_PER_YEAR *
+            DECIMAL;
+        uint256 _totalBorrowPoolInUSD = _liquidityPool.getAmountInUSD(_stats.totalBorrowPool);
+
+        if (_totalBorrowPoolInUSD != 0) {
+            _borrowAPY = _annualBorrowReward / _totalBorrowPoolInUSD;
+        }
+    }
+
+    function getUserReward(
+        bytes32 _assetKey,
+        address _userAddr,
+        ILiquidityPool _liquidityPool
+    ) external view override returns (uint256 _userReward) {
+        (uint256 _newSupplyCumulativeSum, uint256 _newBorrowCumulativeSum) = _getNewCumulativeSums(
+            _assetKey,
+            _liquidityPool
+        );
+        _userReward = _getNewUserReward(
+            _userAddr,
+            _assetKey,
+            _liquidityPool,
+            _newSupplyCumulativeSum,
+            _newBorrowCumulativeSum
+        );
     }
 
     function _updateSumsWithUserReward(
@@ -286,14 +277,15 @@ contract RewardsDistribution is IRewardsDistribution, OwnableUpgradeable, Abstra
         view
         returns (uint256 _supplyRewardPerBlock, uint256 _borrowRewardPerBlock)
     {
-        (uint256 _minSupplyPart, uint256 _minBorrowPart) = assetParameters.getDistributionMinimums(
-            _assetKey
-        );
+        IAssetParameters.DistributionMinimums memory _distrMinimums = assetParameters
+            .getDistributionMinimums(_assetKey);
 
         uint256 _totalRewardPerBlock = liquidityPoolsInfo[_assetKey].rewardPerBlock;
 
-        uint256 _supplyRewardPerBlockPart = (DECIMAL - _minBorrowPart - _minSupplyPart)
-            .mulWithPrecision(_currentUR) + _minSupplyPart;
+        uint256 _supplyRewardPerBlockPart = (DECIMAL -
+            _distrMinimums.minBorrowDistrPart -
+            _distrMinimums.minSupplyDistrPart).mulWithPrecision(_currentUR) +
+            _distrMinimums.minSupplyDistrPart;
 
         _supplyRewardPerBlock = _totalRewardPerBlock.mulWithPrecision(_supplyRewardPerBlockPart);
         _borrowRewardPerBlock = _totalRewardPerBlock - _supplyRewardPerBlock;

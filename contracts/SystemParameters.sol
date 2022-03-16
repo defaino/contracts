@@ -20,11 +20,7 @@ contract SystemParameters is ISystemParameters, OwnableUpgradeable {
         __Ownable_init();
     }
 
-    function getLiquidationBoundaryParam() external view override returns (uint256) {
-        return _getParam(LIQUIDATION_BOUNDARY_KEY).getUintFromParam();
-    }
-
-    function setupLiquidationBoundary(uint256 _newValue) external onlyOwner {
+    function setupLiquidationBoundary(uint256 _newValue) external override onlyOwner {
         require(
             _newValue >= ONE_PERCENT * 50 && _newValue <= ONE_PERCENT * 80,
             "SystemParameters: The new value of the liquidation boundary is invalid."
@@ -32,7 +28,11 @@ contract SystemParameters is ISystemParameters, OwnableUpgradeable {
 
         _parameters[LIQUIDATION_BOUNDARY_KEY] = PureParameters.makeUintParam(_newValue);
 
-        emit UintParamUpdated(LIQUIDATION_BOUNDARY_KEY, _newValue);
+        emit LiquidationBoundaryUpdated(_newValue);
+    }
+
+    function getLiquidationBoundaryParam() external view override returns (uint256) {
+        return _getParam(LIQUIDATION_BOUNDARY_KEY).getUintFromParam();
     }
 
     function _getParam(bytes32 _paramKey) internal view returns (PureParameters.Param memory) {

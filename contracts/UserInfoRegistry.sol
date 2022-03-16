@@ -29,8 +29,8 @@ contract UserInfoRegistry is IUserInfoRegistry, AbstractDependant {
 
     IERC20Metadata internal governanceToken;
     IDefiCore internal defiCore;
-    IAssetParameters internal assetParameters;
     ISystemParameters internal systemParameters;
+    IAssetParameters internal assetParameters;
     IRewardsDistribution internal rewardsDistribution;
     ILiquidityPoolRegistry internal liquidityPoolRegistry;
 
@@ -291,8 +291,8 @@ contract UserInfoRegistry is IUserInfoRegistry, AbstractDependant {
 
         for (uint256 i = 0; i < _accounts.length; i++) {
             _resultArr[i] = UserLiquidationInfo(
-                _getUserAssets(_supplyAssets[_accounts[i]]),
                 _getUserAssets(_borrowAssets[_accounts[i]]),
+                _getUserAssets(_supplyAssets[_accounts[i]]),
                 _defiCore.getTotalBorrowBalanceInUSD(_accounts[i])
             );
         }
