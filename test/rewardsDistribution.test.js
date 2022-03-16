@@ -1,12 +1,6 @@
-const {
-  setNextBlockTime,
-  setTime,
-  mine,
-  getCurrentBlockTime,
-  getCurrentBlockNumber,
-} = require("./helpers/hardhatTimeTraveller");
-const { toBytes, compareKeys, deepCompareKeys } = require("./helpers/bytesCompareLibrary");
-const { getInterestRateLibraryData } = require("../migrations/helpers/deployHelper");
+const { mine, getCurrentBlockNumber } = require("./helpers/hardhatTimeTraveller");
+const { toBytes } = require("./helpers/bytesCompareLibrary");
+const { getInterestRateLibraryData } = require("../deploy/helpers/deployHelper");
 const { toBN, accounts, getOnePercent, getDecimal, wei } = require("../scripts/utils");
 
 const Reverter = require("./helpers/reverter");
@@ -189,8 +183,7 @@ describe("RewardsDistribution", () => {
 
     const governanceToken = await GovernanceToken.new(OWNER);
     const interestRateLibrary = await InterestRateLibrary.new(
-      getInterestRateLibraryData("scripts/InterestRatesExactData.txt"),
-      getInterestRateLibraryData("scripts/InterestRatesData.txt")
+      getInterestRateLibraryData("deploy/data/InterestRatesExactData.txt")
     );
 
     registry = await Registry.new();
@@ -240,6 +233,11 @@ describe("RewardsDistribution", () => {
     await rewardsDistribution.rewardsDistributionInitialize();
     await liquidityPoolRegistry.liquidityPoolRegistryInitialize(_liquidityPoolImpl.address);
     await priceManager.priceManagerInitialize(daiKey, tokens[1].address);
+
+    await interestRateLibrary.addNewRates(
+      110, // Start percentage
+      getInterestRateLibraryData("deploy/data/InterestRatesData.txt")
+    );
 
     await deployGovernancePool(governanceToken.address, await governanceToken.symbol());
 
@@ -411,7 +409,7 @@ describe("RewardsDistribution", () => {
       await defiCore.addLiquidity(wEthKey, liquidityAmount.times(20), { from: USER1 });
       await defiCore.addLiquidity(wEthKey, liquidityAmount.times(20), { from: USER2 });
 
-      await defiCore.borrow(daiKey, borrowAmount.times(10), { from: USER1 });
+      await defiCore.borrowFor(daiKey, borrowAmount.times(10), USER1, { from: USER1 });
       const startBlock = toBN(await getCurrentBlockNumber());
 
       let newSupplyCumulativeSum = getNewCumulativeSum(wei("0.2"), liquidityAmount.times(10), 0, toBN(3));
@@ -425,7 +423,7 @@ describe("RewardsDistribution", () => {
 
       let rewardsPerBlock = await getRewardsPerBlock(daiKey, daiPool);
 
-      await defiCore.borrow(daiKey, borrowAmount.times(5), { from: USER2 });
+      await defiCore.borrowFor(daiKey, borrowAmount.times(5), USER2, { from: USER2 });
 
       let currentBlock = toBN(await getCurrentBlockNumber());
       newSupplyCumulativeSum = getNewCumulativeSum(
@@ -499,7 +497,7 @@ describe("RewardsDistribution", () => {
       await defiCore.addLiquidity(wEthKey, liquidityAmount.times(20), { from: USER1 });
       await defiCore.addLiquidity(wEthKey, liquidityAmount.times(20), { from: USER2 });
 
-      await defiCore.borrow(daiKey, borrowAmount.times(10), { from: USER1 });
+      await defiCore.borrowFor(daiKey, borrowAmount.times(10), USER1, { from: USER1 });
       const startBlock = toBN(await getCurrentBlockNumber());
 
       let newSupplyCumulativeSum = getNewCumulativeSum(wei("0.2"), liquidityAmount.times(10), 0, toBN(3));
@@ -512,7 +510,7 @@ describe("RewardsDistribution", () => {
 
       let rewardsPerBlock = await getRewardsPerBlock(daiKey, daiPool);
 
-      await defiCore.borrow(daiKey, borrowAmount.times(5), { from: USER1 });
+      await defiCore.borrowFor(daiKey, borrowAmount.times(5), USER1, { from: USER1 });
 
       let currentBlock = toBN(await getCurrentBlockNumber());
       newSupplyCumulativeSum = getNewCumulativeSum(
@@ -566,7 +564,7 @@ describe("RewardsDistribution", () => {
       rewardsPerBlock = await getRewardsPerBlock(daiKey, daiPool);
       prevAP = newBorrowCumulativeSum;
 
-      await defiCore.borrow(daiKey, borrowAmount.times(4), { from: USER1 });
+      await defiCore.borrowFor(daiKey, borrowAmount.times(4), USER1, { from: USER1 });
 
       currentBlock = toBN(await getCurrentBlockNumber());
       newSupplyCumulativeSum = getNewCumulativeSum(
@@ -654,7 +652,7 @@ describe("RewardsDistribution", () => {
       await rewardsDistribution.setupRewardsPerBlockBatch([daiKey], [toBN("0")]);
 
       await defiCore.addLiquidity(daiKey, liquidityAmount.times(10));
-      await defiCore.borrow(daiKey, borrowAmount.times(10), { from: USER1 });
+      await defiCore.borrowFor(daiKey, borrowAmount.times(10), USER1, { from: USER1 });
 
       await rewardsDistribution.setupRewardsPerBlockBatch([daiKey], [toBN("424763700000000")]);
 
@@ -768,7 +766,7 @@ describe("RewardsDistribution", () => {
 
       await mine(499);
 
-      await defiCore.borrow(daiKey, borrowAmount, { from: USER1 });
+      await defiCore.borrowFor(daiKey, borrowAmount, USER1, { from: USER1 });
 
       await mine(250);
 
@@ -785,7 +783,7 @@ describe("RewardsDistribution", () => {
 
       await mine(449);
 
-      await defiCore.borrow(daiKey, borrowAmount.times(4), { from: USER2 });
+      await defiCore.borrowFor(daiKey, borrowAmount.times(4), USER2, { from: USER2 });
 
       let expectedUser1Reward = wei("22.7");
       let expectedUser2Reward = wei("67.5");
@@ -801,7 +799,7 @@ describe("RewardsDistribution", () => {
 
       await mine(499);
 
-      await defiCore.borrow(daiKey, borrowAmount, { from: USER1 });
+      await defiCore.borrowFor(daiKey, borrowAmount, USER1, { from: USER1 });
 
       expectedUser1Reward = wei("147.7");
       expectedUser2Reward = wei("942.5");
@@ -834,8 +832,8 @@ describe("RewardsDistribution", () => {
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
       await defiCore.addLiquidity(daiKey, liquidityAmount.times(3), { from: USER2 });
 
-      await defiCore.borrow(daiKey, borrowAmount, { from: USER1 });
-      await defiCore.borrow(daiKey, borrowAmount.times(2), { from: USER2 });
+      await defiCore.borrowFor(daiKey, borrowAmount, USER1, { from: USER1 });
+      await defiCore.borrowFor(daiKey, borrowAmount.times(2), USER2, { from: USER2 });
 
       await mine(499);
 

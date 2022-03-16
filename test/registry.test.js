@@ -36,10 +36,6 @@ describe("Registry", () => {
       const txReceipt = await registry.addContract(await registry.GOVERNANCE_TOKEN_NAME(), governanceToken.address);
 
       assert.equal(await registry.getGovernanceTokenContract(), governanceToken.address);
-
-      assert.equal(txReceipt.receipt.logs[0].event, "ContractAdded");
-      assert.equal(txReceipt.receipt.logs[0].args._name, await registry.GOVERNANCE_TOKEN_NAME());
-      assert.equal(txReceipt.receipt.logs[0].args._contractAddress, governanceToken.address);
     });
 
     it("should get exception if try to change contract address", async () => {
@@ -70,11 +66,6 @@ describe("Registry", () => {
         await registry.GOVERNANCE_TOKEN_NAME(),
         governanceTokenImpl.address
       );
-
-      assert.equal(txReceipt.receipt.logs[0].event, "ProxyContractAdded");
-      assert.equal(txReceipt.receipt.logs[0].args._name, await registry.GOVERNANCE_TOKEN_NAME());
-      assert.equal(txReceipt.receipt.logs[0].args._proxyAddress, await registry.getGovernanceTokenContract());
-      assert.equal(txReceipt.receipt.logs[0].args._implAddress, governanceTokenImpl.address);
     });
 
     it("should get exception if try to change contract address", async () => {

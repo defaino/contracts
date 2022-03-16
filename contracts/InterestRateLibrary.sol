@@ -22,7 +22,7 @@ contract InterestRateLibrary is IInterestRateLibrary, Ownable {
         );
 
         // Add exact values
-        _addRates(0, _exactRatesPerSecond, 1);
+        _addRates(1, _exactRatesPerSecond, 1);
     }
 
     function addNewRates(uint256 _startPercentage, uint256[] calldata _ratesPerSecond)
@@ -30,13 +30,10 @@ contract InterestRateLibrary is IInterestRateLibrary, Ownable {
         override
         onlyOwner
     {
-        uint256 _maxSupportedPercentage = maxSupportedPercentage;
-        uint256 _libraryPrecision = _maxSupportedPercentage < getLimitOfExactValues()
-            ? 1
-            : getLibraryPrecision();
+        uint256 _libraryPrecision = getLibraryPrecision();
 
         require(
-            _startPercentage == _maxSupportedPercentage + _libraryPrecision,
+            _startPercentage == maxSupportedPercentage + _libraryPrecision,
             "InterestRateLibrary: Incorrect starting percentage to add."
         );
 

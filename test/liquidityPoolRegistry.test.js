@@ -1,6 +1,6 @@
 const { setNextBlockTime, getCurrentBlockTime } = require("./helpers/hardhatTimeTraveller");
 const { toBytes, fromBytes, deepCompareKeys, compareKeys } = require("./helpers/bytesCompareLibrary");
-const { getInterestRateLibraryData } = require("../migrations/helpers/deployHelper");
+const { getInterestRateLibraryData } = require("../deploy/helpers/deployHelper");
 const { toBN, accounts, getOnePercent, getDecimal, wei } = require("../scripts/utils");
 
 const truffleAssert = require("truffle-assertions");
@@ -137,8 +137,7 @@ describe("LiquidityPoolRegistry", () => {
     TEST_ASSET = await accounts(9);
 
     const interestRateLibrary = await InterestRateLibrary.new(
-      getInterestRateLibraryData("scripts/InterestRatesExactData.txt"),
-      getInterestRateLibraryData("scripts/InterestRatesData.txt")
+      getInterestRateLibraryData("deploy/data/InterestRatesExactData.txt")
     );
     const governanceToken = await GovernanceToken.new(OWNER);
 
@@ -189,6 +188,11 @@ describe("LiquidityPoolRegistry", () => {
     await rewardsDistribution.rewardsDistributionInitialize();
     await liquidityPoolRegistry.liquidityPoolRegistryInitialize(_liquidityPoolImpl.address);
     await priceManager.priceManagerInitialize(daiKey, daiToken.address);
+
+    await interestRateLibrary.addNewRates(
+      110, // Start percentage
+      getInterestRateLibraryData("deploy/data/InterestRatesData.txt")
+    );
 
     await deployGovernancePool(governanceToken.address, await governanceToken.symbol());
 
@@ -338,10 +342,10 @@ describe("LiquidityPoolRegistry", () => {
         liquidityPools.push(currentLiquidityPool);
 
         await defiCore.addLiquidity(keys[i], liquidityAmount.times(i + 1), { from: USER1 });
-        await defiCore.borrow(keys[i], borrowAmount.times(i + 1), { from: USER1 });
+        await defiCore.borrowFor(keys[i], borrowAmount.times(i + 1), USER1, { from: USER1 });
 
         await setNextBlockTime(currentTime.plus(startTime.times(1000)).toNumber());
-        await currentLiquidityPool.updateCompoundRate();
+        await currentLiquidityPool.updateCompoundRate(false);
 
         await defiCore.repayBorrow(keys[i], borrowAmount.times(i + 3), true, { from: USER1 });
 
@@ -399,7 +403,7 @@ describe("LiquidityPoolRegistry", () => {
         liquidityPools.push(currentLiquidityPool);
 
         await defiCore.addLiquidity(keys[i], liquidityAmount.times(i + 1), { from: USER1 });
-        await defiCore.borrow(keys[i], borrowAmount.times(i + 1), { from: USER1 });
+        await defiCore.borrowFor(keys[i], borrowAmount.times(i + 1), USER1, { from: USER1 });
       }
     });
 
@@ -449,7 +453,7 @@ describe("LiquidityPoolRegistry", () => {
         await createLiquidityPool(keys[i], symbols[i], true);
 
         await defiCore.addLiquidity(keys[i], liquidityAmount.times(i + 1), { from: USER1 });
-        await defiCore.borrow(keys[i], borrowAmount.times(i + 1), { from: USER1 });
+        await defiCore.borrowFor(keys[i], borrowAmount.times(i + 1), USER1, { from: USER1 });
       }
 
       await rewardsDistribution.setupRewardsPerBlockBatch(keys, [wei(2), oneToken, wei(3)]);

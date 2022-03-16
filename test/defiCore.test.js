@@ -1,6 +1,6 @@
 const { setNextBlockTime, setTime, mine, getCurrentBlockTime } = require("./helpers/hardhatTimeTraveller");
 const { toBytes, compareKeys, deepCompareKeys } = require("./helpers/bytesCompareLibrary");
-const { getInterestRateLibraryData } = require("../migrations/helpers/deployHelper");
+const { getInterestRateLibraryData } = require("../deploy/helpers/deployHelper");
 const { toBN, accounts, getOnePercent, getDecimal, wei } = require("../scripts/utils");
 
 const Reverter = require("./helpers/reverter");
@@ -156,8 +156,7 @@ describe("DefiCore", async () => {
 
     governanceToken = await GovernanceToken.new(OWNER);
     const interestRateLibrary = await InterestRateLibrary.new(
-      getInterestRateLibraryData("scripts/InterestRatesExactData.txt"),
-      getInterestRateLibraryData("scripts/InterestRatesData.txt")
+      getInterestRateLibraryData("deploy/data/InterestRatesExactData.txt")
     );
 
     registry = await Registry.new();
@@ -207,6 +206,11 @@ describe("DefiCore", async () => {
     await rewardsDistribution.rewardsDistributionInitialize();
     await liquidityPoolRegistry.liquidityPoolRegistryInitialize(_liquidityPoolImpl.address);
     await priceManager.priceManagerInitialize(daiKey, tokens[1].address);
+
+    await interestRateLibrary.addNewRates(
+      110, // Start percentage
+      getInterestRateLibraryData("deploy/data/InterestRatesData.txt")
+    );
 
     await deployGovernancePool(governanceToken.address, await governanceToken.symbol());
 
@@ -435,13 +439,13 @@ describe("DefiCore", async () => {
 
       await defiCore.addLiquidity(daiKey, liquidityAmount.times(2), { from: USER1 });
 
-      await defiCore.borrow(wEthKey, amountToBorrow, { from: USER1 });
-      await defiCore.borrow(usdtKey, amountToBorrow, { from: USER1 });
+      await defiCore.borrowFor(wEthKey, amountToBorrow, USER1, { from: USER1 });
+      await defiCore.borrowFor(usdtKey, amountToBorrow, USER1, { from: USER1 });
 
       await setNextBlockTime(neededTime);
 
-      await wEthPool.updateCompoundRate();
-      await usdtPool.updateCompoundRate();
+      await wEthPool.updateCompoundRate(false);
+      await usdtPool.updateCompoundRate(false);
 
       const totalBorrowedAmount = (await defiCore.getUserBorrowedAmount(USER1, wEthKey)).plus(
         await defiCore.getUserBorrowedAmount(USER1, usdtKey)
@@ -538,9 +542,9 @@ describe("DefiCore", async () => {
       await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER1 });
 
       await setNextBlockTime(startTime.toNumber());
-      await usdtPool.updateCompoundRate();
+      await usdtPool.updateCompoundRate(false);
 
-      await defiCore.borrow(usdtKey, amountToBorrow, { from: USER1 });
+      await defiCore.borrowFor(usdtKey, amountToBorrow, USER1, { from: USER1 });
 
       let borrowLimit = await defiCore.getCurrentBorrowLimitInUSD(USER1);
       let totalBorrowedAmount = await defiCore.getTotalBorrowBalanceInUSD(USER1);
@@ -550,7 +554,7 @@ describe("DefiCore", async () => {
       assert.equal(result[1], 0);
 
       await setNextBlockTime(startTime.times(100).toNumber());
-      await usdtPool.updateCompoundRate();
+      await usdtPool.updateCompoundRate(false);
 
       const amountToRepayBorrow = amountToBorrow.div(2);
       await defiCore.repayBorrow(usdtKey, amountToRepayBorrow, false, { from: USER1 });
@@ -572,9 +576,10 @@ describe("DefiCore", async () => {
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
       await defiCore.disableCollateral(daiKey, { from: USER1 });
 
-      const result = toBN(await defiCore.enableCollateral.call(daiKey, { from: USER1 }));
+      await defiCore.enableCollateral(daiKey, { from: USER1 });
+
       assert.equal(
-        result.toString(),
+        (await defiCore.getCurrentBorrowLimitInUSD(USER1)).toString(),
         liquidityAmount
           .times(price)
           .times(priceDecimals)
@@ -583,8 +588,6 @@ describe("DefiCore", async () => {
           .idiv(standardColRatio)
           .toString()
       );
-
-      await defiCore.enableCollateral(daiKey, { from: USER1 });
 
       assert.equal(await defiCore.disabledCollateralAssets(USER1, daiKey), false);
     });
@@ -606,9 +609,6 @@ describe("DefiCore", async () => {
     const price = toBN(100);
 
     it("should correctly disable collateral", async () => {
-      let result = await defiCore.disableCollateral.call(daiKey, { from: USER1 });
-      assert.equal(result, 0);
-
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
 
       const expectedBorrowLimit = liquidityAmount
@@ -617,12 +617,11 @@ describe("DefiCore", async () => {
         .div(oneToken)
         .times(getDecimal())
         .div(standardColRatio);
-      assert.equal(toBN(await defiCore.getCurrentBorrowLimitInUSD(USER1)).toString(), expectedBorrowLimit.toString());
-
-      result = await defiCore.disableCollateral.call(daiKey, { from: USER1 });
-      assert.equal(result.toString(), 0);
+      assert.equal((await defiCore.getCurrentBorrowLimitInUSD(USER1)).toString(), expectedBorrowLimit.toString());
 
       await defiCore.disableCollateral(daiKey, { from: USER1 });
+
+      assert.equal((await defiCore.getCurrentBorrowLimitInUSD(USER1)).toString(), 0);
 
       assert.equal(await defiCore.disabledCollateralAssets(USER1, daiKey), true);
     });
@@ -631,7 +630,7 @@ describe("DefiCore", async () => {
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
       await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER2 });
 
-      await defiCore.borrow(wEthKey, amountToBorrow, { from: USER1 });
+      await defiCore.borrowFor(wEthKey, amountToBorrow, USER1, { from: USER1 });
 
       const reason = "DefiCore: It is impossible to disable the asset as a collateral.";
       await truffleAssert.reverts(defiCore.disableCollateral(daiKey, { from: USER1 }), reason);
@@ -829,7 +828,7 @@ describe("DefiCore", async () => {
       // console.log(`Total Supply balance - ${toBN(await defiCore.getTotalSupplyBalanceInUSD(USER1)).toString()}`);
       // console.log(`AL - ${toBN((await defiCore.getAvailableLiquidity(USER1))[0]).toString()}`);
 
-      await defiCore.borrow(daiKey, liquidityAmount.idiv(2), { from: USER1 });
+      await defiCore.borrowFor(daiKey, liquidityAmount.idiv(2), USER1, { from: USER1 });
 
       let expectedTotalBorrow = toBN(500).times(priceDecimals);
       expectedAvailableLiquidity = expectedAvailableLiquidity.minus(expectedTotalBorrow);
@@ -868,11 +867,11 @@ describe("DefiCore", async () => {
       assert.equal((await daiPool.balanceOf(USER1)).toString(), liquidityAmount.toString());
       assert.equal((await defiCore.getUserLiquidityAmount(USER1, daiKey)).toString(), liquidityAmount.toString());
 
-      await defiCore.borrow(daiKey, amountToBorrow, { from: USER2 });
+      await defiCore.borrowFor(daiKey, amountToBorrow, USER2, { from: USER2 });
 
       await setNextBlockTime(startTime.times(100).toNumber());
 
-      await defiCore.updateCompoundRate(daiKey);
+      await defiCore.updateCompoundRate(daiKey, false);
 
       assert.isTrue((await daiPool.getCurrentRate()).gt(getDecimal()));
 
@@ -885,7 +884,7 @@ describe("DefiCore", async () => {
 
       await setNextBlockTime(startTime.times(1000).toNumber());
 
-      await defiCore.updateCompoundRate(daiKey);
+      await defiCore.updateCompoundRate(daiKey, false);
 
       await defiCore.withdrawLiquidity(daiKey, 0, true, { from: USER1 });
 
@@ -910,7 +909,7 @@ describe("DefiCore", async () => {
       await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER2 });
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
 
-      await defiCore.borrow(wEthKey, amountToBorrow, { from: USER1 });
+      await defiCore.borrowFor(wEthKey, amountToBorrow, USER1, { from: USER1 });
 
       const expectedLimit = liquidityAmount
         .times(price)
@@ -994,7 +993,7 @@ describe("DefiCore", async () => {
       await setNextBlockTime(startTime.toNumber());
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
 
-      await defiCore.borrow(usdtKey, amountToBorrow, { from: USER1 });
+      await defiCore.borrowFor(usdtKey, amountToBorrow, USER1, { from: USER1 });
 
       assert.isTrue(deepCompareKeys(await userInfoRegistry.getUserSupplyAssets(USER1), [daiKey]));
       assert.isTrue(deepCompareKeys(await userInfoRegistry.getUserBorrowAssets(USER1), [usdtKey]));
@@ -1010,7 +1009,7 @@ describe("DefiCore", async () => {
       assert.isTrue(deepCompareKeys(await userInfoRegistry.getUserBorrowAssets(USER1), []));
 
       await setNextBlockTime(startTime.times(2).plus(1).toNumber());
-      await defiCore.borrow(usdtKey, amountToBorrow, { from: USER1 });
+      await defiCore.borrowFor(usdtKey, amountToBorrow, USER1, { from: USER1 });
 
       await setNextBlockTime(startTime.times(2).plus(2).toNumber());
       await defiCore.repayBorrow(usdtKey, amountToBorrow, true, { from: USER1 });
@@ -1031,13 +1030,13 @@ describe("DefiCore", async () => {
     it("should correctly borrow tokens", async () => {
       await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER2 });
 
-      await wEthPool.updateCompoundRate();
-      const txReceipt = await defiCore.borrow(wEthKey, borrowAmount, { from: USER1 });
+      await wEthPool.updateCompoundRate(false);
+      const txReceipt = await defiCore.borrowFor(wEthKey, borrowAmount, USER1, { from: USER1 });
 
       assert.equal(txReceipt.receipt.logs.length, 1);
 
       assert.equal(txReceipt.receipt.logs[0].event, "Borrowed");
-      assert.equal(txReceipt.receipt.logs[0].args._userAddr, USER1);
+      assert.equal(txReceipt.receipt.logs[0].args._borrower, USER1);
       assert.isTrue(compareKeys(txReceipt.receipt.logs[0].args._assetKey, wEthKey));
       assert.equal(toBN(txReceipt.receipt.logs[0].args._borrowedAmount).toString(), borrowAmount.toString());
 
@@ -1058,25 +1057,25 @@ describe("DefiCore", async () => {
 
     it("should get exception if borrow amount is zero", async () => {
       const reason = "DefiCore: Borrow amount must be greater than zero.";
-      await truffleAssert.reverts(defiCore.borrow(daiKey, 0, { from: USER1 }), reason);
+      await truffleAssert.reverts(defiCore.borrowFor(daiKey, 0, USER1, { from: USER1 }), reason);
     });
 
     it("should get exception if asset does not exists", async () => {
       const someAssetKey = toBytes("SOME_ASSET");
       const reason = "AssetParameters: Param for this asset doesn't exist.";
-      await truffleAssert.reverts(defiCore.borrow(someAssetKey, liquidityAmount, { from: USER1 }), reason);
+      await truffleAssert.reverts(defiCore.borrowFor(someAssetKey, liquidityAmount, USER1, { from: USER1 }), reason);
     });
 
     it("should get exception if not enough available liquidity", async () => {
       const reason = "DefiCore: Not enough available liquidity.";
-      await truffleAssert.reverts(defiCore.borrow(daiKey, liquidityAmount.times(2), { from: USER2 }), reason);
+      await truffleAssert.reverts(defiCore.borrowFor(daiKey, liquidityAmount.times(2), USER2, { from: USER2 }), reason);
     });
 
     it("should get exception if liquidity pool sis freezed", async () => {
       await assetParameters.freeze(daiKey);
 
       const reason = "DefiCore: Pool is freeze for borrow operations.";
-      await truffleAssert.reverts(defiCore.borrow(daiKey, liquidityAmount, { from: USER1 }), reason);
+      await truffleAssert.reverts(defiCore.borrowFor(daiKey, liquidityAmount, USER1, { from: USER1 }), reason);
     });
   });
 
@@ -1093,8 +1092,8 @@ describe("DefiCore", async () => {
 
       await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER2 });
 
-      await wEthPool.updateCompoundRate();
-      await defiCore.borrow(wEthKey, borrowAmount, { from: USER1 });
+      await wEthPool.updateCompoundRate(false);
+      await defiCore.borrowFor(wEthKey, borrowAmount, USER1, { from: USER1 });
 
       assert.isTrue(deepCompareKeys(await userInfoRegistry.getUserBorrowAssets(USER1), [wEthKey]));
     });
@@ -1104,7 +1103,7 @@ describe("DefiCore", async () => {
 
       const currentNormalizedAmount = (await wEthPool.borrowInfos(USER1)).normalizedAmount;
 
-      await wEthPool.updateCompoundRate();
+      await wEthPool.updateCompoundRate(false);
       const txReceipt = await defiCore.repayBorrow(wEthKey, repayBorrowAmount, false, { from: USER1 });
 
       const currentRate = await wEthPool.getCurrentRate();
@@ -1137,7 +1136,7 @@ describe("DefiCore", async () => {
     it("should fully repay borrow and remove assets from the list", async () => {
       await setNextBlockTime(startTime.times(100).toNumber());
 
-      await wEthPool.updateCompoundRate();
+      await wEthPool.updateCompoundRate(false);
       await defiCore.repayBorrow(wEthKey, 0, true, { from: USER1 });
 
       assert.equal((await wEthPool.borrowInfos(USER1)).normalizedAmount.toString(), 0);
@@ -1149,10 +1148,10 @@ describe("DefiCore", async () => {
     it("should correctly repay full borrow immediately after borrow", async () => {
       await setNextBlockTime(startTime.times(10).toNumber());
 
-      await wEthPool.updateCompoundRate();
+      await wEthPool.updateCompoundRate(false);
 
       await setNextBlockTime(startTime.times(10).plus(10).toNumber());
-      await defiCore.borrow(wEthKey, wei(10), { from: USER2 });
+      await defiCore.borrowFor(wEthKey, wei(10), USER2, { from: USER2 });
 
       await setNextBlockTime(startTime.times(10).plus(11).toNumber());
       await defiCore.repayBorrow(wEthKey, 0, true, { from: USER2 });
@@ -1181,8 +1180,8 @@ describe("DefiCore", async () => {
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER2 });
       await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER2 });
 
-      await wEthPool.updateCompoundRate();
-      await defiCore.borrow(wEthKey, borrowAmount, { from: USER1 });
+      await wEthPool.updateCompoundRate(false);
+      await defiCore.borrowFor(wEthKey, borrowAmount, USER1, { from: USER1 });
 
       assert.isTrue(deepCompareKeys(await userInfoRegistry.getUserBorrowAssets(USER1), [wEthKey]));
     });
@@ -1194,22 +1193,7 @@ describe("DefiCore", async () => {
       await daiChainlinkOracle.setPrice(price.times(priceDecimals));
       await usdtChainlinkOracle.setPrice(price.times(priceDecimals));
 
-      const result = await defiCore.liquidation(USER1, daiKey, wEthKey, liquidateAmount, { from: USER2 });
-
-      assert.equal(result.receipt.logs.length, 2);
-
-      assert.equal(result.receipt.logs[0].event, "LiquidateBorrow");
-      assert.isTrue(deepCompareKeys([result.receipt.logs[0].args._paramKey], [wEthKey]));
-      assert.equal(result.logs[0].args._userAddr, USER1);
-      assert.equal(toBN(result.logs[0].args._amount).toString(), toBN(liquidateAmount).toString());
-
-      assert.equal(result.receipt.logs[1].event, "LiquidatorPay");
-      assert.isTrue(deepCompareKeys([result.receipt.logs[1].args._paramKey], [daiKey]));
-      assert.equal(result.logs[1].args._liquidatorAddr, USER2);
-      assert.equal(
-        toBN(result.logs[1].args._amount).toString(),
-        liquidateAmount.times(100).idiv(price).idiv("0.92").toString()
-      );
+      await defiCore.liquidation(USER1, daiKey, wEthKey, liquidateAmount, { from: USER2 });
     });
 
     it("should correctly liquidate user's asset", async () => {
@@ -1217,27 +1201,12 @@ describe("DefiCore", async () => {
 
       await daiChainlinkOracle.setPrice(price.times(priceDecimals));
 
-      const result = await defiCore.liquidation(USER1, daiKey, wEthKey, liquidateAmount, { from: USER2 });
-
-      assert.equal(result.receipt.logs.length, 2);
-
-      assert.equal(result.receipt.logs[0].event, "LiquidateBorrow");
-      assert.isTrue(deepCompareKeys([result.receipt.logs[0].args._paramKey], [wEthKey]));
-      assert.equal(result.logs[0].args._userAddr, USER1);
-      assert.equal(toBN(result.logs[0].args._amount).toString(), toBN(liquidateAmount).toString());
-
-      assert.equal(result.receipt.logs[1].event, "LiquidatorPay");
-      assert.isTrue(deepCompareKeys([result.receipt.logs[1].args._paramKey], [daiKey]));
-      assert.equal(result.logs[1].args._liquidatorAddr, USER2);
-      assert.equal(
-        toBN(result.logs[1].args._amount).toString(),
-        liquidateAmount.times(100).idiv(price).idiv("0.92").toString()
-      );
+      await defiCore.liquidation(USER1, daiKey, wEthKey, liquidateAmount, { from: USER2 });
     });
 
     it("should correctly update cumulative sums after liquidation", async () => {
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
-      await defiCore.borrow(daiKey, borrowAmount, { from: USER1 });
+      await defiCore.borrowFor(daiKey, borrowAmount, USER1, { from: USER1 });
 
       await mine(500);
 
@@ -1305,7 +1274,7 @@ describe("DefiCore", async () => {
 
     it("should correctly update user borrow assets after liquidation", async () => {
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
-      await defiCore.borrow(daiKey, borrowAmount, { from: USER1 });
+      await defiCore.borrowFor(daiKey, borrowAmount, USER1, { from: USER1 });
 
       const price = toBN(82).times(priceDecimals);
       await daiChainlinkOracle.setPrice(price);
@@ -1389,12 +1358,12 @@ describe("DefiCore", async () => {
 
     it("should claim correct rewards after deposit and borrow", async () => {
       await defiCore.addLiquidity(daiKey, liquidityAmount.times(2), { from: USER1 });
-      await defiCore.borrow(daiKey, borrowAmount, { from: USER1 });
+      await defiCore.borrowFor(daiKey, borrowAmount, USER1, { from: USER1 });
 
       await mine(498);
 
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
-      await defiCore.borrow(daiKey, borrowAmount.idiv(2), { from: USER1 });
+      await defiCore.borrowFor(daiKey, borrowAmount.idiv(2), USER1, { from: USER1 });
 
       await defiCore.claimDistributionRewards({ from: USER1 });
 
@@ -1416,14 +1385,14 @@ describe("DefiCore", async () => {
     it("should claim correct rewards from several pools with deposits and borrows", async () => {
       for (let i = 0; i < keys.length; i++) {
         await defiCore.addLiquidity(keys[i], liquidityAmount, { from: USER1 });
-        await defiCore.borrow(keys[i], borrowAmount, { from: USER1 });
+        await defiCore.borrowFor(keys[i], borrowAmount, USER1, { from: USER1 });
       }
 
       await mine(500);
 
       for (let i = 0; i < keys.length; i++) {
         await defiCore.addLiquidity(keys[i], liquidityAmount, { from: USER1 });
-        await defiCore.borrow(keys[i], borrowAmount, { from: USER1 });
+        await defiCore.borrowFor(keys[i], borrowAmount, USER1, { from: USER1 });
       }
 
       await defiCore.claimDistributionRewards({ from: USER1 });
@@ -1470,12 +1439,12 @@ describe("DefiCore", async () => {
 
     it("should claim correct rewards after deposit and borrow", async () => {
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
-      await defiCore.borrow(daiKey, borrowAmount, { from: USER1 });
+      await defiCore.borrowFor(daiKey, borrowAmount, USER1, { from: USER1 });
 
       await mine(500);
 
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
-      await defiCore.borrow(daiKey, borrowAmount.idiv(2), { from: USER1 });
+      await defiCore.borrowFor(daiKey, borrowAmount.idiv(2), USER1, { from: USER1 });
 
       await defiCore.claimPoolDistributionRewards(daiKey, { from: USER1 });
 
@@ -1495,60 +1464,6 @@ describe("DefiCore", async () => {
       await truffleAssert.reverts(defiCore.claimPoolDistributionRewards(daiKey, { from: USER2 }), reason);
     });
   });
-
-  // describe("getUserDistributionRewards", async () => {
-  //   const liquidityAmount = wei(100);
-  //   const borrowAmount = wei(50);
-
-  //   it("should get correct rewards", async () => {
-  //     await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
-
-  //     await mine(499);
-
-  //     const expectedRewards = wei(100);
-
-  //     await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER2 });
-  //     const rewardInfo = await defiCore.getUserDistributionRewards(USER1);
-
-  //     assert.equal(toBN(rewardInfo.distributionReward).toString(), expectedRewards.toString());
-  //     assert.equal(toBN(rewardInfo.userBalance).toString(), 0);
-  //   });
-
-  //   it("should get correct rewards after claim", async () => {
-  //     await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
-
-  //     await mine(499);
-
-  //     const expectedRewards = wei(100.1);
-
-  //     await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER2 });
-
-  //     await defiCore.claimPoolDistributionRewards(daiKey, { from: USER1 });
-
-  //     let rewardInfo = await defiCore.getUserDistributionRewards(USER1);
-
-  //     assert.equal(toBN(await governanceToken.balanceOf(USER1)).toString(), toBN(rewardInfo.userBalance).toString());
-  //     assert.equal(toBN(rewardInfo.userBalance).toString(), expectedRewards.toString());
-
-  //     assert.equal(toBN(rewardInfo.distributionReward).toString(), 0);
-  //   });
-
-  //   it("should get correct rewards after deposit and borrow", async () => {
-  //     await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
-  //     await defiCore.borrow(daiKey, borrowAmount, { from: USER1 });
-
-  //     await mine(500);
-
-  //     await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
-  //     await defiCore.borrow(daiKey, borrowAmount.idiv(2), { from: USER1 });
-
-  //     const rewardInfo = await defiCore.getUserDistributionRewards(USER1);
-  //     const expectedReward = wei(1004.2);
-
-  //     assert.equal(toBN(rewardInfo.distributionReward).toString(), expectedReward.toString());
-  //     assert.equal(toBN(rewardInfo.userBalance).toString(), 0);
-  //   });
-  // });
 
   describe("approveToDelegateBorrow", () => {
     const liquidityAmount = wei(100);
@@ -1596,13 +1511,13 @@ describe("DefiCore", async () => {
     it("should correctly borrow tokens", async () => {
       await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER2 });
 
-      await wEthPool.updateCompoundRate();
+      await wEthPool.updateCompoundRate(false);
       const txReceipt = await defiCore.delegateBorrow(wEthKey, borrowAmount, USER1, { from: USER2 });
 
       assert.equal(txReceipt.receipt.logs.length, 1);
 
       assert.equal(txReceipt.receipt.logs[0].event, "Borrowed");
-      assert.equal(txReceipt.receipt.logs[0].args._userAddr, USER1);
+      assert.equal(txReceipt.receipt.logs[0].args._borrower, USER1);
       assert.isTrue(compareKeys(txReceipt.receipt.logs[0].args._assetKey, wEthKey));
       assert.equal(toBN(txReceipt.receipt.logs[0].args._borrowedAmount).toString(), borrowAmount.toString());
 
@@ -1628,7 +1543,7 @@ describe("DefiCore", async () => {
     it("should get exception if user is not a part of delegation", async () => {
       await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER2 });
 
-      await wEthPool.updateCompoundRate();
+      await wEthPool.updateCompoundRate(false);
 
       const reason = "LiquidityPool: Not enough allowed to borrow amount.";
       await truffleAssert.reverts(defiCore.delegateBorrow(wEthKey, borrowAmount, USER1, { from: OWNER }), reason);
@@ -1675,7 +1590,7 @@ describe("DefiCore", async () => {
       await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER2 });
 
       await defiCore.approveToDelegateBorrow(wEthKey, borrowAmount, USER2, 0, { from: USER1 });
-      await wEthPool.updateCompoundRate();
+      await wEthPool.updateCompoundRate(false);
       await defiCore.delegateBorrow(wEthKey, borrowAmount, USER1, { from: USER2 });
 
       assert.isTrue(deepCompareKeys(await userInfoRegistry.getUserBorrowAssets(USER1), [wEthKey]));
@@ -1686,7 +1601,7 @@ describe("DefiCore", async () => {
 
       const currentNormalizedAmount = toBN((await wEthPool.borrowInfos(USER1)).normalizedAmount);
 
-      await wEthPool.updateCompoundRate();
+      await wEthPool.updateCompoundRate(false);
       const txReceipt = await defiCore.delegateRepayBorrow(wEthKey, repayBorrowAmount, USER1, false, { from: USER2 });
 
       const currentRate = toBN(await wEthPool.getCurrentRate());
@@ -1720,7 +1635,7 @@ describe("DefiCore", async () => {
     it("should fully repay borrow and remove assets from the list", async () => {
       await setNextBlockTime(startTime.times(100).toNumber());
 
-      await wEthPool.updateCompoundRate();
+      await wEthPool.updateCompoundRate(false);
       await await defiCore.delegateRepayBorrow(wEthKey, borrowAmount.times(2), USER1, { from: USER2 });
 
       assert.equal((await wEthPool.borrowInfos(USER1)).normalizedAmount.toString(), 0);
@@ -1746,13 +1661,13 @@ describe("DefiCore", async () => {
     it("should correctly borrow tokens", async () => {
       await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER2 });
 
-      await wEthPool.updateCompoundRate();
+      await wEthPool.updateCompoundRate(false);
       const txReceipt = await defiCore.borrowFor(wEthKey, borrowAmount, USER2, { from: USER1 });
 
       assert.equal(txReceipt.receipt.logs.length, 1);
 
       assert.equal(txReceipt.receipt.logs[0].event, "Borrowed");
-      assert.equal(txReceipt.receipt.logs[0].args._userAddr, USER1);
+      assert.equal(txReceipt.receipt.logs[0].args._borrower, USER1);
       assert.isTrue(compareKeys(txReceipt.receipt.logs[0].args._assetKey, wEthKey));
       assert.equal(toBN(txReceipt.receipt.logs[0].args._borrowedAmount).toString(), borrowAmount.toString());
 
@@ -1802,110 +1717,6 @@ describe("DefiCore", async () => {
     });
   });
 
-  // describe("getUserLiquidationInfo", async () => {
-  //   const liquidityAmount = wei(100);
-  //   const borrowAmount = wei(50);
-  //   const chainlinkPriceDecimals = toBN(10).pow(8);
-
-  //   beforeEach("setup", async () => {
-  //     await daiChainlinkOracle.setPrice(toBN(20).times(chainlinkPriceDecimals));
-  //     await wEthChainlinkOracle.setPrice(toBN(30).times(chainlinkPriceDecimals));
-  //   });
-
-  //   it("should return correct user liquidation info if supply amount less than liquidation amount", async () => {
-  //     await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
-  //     await defiCore.addLiquidity(wEthKey, liquidityAmount.idiv(10), { from: USER1 });
-
-  //     await defiCore.borrow(daiKey, borrowAmount, { from: USER1 });
-
-  //     const result = await defiCore.getUserLiquidationInfo(USER1, daiKey, wEthKey);
-
-  //     assert.equal(toBN(result.borrowAssetPrice).toString(), chainlinkPriceDecimals.times(20).toString());
-  //     assert.equal(toBN(result.receiveAssetPrice).toString(), chainlinkPriceDecimals.times(30).toString());
-  //     assert.equal(
-  //       toBN(result.bonusReceiveAssetPrice).toString(),
-  //       chainlinkPriceDecimals.times(30).times(0.92).toString()
-  //     );
-
-  //     assert.equal(toBN(result.borrowedAmount).toString(), borrowAmount.toString());
-  //     assert.equal(toBN(result.supplyAmount).toString(), liquidityAmount.idiv(10).toString());
-
-  //     const expectedMaxQuantity = toBN(wei(13.8));
-  //     assert.equal(toBN(result.maxQuantity).toString(), expectedMaxQuantity.toString());
-  //   });
-
-  //   it("should return correct user liquidation info that equals to borrow amount", async () => {
-  //     await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
-  //     await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER2 });
-
-  //     await defiCore.borrow(daiKey, borrowAmount.idiv(2), { from: USER1 });
-  //     await defiCore.borrow(wEthKey, borrowAmount.idiv(5), { from: USER1 });
-
-  //     const result = await defiCore.getUserLiquidationInfo(USER1, wEthKey, daiKey);
-
-  //     assert.equal(toBN(result.borrowAssetPrice).toString(), chainlinkPriceDecimals.times(30).toString());
-  //     assert.equal(toBN(result.receiveAssetPrice).toString(), chainlinkPriceDecimals.times(20).toString());
-  //     assert.equal(
-  //       toBN(result.bonusReceiveAssetPrice).toString(),
-  //       chainlinkPriceDecimals.times(20).times(0.92).toString()
-  //     );
-
-  //     assert.equal(toBN(result.borrowedAmount).toString(), borrowAmount.idiv(5).toString());
-  //     assert.equal(toBN(result.supplyAmount).toString(), liquidityAmount.toString());
-
-  //     const expectedMaxQuantity = toBN(wei(10));
-  //     assert.equal(toBN(result.maxQuantity).toString(), expectedMaxQuantity.toString());
-  //   });
-
-  //   it("should return correct user liquidation info equals to max liquidation part", async () => {
-  //     await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
-  //     await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER2 });
-
-  //     await defiCore.borrow(daiKey, borrowAmount.idiv(2), { from: USER1 });
-  //     await defiCore.borrow(wEthKey, borrowAmount.idiv(2), { from: USER1 });
-
-  //     const result = await defiCore.getUserLiquidationInfo(USER1, wEthKey, daiKey);
-
-  //     assert.equal(toBN(result.borrowAssetPrice).toString(), chainlinkPriceDecimals.times(30).toString());
-  //     assert.equal(toBN(result.receiveAssetPrice).toString(), chainlinkPriceDecimals.times(20).toString());
-  //     assert.equal(
-  //       toBN(result.bonusReceiveAssetPrice).toString(),
-  //       chainlinkPriceDecimals.times(20).times(0.92).toString()
-  //     );
-
-  //     assert.equal(toBN(result.borrowedAmount).toString(), borrowAmount.idiv(2).toString());
-  //     assert.equal(toBN(result.supplyAmount).toString(), liquidityAmount.toString());
-
-  //     const expectedMaxQuantity = toBN("20833333333333333333");
-  //     assert.equal(toBN(result.maxQuantity).toString(), expectedMaxQuantity.toString());
-  //   });
-  // });
-
-  // describe("getLiquidiationInfo", async () => {
-  //   const liquidityAmount = wei(100);
-  //   const borrowAmount = wei(50);
-
-  //   it("should return correct liquidation info", async () => {
-  //     await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
-  //     await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER1 });
-  //     await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER2 });
-
-  //     await defiCore.borrow(daiKey, borrowAmount.idiv(2), { from: USER1 });
-  //     await defiCore.borrow(wEthKey, borrowAmount.idiv(2), { from: USER1 });
-  //     await defiCore.borrow(wEthKey, borrowAmount.idiv(2), { from: USER2 });
-
-  //     const result = await defiCore.getLiquidiationInfo([USER1, USER2]);
-
-  //     assert.isTrue(deepCompareKeys(result[0].borrowAssetKeys, [daiKey, wEthKey]));
-  //     assert.isTrue(deepCompareKeys(result[0].supplyAssetKeys, [daiKey, wEthKey]));
-  //     assert.equal(toBN(result[0].totalBorrowedAmount).toString(), toBN(5000).times(priceDecimals).toString());
-
-  //     assert.isTrue(deepCompareKeys(result[1].borrowAssetKeys, [wEthKey]));
-  //     assert.isTrue(deepCompareKeys(result[1].supplyAssetKeys, [wEthKey]));
-  //     assert.equal(toBN(result[1].totalBorrowedAmount).toString(), toBN(2500).times(priceDecimals).toString());
-  //   });
-  // });
-
   describe("getMaxToWithdraw - withdrawLiquidity - exchangeRate integration tests", () => {
     const liquidityAmount = wei(100);
     const borrowAmount = wei(30);
@@ -1915,11 +1726,11 @@ describe("DefiCore", async () => {
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER2 });
       await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: OWNER });
 
-      await defiCore.borrow(daiKey, borrowAmount, { from: OWNER });
+      await defiCore.borrowFor(daiKey, borrowAmount, OWNER, { from: OWNER });
 
       await setNextBlockTime(10000000);
 
-      await daiPool.updateCompoundRate();
+      await daiPool.updateCompoundRate(false);
 
       await defiCore.withdrawLiquidity(daiKey, await defiCore.getUserLiquidityAmount(USER1, daiKey), true, {
         from: USER1,
@@ -1945,11 +1756,11 @@ describe("DefiCore", async () => {
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER2 });
       await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: OWNER });
 
-      await defiCore.borrow(daiKey, borrowAmount, { from: OWNER });
+      await defiCore.borrowFor(daiKey, borrowAmount, OWNER, { from: OWNER });
 
       await setNextBlockTime(10000000);
 
-      await daiPool.updateCompoundRate();
+      await daiPool.updateCompoundRate(false);
       await defiCore.withdrawLiquidity(daiKey, await defiCore.getUserLiquidityAmount(USER1, daiKey), true, {
         from: USER1,
       });
@@ -1959,7 +1770,7 @@ describe("DefiCore", async () => {
 
       await setNextBlockTime(100000000);
 
-      await daiPool.updateCompoundRate();
+      await daiPool.updateCompoundRate(false);
       await defiCore.withdrawLiquidity(daiKey, await defiCore.getMaxToWithdraw(USER2, daiKey), true, { from: USER2 });
 
       assert.equal((await defiCore.getMaxToWithdraw(USER2, daiKey)).toString(), 0);
@@ -1992,7 +1803,7 @@ describe("DefiCore", async () => {
       await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER2 });
       await defiCore.addLiquidity(wEthKey, liquidityAmount.idiv(10), { from: USER1 });
 
-      await defiCore.borrow(wEthKey, borrowAmount.idiv(2), { from: USER1 });
+      await defiCore.borrowFor(wEthKey, borrowAmount.idiv(2), USER1, { from: USER1 });
 
       await setNextBlockTime(
         toBN(await getCurrentBlockTime())
@@ -2008,7 +1819,7 @@ describe("DefiCore", async () => {
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
       await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER2 });
 
-      await defiCore.borrow(wEthKey, wei(80), { from: USER1 });
+      await defiCore.borrowFor(wEthKey, wei(80), USER1, { from: USER1 });
 
       await setNextBlockTime(
         toBN(await getCurrentBlockTime())
@@ -2021,7 +1832,7 @@ describe("DefiCore", async () => {
 
     it("should return correct value if BA > 0", async () => {
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
-      await defiCore.borrow(daiKey, borrowAmount, { from: USER1 });
+      await defiCore.borrowFor(daiKey, borrowAmount, USER1, { from: USER1 });
 
       await setNextBlockTime(1000000);
 
@@ -2054,7 +1865,7 @@ describe("DefiCore", async () => {
     it("should return correct value UR = max UR", async () => {
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
       await defiCore.addLiquidity(wEthKey, liquidityAmount.times(3), { from: USER2 });
-      await defiCore.borrow(daiKey, wei(95), { from: USER2 });
+      await defiCore.borrowFor(daiKey, wei(95), USER2, { from: USER2 });
 
       assert.equal((await defiCore.getMaxToBorrow(USER1, daiKey)).toString(), 0);
     });
@@ -2062,7 +1873,7 @@ describe("DefiCore", async () => {
     it("should correct borrow maximum", async () => {
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
 
-      await defiCore.borrow(daiKey, await defiCore.getMaxToBorrow(USER1, daiKey), { from: USER1 });
+      await defiCore.borrowFor(daiKey, await defiCore.getMaxToBorrow(USER1, daiKey), USER1, { from: USER1 });
 
       assert.equal((await defiCore.getAvailableLiquidity(USER1))[0].toString(), 0);
     });
@@ -2080,7 +1891,7 @@ describe("DefiCore", async () => {
 
     it("should return correct value if available liquidity greater than pool capacity", async () => {
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
-      await defiCore.borrow(daiKey, borrowAmount, { from: USER1 });
+      await defiCore.borrowFor(daiKey, borrowAmount, USER1, { from: USER1 });
 
       await setTime(100000);
 
@@ -2111,7 +1922,7 @@ describe("DefiCore", async () => {
 
     it("should correct repay all debt", async () => {
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
-      await defiCore.borrow(daiKey, borrowAmount, { from: USER1 });
+      await defiCore.borrowFor(daiKey, borrowAmount, USER1, { from: USER1 });
 
       await setNextBlockTime(100000);
 

@@ -1,4 +1,4 @@
-const { getInterestRateLibraryData } = require("../migrations/helpers/deployHelper");
+const { getInterestRateLibraryData } = require("../deploy/helpers/deployHelper");
 const { toBN } = require("../scripts/utils");
 
 const truffleAssert = require("truffle-assertions");
@@ -17,8 +17,12 @@ describe("InterestRateLibrary", () => {
 
   before("setup", async () => {
     interestRateLibrary = await InterestRateLibrary.new(
-      getInterestRateLibraryData("scripts/InterestRatesExactData.txt"),
-      getInterestRateLibraryData("scripts/InterestRatesData.txt")
+      getInterestRateLibraryData("deploy/data/InterestRatesExactData.txt")
+    );
+
+    await interestRateLibrary.addNewRates(
+      110, // Start percentage
+      getInterestRateLibraryData("deploy/data/InterestRatesData.txt")
     );
 
     await reverter.snapshot();

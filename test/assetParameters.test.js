@@ -1,6 +1,5 @@
-const { assert } = require("chai");
 const { toBytes, fromBytes, compareKeys } = require("./helpers/bytesCompareLibrary");
-const { getInterestRateLibraryData } = require("../migrations/helpers/deployHelper");
+const { getInterestRateLibraryData } = require("../deploy/helpers/deployHelper");
 const { toBN, accounts } = require("../scripts/utils");
 
 const truffleAssert = require("truffle-assertions");
@@ -143,8 +142,7 @@ describe("AssetParameters", () => {
     TEST_ASSET = await accounts(9);
 
     const interestRateLibrary = await InterestRateLibrary.new(
-      getInterestRateLibraryData("scripts/InterestRatesExactData.txt"),
-      getInterestRateLibraryData("scripts/InterestRatesData.txt")
+      getInterestRateLibraryData("deploy/data/InterestRatesExactData.txt")
     );
     const governanceToken = await GovernanceToken.new(OWNER);
 
@@ -194,6 +192,11 @@ describe("AssetParameters", () => {
     await rewardsDistribution.rewardsDistributionInitialize();
     await liquidityPoolRegistry.liquidityPoolRegistryInitialize(_liquidityPoolImpl.address);
     await priceManager.priceManagerInitialize(daiKey, daiToken.address);
+
+    await interestRateLibrary.addNewRates(
+      110, // Start percentage
+      getInterestRateLibraryData("deploy/data/InterestRatesData.txt")
+    );
 
     await deployGovernancePool(governanceToken.address, await governanceToken.symbol());
 
@@ -311,7 +314,7 @@ describe("AssetParameters", () => {
 
       assert.equal(result.logs.length, 1);
 
-      assert.equal(result.logs[0].event, "BoolParamUpdated");
+      assert.equal(result.logs[0].event, "FreezeParamUpdated");
 
       assert.isTrue(compareKeys(result.logs[0].args._assetKey, paramKeyBytes));
       assert.equal(result.logs[0].args._newValue, true);
@@ -337,10 +340,10 @@ describe("AssetParameters", () => {
     it("should correctly freeze the asset", async () => {
       const result = await assetParameters.enableCollateral(assetKeyBytes);
 
-      assert.equal(result.receipt.logs[0].event, "BoolParamUpdated");
+      assert.equal(result.receipt.logs[0].event, "CollateralParamUpdated");
 
       assert.equal(fromBytes(result.receipt.logs[0].args._assetKey), assetKeyRow);
-      assert.equal(result.receipt.logs[0].args._paramKey, await assetParameters.ENABLE_COLLATERAL_KEY());
+      assert.equal(result.receipt.logs[0].args._isCollateral, true);
     });
 
     it("should get exception if not owner try to change collateral status", async () => {

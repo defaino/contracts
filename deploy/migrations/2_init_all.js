@@ -60,7 +60,7 @@ module.exports = async (deployer) => {
 
   logTransaction(
     await interestRateLibrary.addNewRates(
-      100, // Start percentage
+      110, // Start percentage
       getInterestRateLibraryData("deploy/data/InterestRatesData.txt")
     ),
     "Add rates to Interest rate library"

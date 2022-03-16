@@ -1,4 +1,4 @@
-const { getInterestRateLibraryData } = require("../migrations/helpers/deployHelper");
+const { getInterestRateLibraryData } = require("../deploy/helpers/deployHelper");
 const { toBN } = require("../scripts/utils");
 
 const truffleAssert = require("truffle-assertions");
@@ -22,8 +22,12 @@ describe("AnnualRatesConverter", () => {
   before("setup", async () => {
     annualRatesConverter = await AnnualRatesConverter.new();
     interestRateLibrary = await InterestRateLibrary.new(
-      getInterestRateLibraryData("scripts/InterestRatesExactData.txt"),
-      getInterestRateLibraryData("scripts/InterestRatesData.txt")
+      getInterestRateLibraryData("deploy/data/InterestRatesExactData.txt")
+    );
+
+    await interestRateLibrary.addNewRates(
+      110, // Start percentage
+      getInterestRateLibraryData("deploy/data/InterestRatesData.txt")
     );
 
     await reverter.snapshot();
@@ -70,19 +74,19 @@ describe("AnnualRatesConverter", () => {
   describe("convertToRatePerSecond", () => {
     it("should return correct rate per second if rate per year is an integer", async () => {
       let ratePerYear = onePercent.times(13);
-      let dataArr = getInterestRateLibraryData("scripts/InterestRatesData.txt");
+      let dataArr = getInterestRateLibraryData("deploy/data/InterestRatesData.txt");
 
       assert.equal(
         (await annualRatesConverter.convertToRatePerSecond(interestRateLibrary.address, ratePerYear)).toString(),
-        toBN(dataArr[3]).toString()
+        toBN(dataArr[2]).toString()
       );
 
       ratePerYear = onePercent.times(4);
-      dataArr = getInterestRateLibraryData("scripts/InterestRatesExactData.txt");
+      dataArr = getInterestRateLibraryData("deploy/data/InterestRatesExactData.txt");
 
       assert.equal(
         (await annualRatesConverter.convertToRatePerSecond(interestRateLibrary.address, ratePerYear)).toString(),
-        toBN(dataArr[40]).toString()
+        toBN(dataArr[39]).toString()
       );
     });
 
