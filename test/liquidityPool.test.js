@@ -574,7 +574,7 @@ describe("LiquidityPool", () => {
 
     it("should get exception if the user does not have enough liquidity", async () => {
       await setNextBlockTime(neededTime.toNumber());
-      await defiCore.disableCollateral(tokenKey, { from: USER1 });
+      await defiCore.updateCollateral(tokenKey, true, { from: USER1 });
 
       await setNextBlockTime(withdrawTime.toNumber());
       const reason = "LiquidityPool: Not enough lpTokens to withdraw liquidity.";
@@ -984,7 +984,7 @@ describe("LiquidityPool", () => {
 
     it("should correctly transfer tokens when an asset is disabled as a collateral", async () => {
       await defiCore.addLiquidity(tokenKey, liquidityAmount, { from: USER1 });
-      await defiCore.disableCollateral(tokenKey, { from: USER1 });
+      await defiCore.updateCollateral(tokenKey, true, { from: USER1 });
 
       await liquidityPool.transfer(USER2, amountToTransfer, { from: USER1 });
 

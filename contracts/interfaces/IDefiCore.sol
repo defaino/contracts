@@ -41,13 +41,10 @@ interface IDefiCore {
     /// @param _rewardAmount the amount of rewards the user will receive
     event DistributionRewardWithdrawn(address _userAddr, uint256 _rewardAmount);
 
-    /// @notice With this function, the user can turn on the assets as collaterals for his address
-    /// @param _assetKey The pool key to be enabled as a collateral
-    function enableCollateral(bytes32 _assetKey) external;
-
-    /// @notice With this function, the user can turn off the assets as collaterals for his address
-    /// @param _assetKey The pool key to be disabled as a collateral
-    function disableCollateral(bytes32 _assetKey) external;
+    /// @notice With this function you can change the value of the disabled of the asset as a collateral
+    /// @param _assetKey pool key to update the value
+    /// @param _isDisabled a flag that shows whether the asset will be disabled as a collateral
+    function updateCollateral(bytes32 _assetKey, bool _isDisabled) external;
 
     /// @notice Function to update the compound rate with or without interval by pool key
     /// @param _assetKey key of the pool for which the compound rate will be updated
@@ -144,14 +141,13 @@ interface IDefiCore {
         uint256 _liquidationAmount
     ) external;
 
-    /// @notice Function for getting the distribution reward from a specific pool
-    /// @param _assetKey the key of the pool from which the reward will be received
-    /// @return _reward the amount of the reward received
-    function claimPoolDistributionRewards(bytes32 _assetKey) external returns (uint256 _reward);
-
-    /// @notice Function for receiving distribution rewards from all pools
-    /// @return _totalReward the total amount of the reward received
-    function claimDistributionRewards() external returns (uint256 _totalReward);
+    /// @notice Function for getting the distribution reward from a specific pools or from the all pools
+    /// @param _assetKeys an array of the keys of the pools from which the reward will be received
+    /// @param _isAllPools the flag that shows whether all pools should be claimed
+    /// @return _totalReward the amount of the total reward received
+    function claimDistributionRewards(bytes32[] memory _assetKeys, bool _isAllPools)
+        external
+        returns (uint256 _totalReward);
 
     /// @notice Function for getting information about the user's assets that are disabled as collateral
     /// @param _userAddr the address of the user for whom the information will be obtained

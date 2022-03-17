@@ -264,8 +264,8 @@ describe("DefiCore", async () => {
     });
 
     it("should return 0 if the user has no enabled as collateral assets", async () => {
-      await defiCore.disableCollateral(daiKey, { from: USER1 });
-      await defiCore.disableCollateral(wEthKey, { from: USER1 });
+      await defiCore.updateCollateral(daiKey, true, { from: USER1 });
+      await defiCore.updateCollateral(wEthKey, true, { from: USER1 });
 
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
       await defiCore.addLiquidity(wEthKey, liquidityAmount.times(2), { from: USER1 });
@@ -277,7 +277,7 @@ describe("DefiCore", async () => {
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
       await defiCore.addLiquidity(wEthKey, liquidityAmount.times(2), { from: USER1 });
 
-      await defiCore.disableCollateral(wEthKey, { from: USER1 });
+      await defiCore.updateCollateral(wEthKey, true, { from: USER1 });
 
       const expectedLimit = liquidityAmount
         .times(price)
@@ -290,30 +290,12 @@ describe("DefiCore", async () => {
     });
 
     it("should return 0 if the user has no enabled as collateral assets, including assets which are not posible to be enabled", async () => {
-      await defiCore.disableCollateral(daiKey, { from: USER1 });
+      await defiCore.updateCollateral(daiKey, true, { from: USER1 });
 
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
       await defiCore.addLiquidity(usdtKey, liquidityAmount.times(2), { from: USER1 });
 
       assert.equal((await defiCore.getCurrentBorrowLimitInUSD(USER1)).toString(), 0);
-    });
-
-    it("should return correct borrow limit regardless of disableCollateral function", async () => {
-      await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
-      await defiCore.addLiquidity(usdtKey, liquidityAmount.times(2), { from: USER1 });
-
-      const expectedLimit = liquidityAmount
-        .times(price)
-        .times(priceDecimals)
-        .idiv(oneToken)
-        .times(getDecimal())
-        .idiv(standardColRatio);
-
-      assert.equal((await defiCore.getCurrentBorrowLimitInUSD(USER1)).toString(), expectedLimit.toString());
-
-      await defiCore.disableCollateral(usdtKey, { from: USER1 });
-
-      assert.equal((await defiCore.getCurrentBorrowLimitInUSD(USER1)).toString(), expectedLimit.toString());
     });
 
     it("should return correct borrow limit for assets with different collateralization ratio", async () => {
@@ -401,7 +383,7 @@ describe("DefiCore", async () => {
     });
 
     it("should return correct value if collateral disabled", async () => {
-      await defiCore.disableCollateral(daiKey, { from: USER1 });
+      await defiCore.updateCollateral(daiKey, true, { from: USER1 });
       const expectedLimit = liquidityAmount
         .times(2)
         .times(price)
@@ -568,15 +550,17 @@ describe("DefiCore", async () => {
     });
   });
 
-  describe("enableCollateral", () => {
+  describe("updateCollateral", () => {
     const liquidityAmount = wei(100);
     const price = toBN(100);
 
     it("should correctly enable collateral", async () => {
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
-      await defiCore.disableCollateral(daiKey, { from: USER1 });
+      await defiCore.updateCollateral(daiKey, true, { from: USER1 });
 
-      await defiCore.enableCollateral(daiKey, { from: USER1 });
+      assert.equal((await defiCore.getCurrentBorrowLimitInUSD(USER1)).toString(), 0);
+
+      await defiCore.updateCollateral(daiKey, false, { from: USER1 });
 
       assert.equal(
         (await defiCore.getCurrentBorrowLimitInUSD(USER1)).toString(),
@@ -592,22 +576,6 @@ describe("DefiCore", async () => {
       assert.equal(await defiCore.disabledCollateralAssets(USER1, daiKey), false);
     });
 
-    it("should get exception if asset already enabled", async () => {
-      const reason = "DefiCore: Asset already enabled as collateral.";
-      await truffleAssert.reverts(defiCore.enableCollateral(daiKey, { from: USER1 }), reason);
-    });
-
-    it("should get exception if asset is not collateral", async () => {
-      const reason = "DefiCore: Asset is blocked for collateral.";
-      await truffleAssert.reverts(defiCore.enableCollateral(usdtKey, { from: USER1 }), reason);
-    });
-  });
-
-  describe("disableCollateral", () => {
-    const liquidityAmount = wei(100);
-    const amountToBorrow = wei(50);
-    const price = toBN(100);
-
     it("should correctly disable collateral", async () => {
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
 
@@ -619,28 +587,21 @@ describe("DefiCore", async () => {
         .div(standardColRatio);
       assert.equal((await defiCore.getCurrentBorrowLimitInUSD(USER1)).toString(), expectedBorrowLimit.toString());
 
-      await defiCore.disableCollateral(daiKey, { from: USER1 });
+      await defiCore.updateCollateral(daiKey, true, { from: USER1 });
 
       assert.equal((await defiCore.getCurrentBorrowLimitInUSD(USER1)).toString(), 0);
 
       assert.equal(await defiCore.disabledCollateralAssets(USER1, daiKey), true);
     });
 
-    it("should get exception if not enough available liquidity after disable", async () => {
-      await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
-      await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER2 });
-
-      await defiCore.borrowFor(wEthKey, amountToBorrow, USER1, { from: USER1 });
-
-      const reason = "DefiCore: It is impossible to disable the asset as a collateral.";
-      await truffleAssert.reverts(defiCore.disableCollateral(daiKey, { from: USER1 }), reason);
+    it("should get exception if asset already enabled", async () => {
+      const reason = "DefiCore: The new value cannot be equal to the current value.";
+      await truffleAssert.reverts(defiCore.updateCollateral(daiKey, false, { from: USER1 }), reason);
     });
 
-    it("should get exception if asset not enabled", async () => {
-      await defiCore.disableCollateral(daiKey, { from: USER1 });
-
-      const reason = "DefiCore: Asset must be enabled as collateral.";
-      await truffleAssert.reverts(defiCore.disableCollateral(daiKey, { from: USER1 }), reason);
+    it("should get exception if asset is not collateral", async () => {
+      const reason = "DefiCore: Asset is blocked for collateral.";
+      await truffleAssert.reverts(defiCore.updateCollateral(usdtKey, true, { from: USER1 }), reason);
     });
   });
 
@@ -758,7 +719,7 @@ describe("DefiCore", async () => {
       await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER1 });
       await defiCore.addLiquidity(usdtKey, liquidityAmount, { from: USER1 });
 
-      await defiCore.disableCollateral(wEthKey, { from: USER1 });
+      await defiCore.updateCollateral(wEthKey, true, { from: USER1 });
 
       const currentTotalLiquidityAmount = liquidityAmount.times(price).times(priceDecimals).idiv(oneToken);
       const expectedLimit = currentTotalLiquidityAmount.times(getDecimal()).idiv(standardColRatio);
@@ -788,7 +749,7 @@ describe("DefiCore", async () => {
     it("should correctly withdraw with disabled collateral", async () => {
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
 
-      await defiCore.disableCollateral(daiKey, { from: USER1 });
+      await defiCore.updateCollateral(daiKey, true, { from: USER1 });
 
       await setNextBlockTime(withdrawTime.toNumber());
       await defiCore.withdrawLiquidity(daiKey, amountToWithdraw, false, { from: USER1 });
@@ -799,9 +760,6 @@ describe("DefiCore", async () => {
 
     it("should correctly withdraw with assets which are not possible to be enabled as collateral", async () => {
       await defiCore.addLiquidity(usdtKey, liquidityAmount, { from: USER1 });
-
-      await defiCore.disableCollateral(usdtKey, { from: USER1 });
-
       await defiCore.withdrawLiquidity(usdtKey, liquidityAmount.minus(1), false, { from: USER1 });
 
       assert.equal((await defiCore.getUserLiquidityAmount(USER1, usdtKey)).toString(), (1).toString());
@@ -1328,7 +1286,7 @@ describe("DefiCore", async () => {
 
       const expectedRewards = wei(100);
 
-      await defiCore.claimDistributionRewards({ from: USER1 });
+      await defiCore.claimDistributionRewards([], true, { from: USER1 });
 
       const userInfo = await rewardsDistribution.usersDistributionInfo(daiKey, USER1);
 
@@ -1351,7 +1309,7 @@ describe("DefiCore", async () => {
 
       const expectedRewards = wei(398.9);
 
-      await defiCore.claimDistributionRewards({ from: USER1 });
+      await defiCore.claimDistributionRewards(keys, false, { from: USER1 });
 
       assert.equal(toBN(await governanceToken.balanceOf(USER1)).toString(), expectedRewards.toString());
     });
@@ -1365,7 +1323,7 @@ describe("DefiCore", async () => {
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
       await defiCore.borrowFor(daiKey, borrowAmount.idiv(2), USER1, { from: USER1 });
 
-      await defiCore.claimDistributionRewards({ from: USER1 });
+      await defiCore.claimDistributionRewards([], true, { from: USER1 });
 
       const userInfo = await rewardsDistribution.usersDistributionInfo(daiKey, USER1);
       const poolInfo = await rewardsDistribution.liquidityPoolsInfo(daiKey);
@@ -1395,7 +1353,7 @@ describe("DefiCore", async () => {
         await defiCore.borrowFor(keys[i], borrowAmount, USER1, { from: USER1 });
       }
 
-      await defiCore.claimDistributionRewards({ from: USER1 });
+      await defiCore.claimDistributionRewards(keys, false, { from: USER1 });
 
       const expectedRewards = wei(4066.8);
       assert.closeTo(
@@ -1408,60 +1366,7 @@ describe("DefiCore", async () => {
     it("should get exception if nothing to claim", async () => {
       const reason = "DefiCore: Nothing to claim.";
 
-      await truffleAssert.reverts(defiCore.claimDistributionRewards({ from: USER1 }), reason);
-    });
-  });
-
-  describe("claimPoolDistributionRewards", () => {
-    const liquidityAmount = wei(100);
-    const borrowAmount = wei(50);
-
-    it("should claim correct rewards", async () => {
-      await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
-
-      await mine(499);
-
-      const expectedRewards = wei(100);
-
-      await defiCore.claimPoolDistributionRewards(daiKey, { from: USER1 });
-
-      const userInfo = await rewardsDistribution.usersDistributionInfo(daiKey, USER1);
-
-      assert.equal(toBN(userInfo.aggregatedReward).toString(), 0);
-      assert.equal(
-        toBN(userInfo.lastSupplyCumulativeSum).toString(),
-        toBN((await rewardsDistribution.liquidityPoolsInfo(daiKey)).supplyCumulativeSum).toString()
-      );
-      assert.equal(toBN(userInfo.lastBorrowCumulativeSum).toString(), 0);
-
-      assert.equal(toBN(await governanceToken.balanceOf(USER1)).toString(), expectedRewards.toString());
-    });
-
-    it("should claim correct rewards after deposit and borrow", async () => {
-      await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
-      await defiCore.borrowFor(daiKey, borrowAmount, USER1, { from: USER1 });
-
-      await mine(500);
-
-      await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
-      await defiCore.borrowFor(daiKey, borrowAmount.idiv(2), USER1, { from: USER1 });
-
-      await defiCore.claimPoolDistributionRewards(daiKey, { from: USER1 });
-
-      const userInfo = await rewardsDistribution.usersDistributionInfo(daiKey, USER1);
-      const poolInfo = await rewardsDistribution.liquidityPoolsInfo(daiKey);
-
-      assert.equal(toBN(userInfo.aggregatedReward).toString(), 0);
-      assert.equal(toBN(userInfo.lastSupplyCumulativeSum).toString(), toBN(poolInfo.supplyCumulativeSum).toString());
-      assert.equal(toBN(userInfo.lastBorrowCumulativeSum).toString(), toBN(poolInfo.borrowCumulativeSum));
-
-      const expectedRewards = wei(1006.2);
-      assert.equal(toBN(await governanceToken.balanceOf(USER1)).toString(), expectedRewards.toString());
-    });
-
-    it("should get exception if user not have rewards", async () => {
-      const reason = "DefiCore: User have not rewards from this pool.";
-      await truffleAssert.reverts(defiCore.claimPoolDistributionRewards(daiKey, { from: USER2 }), reason);
+      await truffleAssert.reverts(defiCore.claimDistributionRewards([], true, { from: USER1 }), reason);
     });
   });
 

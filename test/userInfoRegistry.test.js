@@ -349,7 +349,7 @@ describe("UserInfoRegistry", () => {
 
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER2 });
 
-      await defiCore.claimPoolDistributionRewards(daiKey, { from: USER1 });
+      await defiCore.claimDistributionRewards([daiKey], false, { from: USER1 });
 
       const rewardInfo = await userInfoRegistry.getUserDistributionRewards(USER1);
 
@@ -395,7 +395,7 @@ describe("UserInfoRegistry", () => {
       await defiCore.addLiquidity(wEthKey, liquidityAmount.times(2), { from: USER2 });
 
       await defiCore.borrowFor(daiKey, borrowAmount, USER2, { from: USER2 });
-      await defiCore.disableCollateral(wEthKey, { from: USER1 });
+      await defiCore.updateCollateral(wEthKey, true, { from: USER1 });
 
       const dataArr = await userInfoRegistry.getUserSupplyPoolsInfo(USER1, [daiKey, wEthKey]);
 
@@ -475,7 +475,7 @@ describe("UserInfoRegistry", () => {
       await defiCore.borrowFor(daiKey, borrowAmount, USER1, { from: USER1 });
       await defiCore.borrowFor(daiKey, borrowAmount, USER2, { from: USER2 });
 
-      await defiCore.disableCollateral(daiKey, { from: USER2 });
+      await defiCore.updateCollateral(daiKey, true, { from: USER2 });
 
       let userPoolInfo = await userInfoRegistry.getUserPoolInfo(USER1, daiKey);
       let userBalance = await tokens[1].balanceOf(USER1);

@@ -14,6 +14,7 @@ import "./interfaces/ILiquidityPool.sol";
 import "./interfaces/IUserInfoRegistry.sol";
 
 import "./libraries/DecimalsConverter.sol";
+import "./libraries/AssetsHelperLibrary.sol";
 import "./libraries/MathHelper.sol";
 
 import "./Registry.sol";
@@ -21,6 +22,7 @@ import "./abstract/AbstractDependant.sol";
 
 contract UserInfoRegistry is IUserInfoRegistry, AbstractDependant {
     using EnumerableSet for EnumerableSet.Bytes32Set;
+    using AssetsHelperLibrary for bytes32;
     using DecimalsConverter for uint256;
     using MathHelper for uint256;
 
@@ -148,7 +150,7 @@ contract UserInfoRegistry is IUserInfoRegistry, AbstractDependant {
             _totalReward += _rewardsDistribution.getUserReward(
                 _allAssets[i],
                 _userAddr,
-                ILiquidityPool(_poolRegistry.liquidityPools(_allAssets[i]))
+                _allAssets[i].getAssetLiquidityPool(_poolRegistry)
             );
         }
 
@@ -183,8 +185,8 @@ contract UserInfoRegistry is IUserInfoRegistry, AbstractDependant {
         _supplyPoolsInfo = new UserSupplyPoolInfo[](_assetKeys.length);
 
         for (uint256 i = 0; i < _assetKeys.length; i++) {
-            ILiquidityPool _currentLiquidityPool = ILiquidityPool(
-                _liquidityPoolRegistry.liquidityPools(_assetKeys[i])
+            ILiquidityPool _currentLiquidityPool = _assetKeys[i].getAssetLiquidityPool(
+                _liquidityPoolRegistry
             );
 
             uint256 _marketSize = _currentLiquidityPool.getTotalLiquidity();
@@ -216,8 +218,8 @@ contract UserInfoRegistry is IUserInfoRegistry, AbstractDependant {
         _borrowPoolsInfo = new UserBorrowPoolInfo[](_assetKeys.length);
 
         for (uint256 i = 0; i < _assetKeys.length; i++) {
-            ILiquidityPool _currentLiquidityPool = ILiquidityPool(
-                _liquidityPoolRegistry.liquidityPools(_assetKeys[i])
+            ILiquidityPool _currentLiquidityPool = _assetKeys[i].getAssetLiquidityPool(
+                _liquidityPoolRegistry
             );
 
             uint256 _availableToBorrow = _currentLiquidityPool.getAvailableToBorrowLiquidity();
@@ -241,9 +243,7 @@ contract UserInfoRegistry is IUserInfoRegistry, AbstractDependant {
         returns (UserPoolInfo memory)
     {
         IDefiCore _defiCore = defiCore;
-        ILiquidityPool _liquidityPool = ILiquidityPool(
-            liquidityPoolRegistry.liquidityPools(_assetKey)
-        );
+        ILiquidityPool _liquidityPool = _assetKey.getAssetLiquidityPool(liquidityPoolRegistry);
         IERC20Metadata _asset = IERC20Metadata(_liquidityPool.assetAddr());
 
         uint256 _walletBalance = _asset.balanceOf(_userAddr).convertTo18(_asset.decimals());
@@ -305,12 +305,10 @@ contract UserInfoRegistry is IUserInfoRegistry, AbstractDependant {
     ) external view override returns (UserLiquidationData memory) {
         IDefiCore _defiCore = defiCore;
         ILiquidityPoolRegistry _poolRegistry = liquidityPoolRegistry;
+        ILiquidityPool _borrowLiquidityPool = _borrowAssetKey.getAssetLiquidityPool(_poolRegistry);
 
-        ILiquidityPool _borrowLiquidityPool = ILiquidityPool(
-            _poolRegistry.liquidityPools(_borrowAssetKey)
-        );
-
-        uint256 _receiveAssetPrice = ILiquidityPool(_poolRegistry.liquidityPools(_receiveAssetKey))
+        uint256 _receiveAssetPrice = _receiveAssetKey
+            .getAssetLiquidityPool(_poolRegistry)
             .getAssetPrice();
 
         return
@@ -341,12 +339,12 @@ contract UserInfoRegistry is IUserInfoRegistry, AbstractDependant {
             _supplyAssetKey
         ) * (DECIMAL - assetParameters.getLiquidationDiscount(_supplyAssetKey))) / DECIMAL;
 
-        uint256 _userBorrowAmountInUSD = ILiquidityPool(
-            _poolRegistry.liquidityPools(_borrowAssetKey)
-        ).getAmountInUSD(_defiCore.getUserBorrowedAmount(_userAddr, _borrowAssetKey));
+        uint256 _userBorrowAmountInUSD = _borrowAssetKey
+            .getAssetLiquidityPool(_poolRegistry)
+            .getAmountInUSD(_defiCore.getUserBorrowedAmount(_userAddr, _borrowAssetKey));
 
         _maxQuantityInUSD = Math.min(
-            ILiquidityPool(_poolRegistry.liquidityPools(_supplyAssetKey)).getAmountInUSD(
+            _supplyAssetKey.getAssetLiquidityPool(_poolRegistry).getAmountInUSD(
                 _liquidateLimitBySupply
             ),
             _userBorrowAmountInUSD

@@ -54,35 +54,30 @@ contract DefiCore is IDefiCore, AbstractDependant {
         );
     }
 
-    function enableCollateral(bytes32 _assetKey) external override {
+    function updateCollateral(bytes32 _assetKey, bool _isDisabled) external override {
         require(
             assetParameters.isAvailableAsCollateral(_assetKey),
             "DefiCore: Asset is blocked for collateral."
         );
 
         require(
-            disabledCollateralAssets[msg.sender][_assetKey],
-            "DefiCore: Asset already enabled as collateral."
-        );
-
-        delete disabledCollateralAssets[msg.sender][_assetKey];
-    }
-
-    function disableCollateral(bytes32 _assetKey) external override {
-        require(
-            !disabledCollateralAssets[msg.sender][_assetKey],
-            "DefiCore: Asset must be enabled as collateral."
+            disabledCollateralAssets[msg.sender][_assetKey] != _isDisabled,
+            "DefiCore: The new value cannot be equal to the current value."
         );
 
         IAssetParameters _parameters = assetParameters;
 
-        uint256 _currentSupplyAmount = _getCurrentSupplyAmountInUSD(
-            _assetKey,
+        uint256 _currentSupplyAmount = _assetKey.getCurrentSupplyAmountInUSD(
             msg.sender,
-            liquidityPoolRegistry
+            liquidityPoolRegistry,
+            IDefiCore(address(this))
         );
 
-        if (_parameters.isAvailableAsCollateral(_assetKey) && _currentSupplyAmount > 0) {
+        if (
+            _isDisabled &&
+            _parameters.isAvailableAsCollateral(_assetKey) &&
+            _currentSupplyAmount > 0
+        ) {
             (uint256 _availableLiquidity, ) = getAvailableLiquidity(msg.sender);
             uint256 _currentLimitPart = _currentSupplyAmount.divWithPrecision(
                 _parameters.getColRatio(_assetKey)
@@ -94,7 +89,7 @@ contract DefiCore is IDefiCore, AbstractDependant {
             );
         }
 
-        disabledCollateralAssets[msg.sender][_assetKey] = true;
+        disabledCollateralAssets[msg.sender][_assetKey] = _isDisabled;
     }
 
     function updateCompoundRate(bytes32 _assetKey, bool _withInterval)
@@ -280,13 +275,8 @@ contract DefiCore is IDefiCore, AbstractDependant {
         ILiquidityPoolRegistry _poolRegistry = liquidityPoolRegistry;
         IAssetParameters _parameters = assetParameters;
 
-        ILiquidityPool _borrowAssetsPool = ILiquidityPool(
-            _poolRegistry.liquidityPools(_borrowAssetKey)
-        );
-
-        ILiquidityPool _supplyAssetsPool = ILiquidityPool(
-            _poolRegistry.liquidityPools(_supplyAssetKey)
-        );
+        ILiquidityPool _borrowAssetsPool = _borrowAssetKey.getAssetLiquidityPool(_poolRegistry);
+        ILiquidityPool _supplyAssetsPool = _supplyAssetKey.getAssetLiquidityPool(_poolRegistry);
 
         require(
             _borrowAssetsPool.getAmountInUSD(_liquidationAmount) <=
@@ -319,45 +309,23 @@ contract DefiCore is IDefiCore, AbstractDependant {
         _userInfoRegistry.updateUserBorrowAssets(_userAddr, _borrowAssetKey);
     }
 
-    function claimPoolDistributionRewards(bytes32 _assetKey)
+    function claimDistributionRewards(bytes32[] memory _assetKeys, bool _isAllPools)
         external
         override
-        returns (uint256 _reward)
+        returns (uint256 _totalReward)
     {
         IRewardsDistribution _rewardsDistribution = rewardsDistribution;
         ILiquidityPoolRegistry _poolRegistry = liquidityPoolRegistry;
 
-        _reward = _rewardsDistribution.withdrawUserReward(
-            _assetKey,
-            msg.sender,
-            ILiquidityPool(_poolRegistry.liquidityPools(_assetKey))
-        );
-
-        require(_reward > 0, "DefiCore: User have not rewards from this pool.");
-
-        IERC20 _governanceToken = governanceToken;
-
-        require(
-            _governanceToken.balanceOf(address(this)) >= _reward,
-            "DefiCore: Not enough governance tokens on the contract."
-        );
-
-        _governanceToken.transfer(msg.sender, _reward);
-
-        emit DistributionRewardWithdrawn(msg.sender, _reward);
-    }
-
-    function claimDistributionRewards() external override returns (uint256 _totalReward) {
-        IRewardsDistribution _rewardsDistribution = rewardsDistribution;
-        ILiquidityPoolRegistry _poolRegistry = liquidityPoolRegistry;
-
-        bytes32[] memory _assetKeys = _poolRegistry.getAllSupportedAssets();
+        if (_isAllPools) {
+            _assetKeys = _poolRegistry.getAllSupportedAssets();
+        }
 
         for (uint256 i = 0; i < _assetKeys.length; i++) {
             _totalReward += _rewardsDistribution.withdrawUserReward(
                 _assetKeys[i],
                 msg.sender,
-                ILiquidityPool(_poolRegistry.liquidityPools(_assetKeys[i]))
+                _assetKeys[i].getAssetLiquidityPool(_poolRegistry)
             );
         }
 
@@ -385,10 +353,10 @@ contract DefiCore is IDefiCore, AbstractDependant {
         bytes32[] memory _userSupplyAssets = userInfoRegistry.getUserSupplyAssets(_userAddr);
 
         for (uint256 i = 0; i < _userSupplyAssets.length; i++) {
-            _totalSupplyBalance += _getCurrentSupplyAmountInUSD(
-                _userSupplyAssets[i],
+            _totalSupplyBalance += _userSupplyAssets[i].getCurrentSupplyAmountInUSD(
                 _userAddr,
-                _poolRegistry
+                _poolRegistry,
+                IDefiCore(address(this))
             );
         }
     }
@@ -558,10 +526,10 @@ contract DefiCore is IDefiCore, AbstractDependant {
             bytes32 _currentAssetKey = _userSupplyAssets[i];
 
             if (isCollateralAssetEnabled(_userAddr, _currentAssetKey)) {
-                uint256 _currentTokensAmount = _getCurrentSupplyAmountInUSD(
-                    _currentAssetKey,
+                uint256 _currentTokensAmount = _currentAssetKey.getCurrentSupplyAmountInUSD(
                     _userAddr,
-                    _poolRegistry
+                    _poolRegistry,
+                    IDefiCore(address(this))
                 );
 
                 _currentBorrowLimit += _currentTokensAmount.divWithPrecision(
@@ -642,17 +610,5 @@ contract DefiCore is IDefiCore, AbstractDependant {
         );
 
         rewardsDistribution.updateCumulativeSums(_borrowerAddr, _assetLiquidityPool);
-    }
-
-    function _getCurrentSupplyAmountInUSD(
-        bytes32 _assetKey,
-        address _userAddr,
-        ILiquidityPoolRegistry _poolsRegistry
-    ) internal view returns (uint256) {
-        ILiquidityPool _currentLiquidityPool = ILiquidityPool(
-            _poolsRegistry.liquidityPools(_assetKey)
-        );
-
-        return _currentLiquidityPool.getAmountInUSD(getUserLiquidityAmount(_userAddr, _assetKey));
     }
 }

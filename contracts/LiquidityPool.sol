@@ -122,32 +122,27 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
             "LiquidityPool: Not enough liquidity available on the contract."
         );
 
+        uint256 _toBurnLP = convertAssetToLPTokens(_liquidityAmount);
+
         if (_isMaxWithdraw) {
             uint256 _userLPBalance = balanceOf(_userAddr);
-            uint256 _toBurnLP;
 
             /// @dev Needed to withdraw all funds without a balance
             if (convertLPTokensToAsset(_userLPBalance) <= _liquidityAmount) {
                 _toBurnLP = _userLPBalance;
-            } else {
-                _toBurnLP = convertAssetToLPTokens(_liquidityAmount);
             }
-
-            _burn(_userAddr, _toBurnLP);
-
-            IERC20(assetAddr).transfer(_userAddr, _convertToUnderlyingAsset(_liquidityAmount));
         } else {
-            uint256 _burnAmount = convertAssetToLPTokens(_liquidityAmount);
-
             require(
-                balanceOf(_userAddr) - lastLiquidity[_userAddr][block.number] >= _burnAmount,
+                balanceOf(_userAddr) - lastLiquidity[_userAddr][block.number] >= _toBurnLP,
                 "LiquidityPool: Not enough lpTokens to withdraw liquidity."
             );
+        }
 
-            _burn(_userAddr, _burnAmount);
+        _burn(_userAddr, _toBurnLP);
 
-            IERC20(assetAddr).transfer(_userAddr, _convertToUnderlyingAsset(_liquidityAmount));
+        IERC20(assetAddr).transfer(_userAddr, _convertToUnderlyingAsset(_liquidityAmount));
 
+        if (!_isMaxWithdraw) {
             require(
                 getBorrowPercentage() <= assetParameters.getMaxUtilizationRatio(assetKey),
                 "LiquidityPool: Utilization ratio after withdraw cannot be greater than the maximum."
