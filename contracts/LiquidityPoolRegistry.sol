@@ -162,6 +162,10 @@ contract LiquidityPoolRegistry is ILiquidityPoolRegistry, OwnableUpgradeable, Ab
         return address(liquidityPoolsBeacon);
     }
 
+    function getLiquidityPoolsImpl() external view override returns (address) {
+        return liquidityPoolsBeacon.implementation();
+    }
+
     function onlyExistingPool(bytes32 _assetKey) public view override returns (bool) {
         return liquidityPools[_assetKey] != address(0);
     }

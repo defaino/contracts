@@ -131,6 +131,10 @@ interface ILiquidityPoolRegistry {
     /// @return a liquidity pool beacon address
     function getLiquidityPoolsBeacon() external view returns (address);
 
+    /// @notice A function that returns the address of liquidity pools implementation
+    /// @return a liquidity pools implementation address
+    function getLiquidityPoolsImpl() external view returns (address);
+
     /// @notice Function to check if the pool exists by the passed pool key
     /// @param _assetKey pool identification key
     /// @return true if the liquidity pool for the passed key exists, false otherwise

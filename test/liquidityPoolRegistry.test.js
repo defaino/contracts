@@ -15,6 +15,7 @@ const UserInfoRegistry = artifacts.require("UserInfoRegistry");
 const LiquidityPoolRegistry = artifacts.require("LiquidityPoolRegistry");
 const LiquidityPoolFactory = artifacts.require("LiquidityPoolFactory");
 const LiquidityPool = artifacts.require("LiquidityPool");
+const LiquidityPoolMock = artifacts.require("LiquidityPoolMock");
 const PriceManager = artifacts.require("PriceManagerMock");
 const InterestRateLibrary = artifacts.require("InterestRateLibrary");
 const GovernanceToken = artifacts.require("GovernanceToken");
@@ -203,58 +204,6 @@ describe("LiquidityPoolRegistry", () => {
 
   afterEach("revert", reverter.revert);
 
-  describe("getAllSupportedAssets", () => {
-    it("should return zero supported assets", async () => {
-      assert.isTrue(deepCompareKeys(await liquidityPoolRegistry.getAllSupportedAssets(), [governanceTokenKey]));
-    });
-
-    it("should return correct supported assets", async () => {
-      const assetKey1 = toBytes("DAI");
-      const assetKey2 = toBytes("WETH");
-      const assetKey3 = toBytes("USDT");
-      const assetKey4 = toBytes("USDC");
-
-      const expectedList = [governanceTokenKey, assetKey1, assetKey2, assetKey3, assetKey4];
-
-      await liquidityPoolRegistry.addLiquidityPool(TEST_ASSET, assetKey1, NOTHING, NOTHING, "DAI", false);
-      await liquidityPoolRegistry.addLiquidityPool(TEST_ASSET, assetKey2, NOTHING, NOTHING, "WETH", false);
-      await liquidityPoolRegistry.addLiquidityPool(TEST_ASSET, assetKey3, NOTHING, NOTHING, "USDT", false);
-      await liquidityPoolRegistry.addLiquidityPool(TEST_ASSET, assetKey4, NOTHING, NOTHING, "USDC", false);
-
-      assert.isTrue(deepCompareKeys(await liquidityPoolRegistry.getAllSupportedAssets(), expectedList));
-    });
-  });
-
-  describe("getAllLiquidityPools", () => {
-    it("should return liquidity pool for governance token", async () => {
-      assert.deepEqual(
-        [await liquidityPoolRegistry.liquidityPools(governanceTokenKey)],
-        await liquidityPoolRegistry.getAllLiquidityPools()
-      );
-    });
-
-    it("should return correct liquidity pools", async () => {
-      const assetKey1 = toBytes("DAI");
-      const assetKey2 = toBytes("WETH");
-      const assetKey3 = toBytes("USDT");
-      const assetKey4 = toBytes("USDC");
-
-      const expectedKeysList = [governanceTokenKey, assetKey1, assetKey2, assetKey3, assetKey4];
-      const expectedList = [];
-
-      await liquidityPoolRegistry.addLiquidityPool(TEST_ASSET, assetKey1, NOTHING, NOTHING, "DAI", false);
-      await liquidityPoolRegistry.addLiquidityPool(TEST_ASSET, assetKey2, NOTHING, NOTHING, "WETH", false);
-      await liquidityPoolRegistry.addLiquidityPool(TEST_ASSET, assetKey3, NOTHING, NOTHING, "USDT", false);
-      await liquidityPoolRegistry.addLiquidityPool(TEST_ASSET, assetKey4, NOTHING, NOTHING, "USDC", false);
-
-      for (let i = 0; i < expectedKeysList.length; i++) {
-        expectedList.push(await liquidityPoolRegistry.liquidityPools(expectedKeysList[i]));
-      }
-
-      assert.deepEqual(expectedList, await liquidityPoolRegistry.getAllLiquidityPools());
-    });
-  });
-
   describe("addLiquidityPool", () => {
     const assetKeyRow = "DAI";
     const assetKeyBytes = toBytes(assetKeyRow);
@@ -376,6 +325,80 @@ describe("LiquidityPoolRegistry", () => {
         liquidityPoolRegistry.withdrawReservedFunds(RECIPIENT, toBytes("SOME_KEY"), 1000, false),
         reason
       );
+    });
+  });
+
+  describe("upgradeLiquidityPools", () => {
+    it("should correctly update liquidity pools", async () => {
+      const daiKey = toBytes("DAI");
+
+      await createLiquidityPool(daiKey, "DAI", true);
+      const daiPool = await LiquidityPool.at(await liquidityPoolRegistry.liquidityPools(daiKey));
+
+      const newImplementation = await LiquidityPoolMock.new();
+
+      await truffleAssert.reverts(
+        (await LiquidityPoolMock.at(daiPool.address)).getNormalizedAmount(10, 10, 10, 50, true)
+      );
+
+      await liquidityPoolRegistry.upgradeLiquidityPoolsImpl(newImplementation.address);
+
+      assert.equal(await liquidityPoolRegistry.getLiquidityPoolsImpl(), newImplementation.address);
+
+      const newDaiPool = await LiquidityPoolMock.at(daiPool.address);
+      await newDaiPool.getNormalizedAmount(10, 100, 100, 50, true);
+    });
+  });
+
+  describe("getAllSupportedAssets", () => {
+    it("should return zero supported assets", async () => {
+      assert.isTrue(deepCompareKeys(await liquidityPoolRegistry.getAllSupportedAssets(), [governanceTokenKey]));
+    });
+
+    it("should return correct supported assets", async () => {
+      const assetKey1 = toBytes("DAI");
+      const assetKey2 = toBytes("WETH");
+      const assetKey3 = toBytes("USDT");
+      const assetKey4 = toBytes("USDC");
+
+      const expectedList = [governanceTokenKey, assetKey1, assetKey2, assetKey3, assetKey4];
+
+      await liquidityPoolRegistry.addLiquidityPool(TEST_ASSET, assetKey1, NOTHING, NOTHING, "DAI", false);
+      await liquidityPoolRegistry.addLiquidityPool(TEST_ASSET, assetKey2, NOTHING, NOTHING, "WETH", false);
+      await liquidityPoolRegistry.addLiquidityPool(TEST_ASSET, assetKey3, NOTHING, NOTHING, "USDT", false);
+      await liquidityPoolRegistry.addLiquidityPool(TEST_ASSET, assetKey4, NOTHING, NOTHING, "USDC", false);
+
+      assert.isTrue(deepCompareKeys(await liquidityPoolRegistry.getAllSupportedAssets(), expectedList));
+    });
+  });
+
+  describe("getAllLiquidityPools", () => {
+    it("should return liquidity pool for governance token", async () => {
+      assert.deepEqual(
+        [await liquidityPoolRegistry.liquidityPools(governanceTokenKey)],
+        await liquidityPoolRegistry.getAllLiquidityPools()
+      );
+    });
+
+    it("should return correct liquidity pools", async () => {
+      const assetKey1 = toBytes("DAI");
+      const assetKey2 = toBytes("WETH");
+      const assetKey3 = toBytes("USDT");
+      const assetKey4 = toBytes("USDC");
+
+      const expectedKeysList = [governanceTokenKey, assetKey1, assetKey2, assetKey3, assetKey4];
+      const expectedList = [];
+
+      await liquidityPoolRegistry.addLiquidityPool(TEST_ASSET, assetKey1, NOTHING, NOTHING, "DAI", false);
+      await liquidityPoolRegistry.addLiquidityPool(TEST_ASSET, assetKey2, NOTHING, NOTHING, "WETH", false);
+      await liquidityPoolRegistry.addLiquidityPool(TEST_ASSET, assetKey3, NOTHING, NOTHING, "USDT", false);
+      await liquidityPoolRegistry.addLiquidityPool(TEST_ASSET, assetKey4, NOTHING, NOTHING, "USDC", false);
+
+      for (let i = 0; i < expectedKeysList.length; i++) {
+        expectedList.push(await liquidityPoolRegistry.liquidityPools(expectedKeysList[i]));
+      }
+
+      assert.deepEqual(expectedList, await liquidityPoolRegistry.getAllLiquidityPools());
     });
   });
 
