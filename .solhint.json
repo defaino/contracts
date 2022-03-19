@@ -1,15 +1,7 @@
 {
   "extends": "solhint:recommended",
-  "plugins": [
-    "prettier"
-  ],
+  "plugins": ["prettier"],
   "rules": {
-    "reason-string": [
-      "error",
-      {
-        "maxLength": 100
-      }
-    ],
     "reentrancy": "off",
     "prettier/prettier": "off",
     "modifier-name-mixedcase": "off",

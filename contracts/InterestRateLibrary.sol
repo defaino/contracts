@@ -13,7 +13,7 @@ contract InterestRateLibrary is IInterestRateLibrary, Ownable {
 
     uint256 public override maxSupportedPercentage;
 
-    constructor(uint256[] memory _exactRatesPerSecond, uint256[] memory _ratesPerSecond) {
+    constructor(uint256[] memory _exactRatesPerSecond) {
         uint256 _limitOfExactValues = getLimitOfExactValues();
 
         require(
@@ -22,22 +22,12 @@ contract InterestRateLibrary is IInterestRateLibrary, Ownable {
         );
 
         // Add exact values
-        _addRates(0, _exactRatesPerSecond, 1);
-
-        // Add other values
-        _addRates(_limitOfExactValues, _ratesPerSecond, getLibraryPrecision());
-    }
-
-    function getLibraryPrecision() public view virtual override returns (uint256) {
-        return 10;
-    }
-
-    function getLimitOfExactValues() public view virtual override returns (uint256) {
-        return 10 * getLibraryPrecision();
+        _addRates(1, _exactRatesPerSecond, 1);
     }
 
     function addNewRates(uint256 _startPercentage, uint256[] calldata _ratesPerSecond)
         external
+        override
         onlyOwner
     {
         uint256 _libraryPrecision = getLibraryPrecision();
@@ -48,6 +38,14 @@ contract InterestRateLibrary is IInterestRateLibrary, Ownable {
         );
 
         _addRates(_startPercentage, _ratesPerSecond, _libraryPrecision);
+    }
+
+    function getLibraryPrecision() public view virtual override returns (uint256) {
+        return 10;
+    }
+
+    function getLimitOfExactValues() public view virtual override returns (uint256) {
+        return 10 * getLibraryPrecision();
     }
 
     function _addRates(

@@ -1,41 +1,30 @@
-function Reverter(web3) {
-  let snapshotId;
+const ht = require("hardhat");
 
-  this.revert = () => {
+class Reverter {
+  revert = () => {
     return new Promise((resolve, reject) => {
-      web3.currentProvider.send(
-        {
-          jsonrpc: "2.0",
-          method: "evm_revert",
-          id: new Date().getTime(),
-          params: [snapshotId],
-        },
-        (err, result) => {
-          if (err) {
-            return reject(err);
-          }
+      ht.network.provider
+        .send("evm_revert", [this.snapshotId])
+        .then(() => {
           return resolve(this.snapshot());
-        }
-      );
+        })
+        .catch((err) => {
+          return reject(err);
+        });
     });
   };
 
-  this.snapshot = () => {
+  snapshot = () => {
     return new Promise((resolve, reject) => {
-      web3.currentProvider.send(
-        {
-          jsonrpc: "2.0",
-          method: "evm_snapshot",
-          id: new Date().getTime(),
-        },
-        (err, result) => {
-          if (err) {
-            return reject(err);
-          }
-          snapshotId = web3.utils.toDecimal(result.result);
-          return resolve();
-        }
-      );
+      ht.network.provider
+        .send("evm_snapshot", [])
+        .then((res) => {
+          this.snapshotId = res;
+          return resolve(res);
+        })
+        .catch((err) => {
+          return reject(err);
+        });
     });
   };
 }

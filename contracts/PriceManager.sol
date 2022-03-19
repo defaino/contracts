@@ -1,18 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.3;
 
-import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV2V3Interface.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
 import "./interfaces/IPriceManager.sol";
 
 import "./libraries/UniswapOracleLibrary.sol";
 
 import "./Registry.sol";
+import "./abstract/AbstractDependant.sol";
 import "./common/Globals.sol";
-import "./common/AbstractDependant.sol";
 
 contract PriceManager is IPriceManager, OwnableUpgradeable, AbstractDependant {
     address private liquidityPoolRegistry;
@@ -25,17 +23,15 @@ contract PriceManager is IPriceManager, OwnableUpgradeable, AbstractDependant {
     bytes32 public quoteAssetKey;
     uint8 public quoteTokenDecimals;
 
-    struct PriceFeed {
-        address assetAddr;
-        AggregatorV2V3Interface chainlinkOracle;
-        address uniswapPool;
-    }
-
     mapping(bytes32 => PriceFeed) public priceFeeds;
 
-    event OracleAdded(bytes32 _assetKey, address _chainlinkOracleAddr, address _uniswapPoolAddr);
-    event ChainlinkOracleAdded(bytes32 _assetKey, address _chainlinkOracleAddr);
-    event RedirectUpdated(uint256 _updateTimestamp, bool _newValue);
+    modifier onlyExistingAssets(bytes32 _assetKey) {
+        require(
+            priceFeeds[_assetKey].assetAddr != address(0),
+            "PriceManager: The oracle for assets does not exists."
+        );
+        _;
+    }
 
     function priceManagerInitialize(bytes32 _quoteAssetKey, address _quoteToken)
         external
@@ -52,28 +48,17 @@ contract PriceManager is IPriceManager, OwnableUpgradeable, AbstractDependant {
         liquidityPoolRegistry = _registry.getLiquidityPoolRegistryContract();
     }
 
-    modifier onlyLiquidityPoolRegistry() {
-        require(
-            liquidityPoolRegistry == msg.sender,
-            "PriceManager: Caller not an LiquidityPoolRegistry."
-        );
-        _;
-    }
-
-    modifier onlyExistingAssets(bytes32 _assetKey) {
-        require(
-            priceFeeds[_assetKey].assetAddr != address(0),
-            "PriceManager: The oracle for assets does not exists."
-        );
-        _;
-    }
-
     function addOracle(
         bytes32 _assetKey,
         address _assetAddr,
         address _newMainOracle,
         address _newBackupOracle
-    ) external override onlyLiquidityPoolRegistry {
+    ) external override {
+        require(
+            liquidityPoolRegistry == msg.sender,
+            "PriceManager: Caller not a LiquidityPoolRegistry."
+        );
+
         if (_assetKey != quoteAssetKey) {
             require(
                 _newBackupOracle != address(0),
@@ -92,6 +77,7 @@ contract PriceManager is IPriceManager, OwnableUpgradeable, AbstractDependant {
 
     function addChainlinkOracle(bytes32 _assetKey, address _newChainlinkOracle)
         external
+        override
         onlyExistingAssets(_assetKey)
         onlyOwner
     {
@@ -109,7 +95,7 @@ contract PriceManager is IPriceManager, OwnableUpgradeable, AbstractDependant {
         emit ChainlinkOracleAdded(_assetKey, _newChainlinkOracle);
     }
 
-    function updateRedirectToUniswap(bool _newValue) external onlyOwner {
+    function updateRedirectToUniswap(bool _newValue) external override onlyOwner {
         redirectToUniswap = _newValue;
 
         emit RedirectUpdated(block.timestamp, _newValue);
@@ -150,8 +136,10 @@ contract PriceManager is IPriceManager, OwnableUpgradeable, AbstractDependant {
         view
         returns (uint256)
     {
-        int24 _timeWeightedAverageTick =
-            UniswapOracleLibrary.consult(priceFeeds[_assetKey].uniswapPool, PRICE_PERIOD);
+        int24 _timeWeightedAverageTick = UniswapOracleLibrary.consult(
+            priceFeeds[_assetKey].uniswapPool,
+            PRICE_PERIOD
+        );
         return
             UniswapOracleLibrary.getQuoteAtTick(
                 _timeWeightedAverageTick,
