@@ -1253,6 +1253,20 @@ describe("DefiCore", async () => {
       );
     });
 
+    it("should get exception if try to liquidate disabled as collateral asset", async () => {
+      const reason = "DefiCore: Supply asset key must be enabled as collateral.";
+
+      await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER1 });
+      await defiCore.updateCollateral(wEthKey, true, { from: USER1 });
+
+      await daiChainlinkOracle.setPrice(toBN(92).times(priceDecimals));
+
+      await truffleAssert.reverts(
+        defiCore.liquidation(USER1, wEthKey, wEthKey, liquidateAmount, { from: USER2 }),
+        reason
+      );
+    });
+
     it("should get exception if try to liquidate more then posible", async () => {
       await daiChainlinkOracle.setPrice(toBN(92).times(priceDecimals));
 

@@ -545,6 +545,23 @@ describe("UserInfoRegistry", () => {
       assert.isTrue(deepCompareKeys(result[1].supplyAssetKeys, [wEthKey]));
       assert.equal(toBN(result[1].totalBorrowedAmount).toString(), convertToUSD(borrowAmount.idiv(2)).toString());
     });
+
+    it("should return correct user supply assets", async () => {
+      await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
+      await defiCore.addLiquidity(usdtKey, liquidityAmount, { from: USER1 });
+      await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER1 });
+
+      await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER2 });
+      await defiCore.addLiquidity(usdtKey, liquidityAmount, { from: USER2 });
+      await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER2 });
+
+      await defiCore.updateCollateral(daiKey, true, { from: USER2 });
+
+      const result = await userInfoRegistry.getUsersLiquidiationInfo([USER1, USER2]);
+
+      assert.isTrue(deepCompareKeys(result[0].supplyAssetKeys, [daiKey, wEthKey, "0x0"]));
+      assert.isTrue(deepCompareKeys(result[1].supplyAssetKeys, [wEthKey, "0x0", "0x0"]));
+    });
   });
 
   describe("getUserLiquidationData", () => {

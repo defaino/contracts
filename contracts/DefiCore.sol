@@ -263,6 +263,10 @@ contract DefiCore is IDefiCore, AbstractDependant {
         uint256 _liquidationAmount
     ) external override {
         require(_userAddr != msg.sender, "DefiCore: User cannot liquidate his position.");
+        require(
+            isCollateralAssetEnabled(_userAddr, _supplyAssetKey),
+            "DefiCore: Supply asset key must be enabled as collateral."
+        );
 
         uint256 _totalBorrowBalanceInUSD = getTotalBorrowBalanceInUSD(_userAddr);
         require(

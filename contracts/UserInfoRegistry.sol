@@ -290,9 +290,20 @@ contract UserInfoRegistry is IUserInfoRegistry, AbstractDependant {
         _resultArr = new UserLiquidationInfo[](_accounts.length);
 
         for (uint256 i = 0; i < _accounts.length; i++) {
+            bytes32[] memory _allUserSupplyAssets = _getUserAssets(_supplyAssets[_accounts[i]]);
+
+            bytes32[] memory _userSupplyAssets = new bytes32[](_allUserSupplyAssets.length);
+            uint256 _arrIndex;
+
+            for (uint256 j = 0; j < _allUserSupplyAssets.length; j++) {
+                if (_defiCore.isCollateralAssetEnabled(_accounts[i], _allUserSupplyAssets[j])) {
+                    _userSupplyAssets[_arrIndex++] = _allUserSupplyAssets[j];
+                }
+            }
+
             _resultArr[i] = UserLiquidationInfo(
                 _getUserAssets(_borrowAssets[_accounts[i]]),
-                _getUserAssets(_supplyAssets[_accounts[i]]),
+                _userSupplyAssets,
                 _defiCore.getTotalBorrowBalanceInUSD(_accounts[i])
             );
         }
