@@ -3,6 +3,7 @@ pragma solidity 0.8.3;
 
 import "@openzeppelin/contracts/utils/math/Math.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 
 import "./interfaces/IDefiCore.sol";
@@ -24,6 +25,7 @@ import "./abstract/AbstractDependant.sol";
 import "./common/Globals.sol";
 
 contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
+    using SafeERC20 for IERC20;
     using DecimalsConverter for uint256;
     using MathHelper for uint256;
 
@@ -109,7 +111,7 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
 
         _mint(_userAddr, _mintAmount);
 
-        IERC20(assetAddr).transferFrom(_userAddr, address(this), _assetAmount);
+        IERC20(assetAddr).safeTransferFrom(_userAddr, address(this), _assetAmount);
     }
 
     function withdrawLiquidity(
@@ -140,7 +142,7 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
 
         _burn(_userAddr, _toBurnLP);
 
-        IERC20(assetAddr).transfer(_userAddr, _convertToUnderlyingAsset(_liquidityAmount));
+        IERC20(assetAddr).safeTransfer(_userAddr, _convertToUnderlyingAsset(_liquidityAmount));
 
         if (!_isMaxWithdraw) {
             require(
@@ -204,7 +206,6 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
             return 0;
         }
 
-        IERC20 _assetToken = IERC20(assetAddr);
         uint256 _repayAmountInUnderlying = _convertToUnderlyingAsset(_repayBorrowVars.repayAmount);
 
         BorrowInfo storage borrowInfo = borrowInfos[_userAddr];
@@ -241,7 +242,7 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
 
         totalReserves += _reserveFunds;
 
-        _assetToken.transferFrom(_closureAddr, address(this), _repayAmountInUnderlying);
+        IERC20(assetAddr).safeTransferFrom(_closureAddr, address(this), _repayAmountInUnderlying);
 
         return _repayBorrowVars.repayAmount;
     }
@@ -267,7 +268,10 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
 
         _burn(_userAddr, _burnAmount);
 
-        IERC20(assetAddr).transfer(_liquidatorAddr, _convertToUnderlyingAsset(_liquidityAmount));
+        IERC20(assetAddr).safeTransfer(
+            _liquidatorAddr,
+            _convertToUnderlyingAsset(_liquidityAmount)
+        );
     }
 
     function withdrawReservedFunds(
@@ -292,7 +296,10 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
 
         totalReserves = _currentReserveAmount - _amountToWithdraw;
 
-        IERC20(assetAddr).transfer(_recipientAddr, _convertToUnderlyingAsset(_amountToWithdraw));
+        IERC20(assetAddr).safeTransfer(
+            _recipientAddr,
+            _convertToUnderlyingAsset(_amountToWithdraw)
+        );
     }
 
     function updateCompoundRate(bool _withInterval) public override returns (uint256) {
@@ -497,7 +504,7 @@ contract LiquidityPool is ILiquidityPool, ERC20Upgradeable, AbstractDependant {
             true
         );
 
-        IERC20(assetAddr).transfer(_recipient, _convertToUnderlyingAsset(_amountToBorrow));
+        IERC20(assetAddr).safeTransfer(_recipient, _convertToUnderlyingAsset(_amountToBorrow));
     }
 
     function _borrowInternal(uint256 _amountToBorrow) internal returns (uint256 _currentRate) {
