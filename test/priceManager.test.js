@@ -1,13 +1,12 @@
-const { setNextBlockTime, getCurrentBlockTime } = require("./helpers/hardhatTimeTraveller");
-const { toBytes, compareKeys } = require("./helpers/bytesCompareLibrary");
+const { toBytes } = require("./helpers/bytesCompareLibrary");
 const { toBN, accounts, wei } = require("../scripts/utils");
 
 const truffleAssert = require("truffle-assertions");
 const Reverter = require("./helpers/reverter");
 
-const PriceManager = artifacts.require("PriceManagerMock");
 const Registry = artifacts.require("Registry");
-const MockERC20 = artifacts.require("MockERC20");
+const PriceManager = artifacts.require("PriceManager");
+const SystemPoolsRegistry = artifacts.require("SystemPoolsRegistryMock");
 const ChainlinkOracle = artifacts.require("ChainlinkOracleMock");
 
 describe("PriceManager", async () => {
@@ -16,34 +15,38 @@ describe("PriceManager", async () => {
   const ADDRESS_NULL = "0x0000000000000000000000000000000000000000";
 
   let NOTHING;
-  let LIQUIDITY_POOL_REGISTRY;
 
   let registry;
   let priceManager;
-
-  let dai;
+  let systemPoolsRegistry;
 
   const daiKey = toBytes("DAI");
   const wEthKey = toBytes("WETH");
-  const usdcKey = toBytes("USDC");
 
   before("setup", async () => {
     NOTHING = await accounts(8);
     LIQUIDITY_POOL_REGISTRY = await accounts(9);
 
     registry = await Registry.new();
-
-    dai = await MockERC20.new("MockDAI", "DAI");
+    await registry.__OwnableContractsRegistry_init();
 
     const _priceManager = await PriceManager.new();
+    systemPoolsRegistry = await SystemPoolsRegistry.new();
 
-    await registry.addContract(await registry.LIQUIDITY_POOL_REGISTRY_NAME(), LIQUIDITY_POOL_REGISTRY);
     await registry.addProxyContract(await registry.PRICE_MANAGER_NAME(), _priceManager.address);
+
+    await registry.addContract(await registry.SYSTEM_POOLS_REGISTRY_NAME(), systemPoolsRegistry.address);
+
+    await registry.addContract(await registry.SYSTEM_PARAMETERS_NAME(), NOTHING);
+    await registry.addContract(await registry.ASSET_PARAMETERS_NAME(), NOTHING);
+    await registry.addContract(await registry.DEFI_CORE_NAME(), NOTHING);
+    await registry.addContract(await registry.REWARDS_DISTRIBUTION_NAME(), NOTHING);
+    await registry.addContract(await registry.SYSTEM_POOLS_FACTORY_NAME(), NOTHING);
 
     priceManager = await PriceManager.at(await registry.getPriceManagerContract());
 
     await registry.injectDependencies(await registry.PRICE_MANAGER_NAME());
-    await priceManager.priceManagerInitialize(daiKey, dai.address);
+    await registry.injectDependencies(await registry.SYSTEM_POOLS_REGISTRY_NAME());
 
     await reverter.snapshot();
   });
@@ -52,127 +55,57 @@ describe("PriceManager", async () => {
 
   describe("addOracle", () => {
     it("should correctly add new oracle", async () => {
-      const chainlinkOracle = await ChainlinkOracle.new(10, 1);
-      const txReceipt = await priceManager.addOracle(wEthKey, NOTHING, chainlinkOracle.address, NOTHING, {
-        from: LIQUIDITY_POOL_REGISTRY,
-      });
+      await systemPoolsRegistry.setPoolType(wEthKey, 0);
 
-      assert.equal(txReceipt.receipt.logs[0].event, "OracleAdded");
-      assert.isTrue(compareKeys(txReceipt.receipt.logs[0].args._assetKey, wEthKey));
-      assert.equal(txReceipt.receipt.logs[0].args._chainlinkOracleAddr, chainlinkOracle.address);
-      assert.equal(txReceipt.receipt.logs[0].args._uniswapPoolAddr, NOTHING);
+      const chainlinkOracle = await ChainlinkOracle.new(10, 1);
+      await systemPoolsRegistry.addOracle(wEthKey, NOTHING, chainlinkOracle.address);
 
       const priceFeed = await priceManager.priceFeeds(wEthKey);
 
       assert.equal(priceFeed.assetAddr, NOTHING);
       assert.equal(priceFeed.chainlinkOracle, chainlinkOracle.address);
-      assert.equal(priceFeed.uniswapPool, NOTHING);
     });
 
-    it("should get exception if the uniswap pool address is zero address", async () => {
-      const reason = "PriceManager: Uniswap pool should not be address zero.";
-      await truffleAssert.reverts(
-        priceManager.addOracle(wEthKey, NOTHING, ADDRESS_NULL, ADDRESS_NULL, { from: LIQUIDITY_POOL_REGISTRY }),
-        reason
-      );
-    });
-  });
+    it("should correctly set null address oracle for stable pool", async () => {
+      await systemPoolsRegistry.setPoolType(wEthKey, 1);
 
-  describe("addChainlinkOracle", () => {
-    let chainlinkOracle;
+      await systemPoolsRegistry.addOracle(wEthKey, NOTHING, ADDRESS_NULL);
 
-    beforeEach("setup", async () => {
-      chainlinkOracle = await ChainlinkOracle.new(10, 1);
+      const priceFeed = await priceManager.priceFeeds(wEthKey);
 
-      await priceManager.addOracle(wEthKey, NOTHING, ADDRESS_NULL, NOTHING, { from: LIQUIDITY_POOL_REGISTRY });
+      assert.equal(priceFeed.assetAddr, NOTHING);
+      assert.equal(priceFeed.chainlinkOracle, ADDRESS_NULL);
     });
 
-    it("should correctly add chainlink oracle", async () => {
-      assert.equal((await priceManager.priceFeeds(wEthKey)).chainlinkOracle, ADDRESS_NULL);
+    it("should get exception if try to add null address oracle for liquidity pool", async () => {
+      await systemPoolsRegistry.setPoolType(wEthKey, 0);
 
-      const txReceipt = await priceManager.addChainlinkOracle(wEthKey, chainlinkOracle.address);
+      const reason = "PriceManager: The oracle must not be a null address.";
 
-      assert.equal(txReceipt.receipt.logs[0].event, "ChainlinkOracleAdded");
-      assert.isTrue(compareKeys(txReceipt.receipt.logs[0].args._assetKey, wEthKey));
-      assert.equal(txReceipt.receipt.logs[0].args._chainlinkOracleAddr, chainlinkOracle.address);
-
-      assert.equal((await priceManager.priceFeeds(wEthKey)).chainlinkOracle, chainlinkOracle.address);
+      await truffleAssert.reverts(systemPoolsRegistry.addOracle(wEthKey, NOTHING, ADDRESS_NULL), reason);
     });
 
-    it("should get exception if the new chainlink oracle is zero address", async () => {
-      const reason = "PriceManager: Chainlink oracle should not be address zero.";
-      await truffleAssert.reverts(priceManager.addChainlinkOracle(wEthKey, ADDRESS_NULL), reason);
-    });
+    it("should get exception if caller not a SystemPoolsRegistry contract", async () => {
+      const reason = "PriceManager: Caller not a SystemPoolsRegistry.";
 
-    it("should get exception if try to modify existing oracle", async () => {
-      await priceManager.addChainlinkOracle(wEthKey, chainlinkOracle.address);
-
-      const reason = "PriceManager: Can't modify an existing oracle.";
-      await truffleAssert.reverts(priceManager.addChainlinkOracle(wEthKey, chainlinkOracle.address), reason);
-    });
-  });
-
-  describe("updateRedirectToUniswap", () => {
-    it("should update the redirect correctly", async () => {
-      let newValue = true;
-      let currentTime = await getCurrentBlockTime();
-
-      await setNextBlockTime(currentTime + 1);
-
-      let txReceipt = await priceManager.updateRedirectToUniswap(newValue);
-
-      assert.equal(txReceipt.receipt.logs[0].event, "RedirectUpdated");
-      assert.equal(txReceipt.receipt.logs[0].args._updateTimestamp, currentTime + 1);
-      assert.equal(txReceipt.receipt.logs[0].args._newValue, newValue);
-
-      assert.equal(await priceManager.redirectToUniswap(), newValue);
-
-      newValue = false;
-      currentTime = 10000;
-
-      await setNextBlockTime(currentTime);
-
-      txReceipt = await priceManager.updateRedirectToUniswap(newValue);
-
-      assert.equal(txReceipt.receipt.logs[0].event, "RedirectUpdated");
-      assert.equal(toBN(txReceipt.receipt.logs[0].args._updateTimestamp).toString(), currentTime);
-      assert.equal(txReceipt.receipt.logs[0].args._newValue, newValue);
-
-      assert.equal(await priceManager.redirectToUniswap(), newValue);
+      await truffleAssert.reverts(priceManager.addOracle(wEthKey, NOTHING, NOTHING), reason);
     });
   });
 
   describe("getPrice", () => {
     const decimals = toBN(8);
     let wEthChainlinkPrice = wei(10, decimals);
-    let daiChainlinkPrice = wei(1, 8);
-    let usdcPrice = toBN(30);
-    let wEthPrice = toBN(9);
-
     let wEthChainlinkOracle;
-    let daiChainlinkOracle;
 
     beforeEach("setup", async () => {
       wEthChainlinkOracle = await ChainlinkOracle.new(wEthChainlinkPrice, decimals);
-      daiChainlinkOracle = await ChainlinkOracle.new(daiChainlinkPrice, decimals);
 
-      await priceManager.addOracle(wEthKey, NOTHING, wEthChainlinkOracle.address, NOTHING, {
-        from: LIQUIDITY_POOL_REGISTRY,
-      });
-      await priceManager.addOracle(daiKey, NOTHING, daiChainlinkOracle.address, NOTHING, {
-        from: LIQUIDITY_POOL_REGISTRY,
-      });
-
-      await priceManager.addOracle(usdcKey, NOTHING, ADDRESS_NULL, NOTHING, { from: LIQUIDITY_POOL_REGISTRY });
-
-      await priceManager.setPrice(usdcKey, usdcPrice);
-      await priceManager.setPrice(wEthKey, wEthPrice);
+      await systemPoolsRegistry.setPoolType(wEthKey, 0);
+      await systemPoolsRegistry.addOracle(wEthKey, NOTHING, wEthChainlinkOracle.address);
     });
 
     it("should get correct price from the chainlink oracle", async () => {
-      const wEthDecimals = toBN(18);
-
-      const result = await priceManager.getPrice(wEthKey, wEthDecimals);
+      const result = await priceManager.getPrice(wEthKey);
 
       assert.equal(toBN(result[0]).toString(), wEthChainlinkPrice.toString());
       assert.equal(toBN(result[1]).toString(), decimals.toString());
@@ -183,43 +116,30 @@ describe("PriceManager", async () => {
       assert.equal(amount.times(result[0]).idiv(toBN(10).pow(result[1])).toString(), expectedAmountInUSD.toString());
     });
 
-    it("should get correct price if the asset is not chainlink oracle", async () => {
-      const usdcDecimals = toBN(6);
-      const daiDecimals = toBN(18);
+    it("should return correct price for stable pool from oracle", async () => {
+      const daiChainlinkOracle = await ChainlinkOracle.new(wei(20, decimals), decimals);
 
-      const result = await priceManager.getPrice(usdcKey, usdcDecimals);
+      await systemPoolsRegistry.setPoolType(daiKey, 1);
+      await systemPoolsRegistry.addOracle(daiKey, NOTHING, daiChainlinkOracle.address);
 
-      assert.equal(toBN(result[0]).toString(), usdcPrice.times(toBN(10).pow(daiDecimals)).toString());
-      assert.equal(toBN(result[1]).toString(), daiDecimals.toString());
+      const result = await priceManager.getPrice(daiKey);
 
-      const amount = toBN(300);
-      const expectedAmountInUSD = toBN(9000);
-
-      assert.equal(amount.times(result[0]).idiv(toBN(10).pow(result[1])).toString(), expectedAmountInUSD.toString());
-    });
-
-    it("should get correct price if redirect to uniswap enabled", async () => {
-      await priceManager.updateRedirectToUniswap(true);
-
-      const wEthDecimals = toBN(18);
-
-      const result = await priceManager.getPrice(wEthKey, wEthDecimals);
-
-      assert.equal(toBN(result[0]).toString(), wEthPrice.times(toBN(10).pow(wEthDecimals)).toString());
-      assert.equal(toBN(result[1]).toString(), wEthDecimals.toString());
+      assert.equal(toBN(result[0]).toString(), wei(20, decimals).toString());
+      assert.equal(toBN(result[1]).toString(), decimals.toString());
 
       const amount = toBN(200);
-      const expectedAmountInUSD = toBN(1800);
+      const expectedAmountInUSD = toBN(4000);
 
       assert.equal(amount.times(result[0]).idiv(toBN(10).pow(result[1])).toString(), expectedAmountInUSD.toString());
     });
 
-    it("should get correct price from chainlink if asset key is the quote key", async () => {
-      const daiDecimals = toBN(18);
+    it("should return correct price for stable pool without oracle", async () => {
+      await systemPoolsRegistry.setPoolType(daiKey, 1);
+      await systemPoolsRegistry.addOracle(daiKey, NOTHING, ADDRESS_NULL);
 
-      const result = await priceManager.getPrice(daiKey, daiDecimals);
+      const result = await priceManager.getPrice(daiKey);
 
-      assert.equal(toBN(result[0]).toString(), daiChainlinkPrice.toString());
+      assert.equal(toBN(result[0]).toString(), wei(1, decimals).toString());
       assert.equal(toBN(result[1]).toString(), decimals.toString());
 
       const amount = toBN(200);
@@ -228,20 +148,10 @@ describe("PriceManager", async () => {
       assert.equal(amount.times(result[0]).idiv(toBN(10).pow(result[1])).toString(), expectedAmountInUSD.toString());
     });
 
-    it("should get correct price from uniswap if asset key is the quote key", async () => {
-      const daiDecimals = toBN(18);
+    it("should get exception if try to get price to unexisting asset", async () => {
+      const reason = "PriceManager: The oracle for assets does not exists.";
 
-      await daiChainlinkOracle.setPrice(0);
-
-      const result = await priceManager.getPrice(daiKey, daiDecimals);
-
-      assert.equal(toBN(result[0]).toString(), toBN(10).pow(daiDecimals).toString());
-      assert.equal(toBN(result[1]).toString(), daiDecimals.toString());
-
-      const amount = toBN(200);
-      const expectedAmountInUSD = toBN(200);
-
-      assert.equal(amount.times(result[0]).idiv(toBN(10).pow(result[1])).toString(), expectedAmountInUSD.toString());
+      await truffleAssert.reverts(priceManager.getPrice(daiKey), reason);
     });
   });
 });

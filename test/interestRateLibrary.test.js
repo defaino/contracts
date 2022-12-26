@@ -1,4 +1,3 @@
-const { getInterestRateLibraryData } = require("../deploy/helpers/deployHelper");
 const { toBN } = require("../scripts/utils");
 
 const truffleAssert = require("truffle-assertions");
@@ -16,14 +15,7 @@ describe("InterestRateLibrary", () => {
   let interestRateLibrary;
 
   before("setup", async () => {
-    interestRateLibrary = await InterestRateLibrary.new(
-      getInterestRateLibraryData("deploy/data/InterestRatesExactData.txt")
-    );
-
-    await interestRateLibrary.addNewRates(
-      110, // Start percentage
-      getInterestRateLibraryData("deploy/data/InterestRatesData.txt")
-    );
+    interestRateLibrary = await InterestRateLibrary.new();
 
     await reverter.snapshot();
   });
@@ -32,55 +24,46 @@ describe("InterestRateLibrary", () => {
 
   describe("creation", () => {
     it("should fill in data correctly", async () => {
-      assert.equal((await interestRateLibrary.maxSupportedPercentage()).toString(), libraryPrecision.times(100));
+      assert.equal((await interestRateLibrary.MAX_SUPPORTED_PERCENTAGE()).toString(), libraryPrecision.times(100));
 
       const percent = libraryPrecision.times(35);
-      assert.equal((await interestRateLibrary.ratesPerSecond(percent)).toString(), toBN("9.51625e18").toString());
+      assert.equal((await interestRateLibrary.getRatePerSecond(percent)).toString(), toBN("9.51625e18").toString());
     });
 
     it("should get correct precise values", async () => {
-      const percent = libraryPrecision.times(3.8);
-      assert.equal((await interestRateLibrary.ratesPerSecond(percent)).toString(), toBN("1.18264e18").toString());
+      let percent = libraryPrecision.times(3.8);
+      assert.equal((await interestRateLibrary.getRatePerSecond(percent)).toString(), toBN("1.18264e18").toString());
+
+      percent = libraryPrecision.times(10);
+      assert.equal(
+        (await interestRateLibrary.getRatePerSecond(percent)).toString(),
+        toBN("3022270000000000000").toString()
+      );
     });
   });
 
-  describe("addNewRates", () => {
-    it("should correctly add new rates", async () => {
-      const newRates = [
-        toBN("2.21377e19").toString(),
-        toBN("2.22951e19").toString(),
-        toBN("2.24517e19").toString(),
-        toBN("2.26075e19").toString(),
-        toBN("2.27626e19").toString(),
-      ];
-      const startPercentage = libraryPrecision.times(101);
+  describe("getRatePerSecond", () => {
+    it("should return correct rate per second", async () => {
+      let percent = libraryPrecision.times(0);
+      assert.equal((await interestRateLibrary.getRatePerSecond(percent)).toString(), 0);
 
-      await interestRateLibrary.addNewRates(startPercentage, newRates);
+      percent = libraryPrecision.times(2.5);
+      assert.equal((await interestRateLibrary.getRatePerSecond(percent)).toString(), "782998000000000000");
 
-      assert.equal(
-        (await interestRateLibrary.maxSupportedPercentage()).toString(),
-        libraryPrecision.times(105).toString()
-      );
+      percent = libraryPrecision.times(10);
+      assert.equal((await interestRateLibrary.getRatePerSecond(percent)).toString(), "3022270000000000000");
 
-      const percent = libraryPrecision.times(103);
-      assert.equal((await interestRateLibrary.ratesPerSecond(percent)).toString(), toBN("2.24517e19").toString());
+      percent = libraryPrecision.times(25);
+      assert.equal((await interestRateLibrary.getRatePerSecond(percent)).toString(), "7075840000000000000");
+
+      percent = libraryPrecision.times(100);
+      assert.equal((await interestRateLibrary.getRatePerSecond(percent)).toString(), "21979600000000000000");
     });
 
-    it("should get exception if start percentage is invalid", async () => {
-      const newRates = [
-        toBN("2.21377e19").toString(),
-        toBN("2.22951e19").toString(),
-        toBN("2.24517e19").toString(),
-        toBN("2.26075e19").toString(),
-        toBN("2.27626e19").toString(),
-      ];
-      let startPercentage = libraryPrecision.times(36);
+    it("should get exception if pass incorrect annual rate", async () => {
+      const reason = "InterestRateLibrary: Unsupported percentage.";
 
-      const reason = "InterestRateLibrary: Incorrect starting percentage to add.";
-      await truffleAssert.reverts(interestRateLibrary.addNewRates(startPercentage, newRates), reason);
-
-      startPercentage = libraryPrecision.times(120);
-      await truffleAssert.reverts(interestRateLibrary.addNewRates(startPercentage, newRates), reason);
+      await truffleAssert.reverts(interestRateLibrary.getRatePerSecond(libraryPrecision.times(101)), reason);
     });
   });
 });

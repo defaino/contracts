@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity 0.8.3;
+pragma solidity 0.8.17;
 
 import "../LiquidityPool.sol";
 
@@ -19,5 +19,9 @@ contract LiquidityPoolMock is LiquidityPool {
                 _currentRate,
                 _isAdding
             );
+    }
+
+    function getPriceManager() external view returns (address) {
+        return address(priceManager);
     }
 }

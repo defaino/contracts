@@ -3,7 +3,7 @@ const SystemParameters = artifacts.require("SystemParameters");
 const AssetParameters = artifacts.require("AssetParameters");
 const DefiCore = artifacts.require("DefiCore");
 const LiquidityPool = artifacts.require("LiquidityPool");
-const LiquidityPoolFactory = artifacts.require("LiquidityPoolFactory");
+const SystemPoolsFactory = artifacts.require("SystemPoolsFactory");
 const LiquidityPoolRegistry = artifacts.require("LiquidityPoolRegistry");
 const InterestRateLibrary = artifacts.require("InterestRateLibrary");
 const RewardsDistribution = artifacts.require("RewardsDistribution");
@@ -37,8 +37,8 @@ module.exports = async (deployer) => {
   await deployer.deploy(LiquidityPoolRegistry);
   const liquidityPoolRegistry = await LiquidityPoolRegistry.deployed();
 
-  await deployer.deploy(LiquidityPoolFactory);
-  const liquidityPoolFactory = await LiquidityPoolFactory.deployed();
+  await deployer.deploy(SystemPoolsFactory);
+  const liquidityPoolFactory = await SystemPoolsFactory.deployed();
 
   await deployer.deploy(LiquidityPool);
 
@@ -79,8 +79,8 @@ module.exports = async (deployer) => {
   );
 
   logTransaction(
-    await registry.addProxyContract(await registry.LIQUIDITY_POOL_FACTORY_NAME(), liquidityPoolFactory.address),
-    "Add LiquidityPoolFactory contract proxy to the registry"
+    await registry.addProxyContract(await registry.SYSTEM_POOLS_FACTORY_NAME(), liquidityPoolFactory.address),
+    "Add SystemPoolsFactory contract proxy to the registry"
   );
 
   logTransaction(

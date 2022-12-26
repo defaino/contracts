@@ -14,12 +14,12 @@ const accounts = async (index) => {
   return (await web3.eth.getAccounts())[index];
 };
 
-function getOnePercent() {
+function getPrecision() {
   return toBN(10).pow(25);
 }
 
-function getDecimal() {
-  return getOnePercent().times(100);
+function getPercentage100() {
+  return getPrecision().times(100);
 }
 
 module.exports = {
@@ -27,6 +27,6 @@ module.exports = {
   accounts,
   wei,
   fromWei,
-  getOnePercent,
-  getDecimal,
+  getPrecision,
+  getPercentage100,
 };

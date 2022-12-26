@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity 0.8.3;
+pragma solidity 0.8.17;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "./libraries/DSMath.sol";
+
+import "@dlsl/dev-modules/libs/math/DSMath.sol";
+
 import "./common/Globals.sol";
 
 contract CompoundRateKeeper is Ownable {
@@ -14,7 +16,7 @@ contract CompoundRateKeeper is Ownable {
     CompoundRate public compoundRate;
 
     constructor() {
-        compoundRate = CompoundRate(DECIMAL, block.timestamp);
+        compoundRate = CompoundRate(PERCENTAGE_100, block.timestamp);
     }
 
     function getCurrentRate() external view returns (uint256) {
@@ -35,7 +37,8 @@ contract CompoundRateKeeper is Ownable {
     function getNewCompoundRate(uint256 _interestRate) public view returns (uint256 _newRate) {
         uint256 _period = block.timestamp - compoundRate.lastUpdate;
         _newRate =
-            (compoundRate.rate * (DSMath.rpow(_interestRate + DECIMAL, _period, DECIMAL))) /
-            DECIMAL;
+            (compoundRate.rate *
+                (DSMath.rpow(_interestRate + PERCENTAGE_100, _period, PERCENTAGE_100))) /
+            PERCENTAGE_100;
     }
 }

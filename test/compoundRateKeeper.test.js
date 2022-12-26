@@ -1,5 +1,5 @@
 const { setNextBlockTime } = require("./helpers/hardhatTimeTraveller");
-const { toBN, accounts, getDecimal } = require("../scripts/utils");
+const { toBN, accounts, getPercentage100 } = require("../scripts/utils");
 const truffleAssert = require("truffle-assertions");
 
 const CompoundRateKeeper = artifacts.require("./contracts/common/CompoundRateKeeper");
@@ -14,7 +14,7 @@ describe("CompoundRateKeeper", () => {
 
       await setNextBlockTime(creationTime + 10);
 
-      const interestRate = getDecimal().multipliedBy(0.01);
+      const interestRate = getPercentage100().multipliedBy(0.01);
       await compoundRateKeeper.update(interestRate);
 
       const actualRate = toBN((await compoundRateKeeper.compoundRate()).rate).decimalPlaces(27);
@@ -29,7 +29,7 @@ describe("CompoundRateKeeper", () => {
 
       const NOT_OWNER = await accounts(1);
       await truffleAssert.reverts(
-        rateKeeper.update(getDecimal().multipliedBy(0.01), { from: NOT_OWNER }),
+        rateKeeper.update(getPercentage100().multipliedBy(0.01), { from: NOT_OWNER }),
         "Ownable: caller is not the owner"
       );
     });

@@ -1,94 +1,111 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity 0.8.3;
+pragma solidity 0.8.17;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
+import "@dlsl/dev-modules/contracts-registry/AbstractDependant.sol";
+
+import "./interfaces/IRegistry.sol";
 import "./interfaces/IAssetParameters.sol";
 import "./interfaces/IRewardsDistribution.sol";
-import "./interfaces/ILiquidityPoolRegistry.sol";
-import "./interfaces/ILiquidityPool.sol";
+import "./interfaces/ISystemPoolsRegistry.sol";
+import "./interfaces/IBasicPool.sol";
 
 import "./libraries/MathHelper.sol";
 
-import "./Registry.sol";
-import "./abstract/AbstractDependant.sol";
 import "./common/Globals.sol";
 
-contract RewardsDistribution is IRewardsDistribution, OwnableUpgradeable, AbstractDependant {
+contract RewardsDistribution is IRewardsDistribution, AbstractDependant {
     using MathHelper for uint256;
 
+    address private systemOwnerAddr;
     address private defiCoreAddr;
     IAssetParameters private assetParameters;
-    ILiquidityPoolRegistry private liquidityPoolsRegistry;
+    ISystemPoolsRegistry private systemPoolsRegistry;
 
     mapping(bytes32 => LiquidityPoolInfo) public liquidityPoolsInfo;
     mapping(bytes32 => mapping(address => UserDistributionInfo)) public usersDistributionInfo;
 
     modifier onlyEligibleContracts() {
         require(
-            defiCoreAddr == msg.sender ||
-                liquidityPoolsRegistry.existingLiquidityPools(msg.sender),
+            defiCoreAddr == msg.sender || systemPoolsRegistry.existingLiquidityPools(msg.sender),
             "RewardsDistribution: Caller not an eligible contract."
         );
         _;
     }
 
-    function rewardsDistributionInitialize() external initializer {
-        __Ownable_init();
+    modifier onlySystemOwner() {
+        require(
+            msg.sender == systemOwnerAddr,
+            "RewardsDistribution: Only system owner can call this function."
+        );
+        _;
     }
 
-    function setDependencies(Registry _registry) external override onlyInjectorOrZero {
+    function setDependencies(address _contractsRegistry) external override dependant {
+        IRegistry _registry = IRegistry(_contractsRegistry);
+
+        systemOwnerAddr = _registry.getSystemOwner();
         defiCoreAddr = _registry.getDefiCoreContract();
         assetParameters = IAssetParameters(_registry.getAssetParametersContract());
-        liquidityPoolsRegistry = ILiquidityPoolRegistry(
-            _registry.getLiquidityPoolRegistryContract()
-        );
+        systemPoolsRegistry = ISystemPoolsRegistry(_registry.getSystemPoolsRegistryContract());
     }
 
-    function updateCumulativeSums(address _userAddr, ILiquidityPool _liquidityPool)
-        external
-        override
-        onlyEligibleContracts
-    {
-        _updateSumsWithUserReward(_userAddr, _liquidityPool.assetKey(), _liquidityPool);
+    function updateCumulativeSums(
+        address _userAddr,
+        address _liquidityPool
+    ) external override onlyEligibleContracts {
+        if (_onlyExistingRewardsAssetKey()) {
+            _updateSumsWithUserReward(
+                _userAddr,
+                IBasicPool(_liquidityPool).assetKey(),
+                _liquidityPool
+            );
+        }
     }
 
     function withdrawUserReward(
         bytes32 _assetKey,
         address _userAddr,
-        ILiquidityPool _liquidityPool
+        address _liquidityPool
     ) external override onlyEligibleContracts returns (uint256 _userReward) {
-        _updateSumsWithUserReward(_userAddr, _assetKey, _liquidityPool);
+        if (_onlyExistingRewardsAssetKey()) {
+            _updateSumsWithUserReward(_userAddr, _assetKey, _liquidityPool);
 
-        UserDistributionInfo storage userInfo = usersDistributionInfo[_assetKey][_userAddr];
+            UserDistributionInfo storage userInfo = usersDistributionInfo[_assetKey][_userAddr];
 
-        _userReward = userInfo.aggregatedReward;
+            _userReward = userInfo.aggregatedReward;
 
-        if (_userReward > 0) {
-            delete userInfo.aggregatedReward;
+            if (_userReward > 0) {
+                delete userInfo.aggregatedReward;
+            }
         }
     }
 
     function setupRewardsPerBlockBatch(
         bytes32[] calldata _assetKeys,
         uint256[] calldata _rewardsPerBlock
-    ) external override onlyOwner {
+    ) external override onlySystemOwner {
+        require(
+            _onlyExistingRewardsAssetKey(),
+            "RewardsDistributionL Unable to setup rewards per block."
+        );
+
         require(
             _assetKeys.length == _rewardsPerBlock.length,
             "RewardsDistribution: Length mismatch."
         );
 
-        ILiquidityPoolRegistry _registry = liquidityPoolsRegistry;
+        ISystemPoolsRegistry _poolsRegistry = systemPoolsRegistry;
 
         for (uint256 i = 0; i < _assetKeys.length; i++) {
             bytes32 _currentKey = _assetKeys[i];
 
             if (liquidityPoolsInfo[_currentKey].rewardPerBlock != 0) {
-                _updateCumulativeSums(
-                    _currentKey,
-                    ILiquidityPool(_registry.liquidityPools(_currentKey))
-                );
+                (address _poolAddr, ISystemPoolsRegistry.PoolType _poolType) = _poolsRegistry
+                    .poolsInfo(_currentKey);
+
+                _updateCumulativeSums(_currentKey, _poolAddr, _poolType);
             } else {
                 liquidityPoolsInfo[_currentKey].lastUpdate = block.number;
             }
@@ -97,33 +114,41 @@ contract RewardsDistribution is IRewardsDistribution, OwnableUpgradeable, Abstra
         }
     }
 
-    function getAPY(ILiquidityPool _liquidityPool)
-        external
-        view
-        override
-        returns (uint256 _supplyAPY, uint256 _borrowAPY)
-    {
-        ILiquidityPool _governanceLP = ILiquidityPool(
-            liquidityPoolsRegistry.getGovernanceLiquidityPool()
-        );
-        bytes32 _assetKey = _liquidityPool.assetKey();
+    function getAPY(
+        bytes32 _assetKey
+    ) external view override returns (uint256 _supplyAPY, uint256 _borrowAPY) {
+        IBasicPool _rewardsLP = IBasicPool(systemPoolsRegistry.getRewardsLiquidityPool());
 
-        LiquidityPoolStats memory _stats = _getLiquidityPoolStats(_assetKey, _liquidityPool);
-
-        uint256 _annualSupplyReward = _governanceLP.getAmountInUSD(_stats.supplyRewardPerBlock) *
-            BLOCKS_PER_YEAR *
-            DECIMAL;
-        uint256 _totalSupplyPoolInUSD = _liquidityPool.getAmountInUSD(
-            _liquidityPool.convertLPTokensToAsset(_stats.totalSupplyPool)
-        );
-
-        if (_totalSupplyPoolInUSD != 0) {
-            _supplyAPY = _annualSupplyReward / _totalSupplyPoolInUSD;
+        if (address(_rewardsLP) == address(0)) {
+            return (_supplyAPY, _borrowAPY);
         }
 
-        uint256 _annualBorrowReward = _governanceLP.getAmountInUSD(_stats.borrowRewardPerBlock) *
+        (address _liquidityPoolAddr, ISystemPoolsRegistry.PoolType _poolType) = systemPoolsRegistry
+            .poolsInfo(_assetKey);
+        ILiquidityPool _liquidityPool = ILiquidityPool(_liquidityPoolAddr);
+
+        LiquidityPoolStats memory _stats = _getLiquidityPoolStats(
+            _assetKey,
+            _liquidityPoolAddr,
+            _poolType
+        );
+
+        if (_stats.supplyRewardPerBlock != 0) {
+            uint256 _annualSupplyReward = _rewardsLP.getAmountInUSD(_stats.supplyRewardPerBlock) *
+                BLOCKS_PER_YEAR *
+                PERCENTAGE_100;
+            uint256 _totalSupplyPoolInUSD = _liquidityPool.getAmountInUSD(
+                _liquidityPool.convertLPTokensToAsset(_stats.totalSupplyPool)
+            );
+
+            if (_totalSupplyPoolInUSD != 0) {
+                _supplyAPY = _annualSupplyReward / _totalSupplyPoolInUSD;
+            }
+        }
+
+        uint256 _annualBorrowReward = _rewardsLP.getAmountInUSD(_stats.borrowRewardPerBlock) *
             BLOCKS_PER_YEAR *
-            DECIMAL;
+            PERCENTAGE_100;
         uint256 _totalBorrowPoolInUSD = _liquidityPool.getAmountInUSD(_stats.totalBorrowPool);
 
         if (_totalBorrowPoolInUSD != 0) {
@@ -134,36 +159,45 @@ contract RewardsDistribution is IRewardsDistribution, OwnableUpgradeable, Abstra
     function getUserReward(
         bytes32 _assetKey,
         address _userAddr,
-        ILiquidityPool _liquidityPool
+        address _liquidityPool
     ) external view override returns (uint256 _userReward) {
-        (uint256 _newSupplyCumulativeSum, uint256 _newBorrowCumulativeSum) = _getNewCumulativeSums(
-            _assetKey,
-            _liquidityPool
-        );
-        _userReward = _getNewUserReward(
-            _userAddr,
-            _assetKey,
-            _liquidityPool,
-            _newSupplyCumulativeSum,
-            _newBorrowCumulativeSum
-        );
+        if (_onlyExistingRewardsAssetKey()) {
+            (, ISystemPoolsRegistry.PoolType _poolType) = systemPoolsRegistry.poolsInfo(_assetKey);
+
+            (
+                uint256 _newSupplyCumulativeSum,
+                uint256 _newBorrowCumulativeSum
+            ) = _getNewCumulativeSums(_assetKey, _liquidityPool, _poolType);
+            _userReward = _getNewUserReward(
+                _userAddr,
+                _assetKey,
+                _liquidityPool,
+                _newSupplyCumulativeSum,
+                _newBorrowCumulativeSum,
+                _poolType
+            );
+        }
     }
 
     function _updateSumsWithUserReward(
         address _userAddr,
         bytes32 _assetKey,
-        ILiquidityPool _liquidityPool
+        address _liquidityPool
     ) internal {
+        (, ISystemPoolsRegistry.PoolType _poolType) = systemPoolsRegistry.poolsInfo(_assetKey);
+
         (uint256 _newSupplyCumulativeSum, uint256 _newBorrowCumulativeSum) = _updateCumulativeSums(
             _assetKey,
-            _liquidityPool
+            _liquidityPool,
+            _poolType
         );
         uint256 _newReward = _getNewUserReward(
             _userAddr,
             _assetKey,
             _liquidityPool,
             _newSupplyCumulativeSum,
-            _newBorrowCumulativeSum
+            _newBorrowCumulativeSum,
+            _poolType
         );
 
         usersDistributionInfo[_assetKey][_userAddr] = UserDistributionInfo(
@@ -173,35 +207,45 @@ contract RewardsDistribution is IRewardsDistribution, OwnableUpgradeable, Abstra
         );
     }
 
-    function _updateCumulativeSums(bytes32 _assetKey, ILiquidityPool _liquidityPool)
-        internal
-        returns (uint256 _newSupplyCumulativeSum, uint256 _newBorrowCumulativeSum)
-    {
+    function _updateCumulativeSums(
+        bytes32 _assetKey,
+        address _liquidityPool,
+        ISystemPoolsRegistry.PoolType _poolType
+    ) internal returns (uint256 _newSupplyCumulativeSum, uint256 _newBorrowCumulativeSum) {
         (_newSupplyCumulativeSum, _newBorrowCumulativeSum) = _getNewCumulativeSums(
             _assetKey,
-            _liquidityPool
+            _liquidityPool,
+            _poolType
         );
 
         LiquidityPoolInfo storage liquidityPoolInfo = liquidityPoolsInfo[_assetKey];
 
-        liquidityPoolInfo.supplyCumulativeSum = _newSupplyCumulativeSum;
-        liquidityPoolInfo.borrowCumulativeSum = _newBorrowCumulativeSum;
-        liquidityPoolInfo.lastUpdate = block.number;
+        if (liquidityPoolInfo.lastUpdate != block.number) {
+            liquidityPoolInfo.supplyCumulativeSum = _newSupplyCumulativeSum;
+            liquidityPoolInfo.borrowCumulativeSum = _newBorrowCumulativeSum;
+            liquidityPoolInfo.lastUpdate = block.number;
+        }
     }
 
     function _getNewUserReward(
         address _userAddr,
         bytes32 _assetKey,
-        ILiquidityPool _liquidityPool,
+        address _liquidityPool,
         uint256 _newSupplyCumulativeSum,
-        uint256 _newBorrowCumulativeSum
+        uint256 _newBorrowCumulativeSum,
+        ISystemPoolsRegistry.PoolType _poolType
     ) internal view returns (uint256 _newAggregatedReward) {
         UserDistributionInfo storage userInfo = usersDistributionInfo[_assetKey][_userAddr];
 
         _newAggregatedReward = userInfo.aggregatedReward;
 
-        uint256 _liquidityAmount = ERC20(address(_liquidityPool)).balanceOf(_userAddr);
-        (uint256 _borrowAmount, ) = _liquidityPool.borrowInfos(_userAddr);
+        uint256 _liquidityAmount;
+
+        if (_poolType == ISystemPoolsRegistry.PoolType.LIQUIDITY_POOL) {
+            _liquidityAmount = ERC20(_liquidityPool).balanceOf(_userAddr);
+        }
+
+        (uint256 _borrowAmount, ) = IBasicPool(_liquidityPool).borrowInfos(_userAddr);
 
         if (_liquidityAmount > 0) {
             _newAggregatedReward += (_newSupplyCumulativeSum - userInfo.lastSupplyCumulativeSum)
@@ -214,11 +258,11 @@ contract RewardsDistribution is IRewardsDistribution, OwnableUpgradeable, Abstra
         }
     }
 
-    function _getNewCumulativeSums(bytes32 _assetKey, ILiquidityPool _liquidityPool)
-        internal
-        view
-        returns (uint256 _newSupplyCumulativeSum, uint256 _newBorrowCumulativeSum)
-    {
+    function _getNewCumulativeSums(
+        bytes32 _assetKey,
+        address _liquidityPool,
+        ISystemPoolsRegistry.PoolType _poolType
+    ) internal view returns (uint256 _newSupplyCumulativeSum, uint256 _newBorrowCumulativeSum) {
         LiquidityPoolInfo storage liquidityPoolInfo = liquidityPoolsInfo[_assetKey];
 
         uint256 _lastUpdate = liquidityPoolInfo.lastUpdate;
@@ -230,7 +274,11 @@ contract RewardsDistribution is IRewardsDistribution, OwnableUpgradeable, Abstra
         _newBorrowCumulativeSum = liquidityPoolInfo.borrowCumulativeSum;
 
         if (_blocksDelta != 0) {
-            LiquidityPoolStats memory _stats = _getLiquidityPoolStats(_assetKey, _liquidityPool);
+            LiquidityPoolStats memory _stats = _getLiquidityPoolStats(
+                _assetKey,
+                _liquidityPool,
+                _poolType
+            );
 
             if (_stats.totalSupplyPool != 0) {
                 _newSupplyCumulativeSum = _countNewCumulativeSum(
@@ -252,43 +300,61 @@ contract RewardsDistribution is IRewardsDistribution, OwnableUpgradeable, Abstra
         }
     }
 
-    function _getLiquidityPoolStats(bytes32 _assetKey, ILiquidityPool _liquidityPool)
-        internal
-        view
-        returns (LiquidityPoolStats memory)
-    {
-        (uint256 _supplyRewardPerBlock, uint256 _borrowRewardPerBlock) = _getRewardsPerBlock(
-            _assetKey,
-            _liquidityPool.getBorrowPercentage()
-        );
-        uint256 _totalBorrowPool = _liquidityPool.aggregatedBorrowedAmount();
+    function _getLiquidityPoolStats(
+        bytes32 _assetKey,
+        address _liquidityPool,
+        ISystemPoolsRegistry.PoolType _poolType
+    ) internal view returns (LiquidityPoolStats memory) {
+        uint256 _supplyRewardPerBlock;
+        uint256 _borrowRewardPerBlock;
+        uint256 _totalSupplyPool;
+
+        if (_poolType == ISystemPoolsRegistry.PoolType.LIQUIDITY_POOL) {
+            (_supplyRewardPerBlock, _borrowRewardPerBlock) = _getRewardsPerBlock(
+                _assetKey,
+                ILiquidityPool(_liquidityPool).getBorrowPercentage()
+            );
+
+            _totalSupplyPool = ERC20(_liquidityPool).totalSupply();
+        } else {
+            _borrowRewardPerBlock = liquidityPoolsInfo[_assetKey].rewardPerBlock;
+        }
+
+        uint256 _totalBorrowPool = IBasicPool(_liquidityPool).aggregatedBorrowedAmount();
 
         return
             LiquidityPoolStats(
                 _supplyRewardPerBlock,
                 _borrowRewardPerBlock,
-                ERC20(address(_liquidityPool)).totalSupply(),
+                _totalSupplyPool,
                 _totalBorrowPool
             );
     }
 
-    function _getRewardsPerBlock(bytes32 _assetKey, uint256 _currentUR)
-        internal
-        view
-        returns (uint256 _supplyRewardPerBlock, uint256 _borrowRewardPerBlock)
-    {
+    function _getRewardsPerBlock(
+        bytes32 _assetKey,
+        uint256 _currentUR
+    ) internal view returns (uint256 _supplyRewardPerBlock, uint256 _borrowRewardPerBlock) {
+        uint256 _totalRewardPerBlock = liquidityPoolsInfo[_assetKey].rewardPerBlock;
+
+        if (_totalRewardPerBlock == 0) {
+            return (_supplyRewardPerBlock, _borrowRewardPerBlock);
+        }
+
         IAssetParameters.DistributionMinimums memory _distrMinimums = assetParameters
             .getDistributionMinimums(_assetKey);
 
-        uint256 _totalRewardPerBlock = liquidityPoolsInfo[_assetKey].rewardPerBlock;
-
-        uint256 _supplyRewardPerBlockPart = (DECIMAL -
+        uint256 _supplyRewardPerBlockPart = (PERCENTAGE_100 -
             _distrMinimums.minBorrowDistrPart -
             _distrMinimums.minSupplyDistrPart).mulWithPrecision(_currentUR) +
             _distrMinimums.minSupplyDistrPart;
 
         _supplyRewardPerBlock = _totalRewardPerBlock.mulWithPrecision(_supplyRewardPerBlockPart);
         _borrowRewardPerBlock = _totalRewardPerBlock - _supplyRewardPerBlock;
+    }
+
+    function _onlyExistingRewardsAssetKey() internal view returns (bool) {
+        return systemPoolsRegistry.rewardsAssetKey() != bytes32(0);
     }
 
     function _countNewCumulativeSum(

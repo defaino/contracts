@@ -1,10 +1,11 @@
 const { setNextBlockTime, setTime, mine, getCurrentBlockTime } = require("./helpers/hardhatTimeTraveller");
 const { toBytes, compareKeys, deepCompareKeys } = require("./helpers/bytesCompareLibrary");
-const { getInterestRateLibraryData } = require("../deploy/helpers/deployHelper");
-const { toBN, accounts, getOnePercent, getDecimal, wei } = require("../scripts/utils");
+const { toBN, accounts, getPrecision, getPercentage100, wei } = require("../scripts/utils");
 
 const Reverter = require("./helpers/reverter");
 const truffleAssert = require("truffle-assertions");
+const { web3 } = require("hardhat");
+const { assert } = require("chai");
 
 const Registry = artifacts.require("Registry");
 const DefiCore = artifacts.require("DefiCore");
@@ -12,12 +13,14 @@ const SystemParameters = artifacts.require("SystemParameters");
 const AssetParameters = artifacts.require("AssetParameters");
 const RewardsDistribution = artifacts.require("RewardsDistributionMock");
 const UserInfoRegistry = artifacts.require("UserInfoRegistry");
-const LiquidityPoolRegistry = artifacts.require("LiquidityPoolRegistry");
-const LiquidityPoolFactory = artifacts.require("LiquidityPoolFactory");
+const SystemPoolsRegistry = artifacts.require("SystemPoolsRegistry");
+const SystemPoolsFactory = artifacts.require("SystemPoolsFactory");
 const LiquidityPool = artifacts.require("LiquidityPool");
-const PriceManager = artifacts.require("PriceManagerMock");
+const StablePool = artifacts.require("StablePool");
+const PriceManager = artifacts.require("PriceManager");
 const InterestRateLibrary = artifacts.require("InterestRateLibrary");
-const GovernanceToken = artifacts.require("GovernanceToken");
+const WETH = artifacts.require("WETH");
+const StablePermitToken = artifacts.require("StablePermitTokenMock");
 
 const MockERC20 = artifacts.require("MockERC20");
 const ChainlinkOracleMock = artifacts.require("ChainlinkOracleMock");
@@ -35,15 +38,16 @@ describe("DefiCore", async () => {
   let OWNER;
   let USER1;
   let USER2;
-  let NOTHING;
 
   let registry;
   let defiCore;
   let assetParameters;
+  let systemParameters;
   let rewardsDistribution;
-  let liquidityPoolRegistry;
-  let priceManager;
+  let userInfoRegistry;
+  let systemPoolsRegistry;
 
+  let nativePool;
   let daiPool;
   let wEthPool;
   let usdtPool;
@@ -54,31 +58,40 @@ describe("DefiCore", async () => {
   let wEthChainlinkOracle;
   let usdtChainlinkOracle;
 
-  let governanceToken;
+  let rewardsToken;
+  let nativeToken;
 
   const oneToken = wei(1);
-  const tokensAmount = wei(100000);
-  const standardColRatio = getDecimal().times("1.25");
-  const reserveFactor = getOnePercent().times("15");
+  const tokensAmount = wei(5000);
+  const standardColRatio = getPercentage100().times("1.25");
+  const reserveFactor = getPrecision().times("15");
 
-  const firstSlope = getOnePercent().times(4);
-  const secondSlope = getDecimal();
-  const utilizationBreakingPoint = getOnePercent().times(80);
-  const maxUR = getOnePercent().times(95);
-  const maxWithdrawUR = getOnePercent().times(94);
-  const liquidationDiscount = getOnePercent().times(8);
-  const liquidationBoundary = getOnePercent().times(50);
+  const annualBorrowRate = getPrecision().times(3);
+  const firstSlope = getPrecision().times(4);
+  const secondSlope = getPercentage100();
+  const utilizationBreakingPoint = getPrecision().times(80);
+  const maxUR = getPrecision().times(95);
+  const liquidationDiscount = getPrecision().times(8);
+  const liquidationBoundary = getPrecision().times(50);
+  const minCurrencyAmount = wei(0.1);
 
   const priceDecimals = wei(1, 8);
   const chainlinkPriceDecimals = toBN(8);
 
-  const minSupplyDistributionPart = getOnePercent().times(10);
-  const minBorrowDistributionPart = getOnePercent().times(10);
+  const minSupplyDistributionPart = getPrecision().times(10);
+  const minBorrowDistributionPart = getPrecision().times(10);
 
+  const zeroKey = toBytes("");
   const daiKey = toBytes("DAI");
   const wEthKey = toBytes("WETH");
   const usdtKey = toBytes("USDT");
-  const governanceTokenKey = toBytes("GTK");
+  const rewardsTokenKey = toBytes("RTK");
+  const nativeTokenKey = toBytes("BNB");
+  const stableKey = toBytes("ST");
+
+  async function getLiquidityPoolAddr(assetKey) {
+    return (await systemPoolsRegistry.poolsInfo(assetKey))[0];
+  }
 
   async function deployTokens(symbols) {
     for (let i = 0; i < symbols.length; i++) {
@@ -90,25 +103,17 @@ describe("DefiCore", async () => {
   }
 
   async function createLiquidityPool(assetKey, asset, symbol, isCollateral) {
-    const chainlinkOracle = await ChainlinkOracleMock.new(
-      toBN(100).times(toBN(10).pow(chainlinkPriceDecimals)),
-      chainlinkPriceDecimals
-    );
+    const chainlinkOracle = await ChainlinkOracleMock.new(wei(100, chainlinkPriceDecimals), chainlinkPriceDecimals);
 
-    await liquidityPoolRegistry.addLiquidityPool(
-      asset.address,
-      assetKey,
-      chainlinkOracle.address,
-      NOTHING,
-      symbol,
-      isCollateral
-    );
+    await systemPoolsRegistry.addLiquidityPool(asset.address, assetKey, chainlinkOracle.address, symbol, isCollateral);
 
-    await asset.approveArbitraryBacth(
-      await liquidityPoolRegistry.liquidityPools(assetKey),
-      [OWNER, USER1, USER2],
-      [tokensAmount, tokensAmount, tokensAmount]
-    );
+    if (assetKey != nativeTokenKey) {
+      await asset.approveArbitraryBacth(
+        await getLiquidityPoolAddr(assetKey),
+        [OWNER, USER1, USER2],
+        [tokensAmount, tokensAmount, tokensAmount]
+      );
+    }
 
     await assetParameters.setupAllParameters(assetKey, [
       [standardColRatio, reserveFactor, liquidationDiscount, maxUR],
@@ -116,32 +121,36 @@ describe("DefiCore", async () => {
       [minSupplyDistributionPart, minBorrowDistributionPart],
     ]);
 
-    await priceManager.setPrice(assetKey, 100);
-
     return chainlinkOracle;
   }
 
-  async function deployGovernancePool(governanceTokenAddr, symbol) {
-    await liquidityPoolRegistry.addLiquidityPool(
-      governanceTokenAddr,
-      governanceTokenKey,
-      ADDRESS_NULL,
-      NOTHING,
+  async function createStablePool(assetKey, assetAddr) {
+    await systemPoolsRegistry.addStablePool(assetAddr, assetKey, ADDRESS_NULL);
+
+    await assetParameters.setupAnnualBorrowRate(assetKey, annualBorrowRate);
+    await assetParameters.setupMainParameters(assetKey, [standardColRatio, reserveFactor, liquidationDiscount, maxUR]);
+  }
+
+  async function deployRewardsPool(rewardsTokenAddr, symbol) {
+    const chainlinkOracle = await ChainlinkOracleMock.new(wei(100, chainlinkPriceDecimals), chainlinkPriceDecimals);
+
+    await systemPoolsRegistry.addLiquidityPool(
+      rewardsTokenAddr,
+      rewardsTokenKey,
+      chainlinkOracle.address,
       symbol,
       true
     );
 
-    await assetParameters.setupAllParameters(governanceTokenKey, [
+    await assetParameters.setupAllParameters(rewardsTokenKey, [
       [standardColRatio, reserveFactor, liquidationDiscount, maxUR],
       [0, firstSlope, secondSlope, utilizationBreakingPoint],
       [minSupplyDistributionPart, minBorrowDistributionPart],
     ]);
-
-    await priceManager.setPrice(governanceTokenKey, 10);
   }
 
   function getNormalizedAmount(normalizedAmount, additionalAmount, currentRate, isAdding) {
-    const normalizedAdditionalAmount = additionalAmount.times(getDecimal()).idiv(currentRate);
+    const normalizedAdditionalAmount = additionalAmount.times(getPercentage100()).idiv(currentRate);
 
     return isAdding
       ? normalizedAmount.plus(normalizedAdditionalAmount)
@@ -154,10 +163,9 @@ describe("DefiCore", async () => {
     USER2 = await accounts(2);
     NOTHING = await accounts(9);
 
-    governanceToken = await GovernanceToken.new(OWNER);
-    const interestRateLibrary = await InterestRateLibrary.new(
-      getInterestRateLibraryData("deploy/data/InterestRatesExactData.txt")
-    );
+    rewardsToken = await MockERC20.new("MockRTK", "RTK");
+    nativeToken = await WETH.new();
+    const interestRateLibrary = await InterestRateLibrary.new();
 
     registry = await Registry.new();
     const _defiCore = await DefiCore.new();
@@ -165,71 +173,74 @@ describe("DefiCore", async () => {
     const _assetParameters = await AssetParameters.new();
     const _rewardsDistribution = await RewardsDistribution.new();
     const _userInfoRegistry = await UserInfoRegistry.new();
-    const _liquidityPoolRegistry = await LiquidityPoolRegistry.new();
-    const _liquidityPoolFactory = await LiquidityPoolFactory.new();
+    const _systemPoolsRegistry = await SystemPoolsRegistry.new();
+    const _liquidityPoolFactory = await SystemPoolsFactory.new();
     const _liquidityPoolImpl = await LiquidityPool.new();
+    const _stablePoolImpl = await StablePool.new();
     const _priceManager = await PriceManager.new();
+
+    await registry.__OwnableContractsRegistry_init();
+
+    const stableToken = await StablePermitToken.new("Stable Token", "ST", registry.address);
 
     await registry.addProxyContract(await registry.DEFI_CORE_NAME(), _defiCore.address);
     await registry.addProxyContract(await registry.SYSTEM_PARAMETERS_NAME(), _systemParameters.address);
     await registry.addProxyContract(await registry.ASSET_PARAMETERS_NAME(), _assetParameters.address);
     await registry.addProxyContract(await registry.REWARDS_DISTRIBUTION_NAME(), _rewardsDistribution.address);
     await registry.addProxyContract(await registry.USER_INFO_REGISTRY_NAME(), _userInfoRegistry.address);
-    await registry.addProxyContract(await registry.LIQUIDITY_POOL_REGISTRY_NAME(), _liquidityPoolRegistry.address);
-    await registry.addProxyContract(await registry.LIQUIDITY_POOL_FACTORY_NAME(), _liquidityPoolFactory.address);
+    await registry.addProxyContract(await registry.SYSTEM_POOLS_REGISTRY_NAME(), _systemPoolsRegistry.address);
+    await registry.addProxyContract(await registry.SYSTEM_POOLS_FACTORY_NAME(), _liquidityPoolFactory.address);
     await registry.addProxyContract(await registry.PRICE_MANAGER_NAME(), _priceManager.address);
 
     await registry.addContract(await registry.INTEREST_RATE_LIBRARY_NAME(), interestRateLibrary.address);
-    await registry.addContract(await registry.GOVERNANCE_TOKEN_NAME(), governanceToken.address);
 
     defiCore = await DefiCore.at(await registry.getDefiCoreContract());
     assetParameters = await AssetParameters.at(await registry.getAssetParametersContract());
     userInfoRegistry = await UserInfoRegistry.at(await registry.getUserInfoRegistryContract());
-    liquidityPoolRegistry = await LiquidityPoolRegistry.at(await registry.getLiquidityPoolRegistryContract());
+    systemPoolsRegistry = await SystemPoolsRegistry.at(await registry.getSystemPoolsRegistryContract());
     rewardsDistribution = await RewardsDistribution.at(await registry.getRewardsDistributionContract());
-    priceManager = await PriceManager.at(await registry.getPriceManagerContract());
-
-    const systemParameters = await SystemParameters.at(await registry.getSystemParametersContract());
+    systemParameters = await SystemParameters.at(await registry.getSystemParametersContract());
 
     await registry.injectDependencies(await registry.DEFI_CORE_NAME());
+    await registry.injectDependencies(await registry.SYSTEM_PARAMETERS_NAME());
     await registry.injectDependencies(await registry.ASSET_PARAMETERS_NAME());
     await registry.injectDependencies(await registry.REWARDS_DISTRIBUTION_NAME());
     await registry.injectDependencies(await registry.USER_INFO_REGISTRY_NAME());
-    await registry.injectDependencies(await registry.LIQUIDITY_POOL_REGISTRY_NAME());
-    await registry.injectDependencies(await registry.LIQUIDITY_POOL_FACTORY_NAME());
+    await registry.injectDependencies(await registry.SYSTEM_POOLS_REGISTRY_NAME());
+    await registry.injectDependencies(await registry.SYSTEM_POOLS_FACTORY_NAME());
     await registry.injectDependencies(await registry.PRICE_MANAGER_NAME());
 
-    await deployTokens([await governanceToken.symbol(), "DAI", "WETH", "USDT"]);
+    tokens.push(rewardsToken.address);
+    await deployTokens(["DAI", "WETH", "USDT"]);
+    tokens.push(nativeToken);
 
-    await systemParameters.systemParametersInitialize();
-    await assetParameters.assetParametersInitialize();
-    await rewardsDistribution.rewardsDistributionInitialize();
-    await liquidityPoolRegistry.liquidityPoolRegistryInitialize(_liquidityPoolImpl.address);
-    await priceManager.priceManagerInitialize(daiKey, tokens[1].address);
+    await defiCore.defiCoreInitialize();
+    await systemPoolsRegistry.systemPoolsRegistryInitialize(_liquidityPoolImpl.address, nativeTokenKey, zeroKey);
 
-    await interestRateLibrary.addNewRates(
-      110, // Start percentage
-      getInterestRateLibraryData("deploy/data/InterestRatesData.txt")
-    );
+    await systemPoolsRegistry.addPoolsBeacon(1, _stablePoolImpl.address);
+    await systemParameters.setupStablePoolsAvailability(true);
+    await systemParameters.setupMinCurrencyAmount(minCurrencyAmount);
+    await systemParameters.setRewardsTokenAddress(ADDRESS_NULL);
 
-    await deployGovernancePool(governanceToken.address, await governanceToken.symbol());
+    await deployRewardsPool(rewardsToken.address, await rewardsToken.symbol());
+    await createStablePool(stableKey, stableToken.address);
 
     daiChainlinkOracle = await createLiquidityPool(daiKey, tokens[1], "DAI", true);
     wEthChainlinkOracle = await createLiquidityPool(wEthKey, tokens[2], "WETH", true);
     usdtChainlinkOracle = await createLiquidityPool(usdtKey, tokens[3], "USDT", false);
+    await createLiquidityPool(nativeTokenKey, tokens[4], "BNB", true);
 
-    daiPool = await LiquidityPool.at(await liquidityPoolRegistry.liquidityPools(daiKey));
-    wEthPool = await LiquidityPool.at(await liquidityPoolRegistry.liquidityPools(wEthKey));
-    usdtPool = await LiquidityPool.at(await liquidityPoolRegistry.liquidityPools(usdtKey));
+    nativePool = await LiquidityPool.at(await getLiquidityPoolAddr(nativeTokenKey));
+    daiPool = await LiquidityPool.at(await getLiquidityPoolAddr(daiKey));
+    wEthPool = await LiquidityPool.at(await getLiquidityPoolAddr(wEthKey));
+    usdtPool = await LiquidityPool.at(await getLiquidityPoolAddr(usdtKey));
 
     await systemParameters.setupLiquidationBoundary(liquidationBoundary);
 
-    await rewardsDistribution.setupRewardsPerBlockBatch(
-      [daiKey, wEthKey, usdtKey, governanceTokenKey],
-      [wei(2), oneToken, wei(5), oneToken]
-    );
+    await rewardsToken.mintArbitrary(defiCore.address, tokensAmount);
 
-    await governanceToken.transfer(defiCore.address, tokensAmount.times(10));
+    await nativeToken.approve(nativePool.address, tokensAmount);
+    await nativeToken.approve(nativePool.address, tokensAmount.times(1000), { from: USER1 });
 
     await reverter.snapshot();
   });
@@ -283,7 +294,7 @@ describe("DefiCore", async () => {
         .times(price)
         .times(priceDecimals)
         .idiv(oneToken)
-        .times(getDecimal())
+        .times(getPercentage100())
         .idiv(standardColRatio);
 
       assert.equal((await defiCore.getCurrentBorrowLimitInUSD(USER1)).toString(), expectedLimit.toString());
@@ -307,13 +318,13 @@ describe("DefiCore", async () => {
         .times(price)
         .times(priceDecimals)
         .idiv(oneToken)
-        .times(getDecimal())
+        .times(getPercentage100())
         .idiv(standardColRatio);
 
       assert.equal((await defiCore.getCurrentBorrowLimitInUSD(USER1)).toString(), expectedLimit.toString());
 
-      const newDaiColRatio = getDecimal().times(1.15);
-      const newWEthColRatio = getDecimal().times(1.3);
+      const newDaiColRatio = getPercentage100().times(1.15);
+      const newWEthColRatio = getPercentage100().times(1.3);
 
       await assetParameters.setupMainParameters(daiKey, [newDaiColRatio, reserveFactor, liquidationDiscount, maxUR]);
       await assetParameters.setupMainParameters(wEthKey, [newWEthColRatio, reserveFactor, liquidationDiscount, maxUR]);
@@ -322,13 +333,13 @@ describe("DefiCore", async () => {
         .times(price)
         .times(priceDecimals)
         .idiv(oneToken)
-        .times(getDecimal())
+        .times(getPercentage100())
         .idiv(newDaiColRatio);
       const wEthPart = liquidityAmount
         .times(price)
         .times(priceDecimals)
         .idiv(oneToken)
-        .times(getDecimal())
+        .times(getPercentage100())
         .idiv(newWEthColRatio);
 
       expectedLimit = daiPart.plus(wEthPart);
@@ -350,7 +361,7 @@ describe("DefiCore", async () => {
         .times(price)
         .times(priceDecimals)
         .idiv(oneToken)
-        .times(getDecimal())
+        .times(getPercentage100())
         .idiv(standardColRatio);
 
       assert.equal((await defiCore.getCurrentBorrowLimitInUSD(USER1)).toString(), expectedLimit.toString());
@@ -362,7 +373,7 @@ describe("DefiCore", async () => {
         .times(price)
         .times(priceDecimals)
         .idiv(oneToken)
-        .times(getDecimal())
+        .times(getPercentage100())
         .idiv(standardColRatio);
 
       const result = await defiCore.getNewBorrowLimitInUSD(USER1, daiKey, liquidityAmount, true);
@@ -375,7 +386,7 @@ describe("DefiCore", async () => {
         .times(price)
         .times(priceDecimals)
         .idiv(oneToken)
-        .times(getDecimal())
+        .times(getPercentage100())
         .idiv(standardColRatio);
 
       const result = await defiCore.getNewBorrowLimitInUSD(USER1, daiKey, liquidityAmount.idiv(2), false);
@@ -389,7 +400,7 @@ describe("DefiCore", async () => {
         .times(price)
         .times(priceDecimals)
         .idiv(oneToken)
-        .times(getDecimal())
+        .times(getPercentage100())
         .idiv(standardColRatio);
 
       let result = await defiCore.getNewBorrowLimitInUSD(USER1, daiKey, liquidityAmount.idiv(2), false);
@@ -471,7 +482,7 @@ describe("DefiCore", async () => {
         .times(price)
         .times(priceDecimals)
         .div(oneToken)
-        .times(getDecimal())
+        .times(getPercentage100())
         .idiv(standardColRatio);
 
       assert.equal(result[0].toString(), expectedAvailableLiquidity.toString());
@@ -483,7 +494,7 @@ describe("DefiCore", async () => {
       await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER1 });
 
       const currentTotalLiquidityAmount = liquidityAmount.times(2).times(price).times(priceDecimals).idiv(oneToken);
-      const expectedLimit = currentTotalLiquidityAmount.times(getDecimal()).idiv(standardColRatio);
+      const expectedLimit = currentTotalLiquidityAmount.times(getPercentage100()).idiv(standardColRatio);
 
       let result = await defiCore.getAvailableLiquidity(USER1);
       assert.equal(result[0].toString(), expectedLimit.toString());
@@ -502,7 +513,7 @@ describe("DefiCore", async () => {
       await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER1 });
 
       let currentTotalLiquidityAmount = liquidityAmount.times(2).times(price).times(priceDecimals).idiv(oneToken);
-      let expectedLimit = currentTotalLiquidityAmount.times(getDecimal()).idiv(standardColRatio);
+      let expectedLimit = currentTotalLiquidityAmount.times(getPercentage100()).idiv(standardColRatio);
 
       let result = await defiCore.getAvailableLiquidity(USER1);
       assert.equal(result[0].toString(), expectedLimit.toString());
@@ -512,7 +523,7 @@ describe("DefiCore", async () => {
       await defiCore.withdrawLiquidity(daiKey, liquidityAmount, false, { from: USER1 });
 
       currentTotalLiquidityAmount = liquidityAmount.times(price).times(priceDecimals).idiv(oneToken);
-      expectedLimit = currentTotalLiquidityAmount.times(getDecimal()).idiv(standardColRatio);
+      expectedLimit = currentTotalLiquidityAmount.times(getPercentage100()).idiv(standardColRatio);
 
       result = await defiCore.getAvailableLiquidity(USER1);
       assert.equal(result[0].toString(), expectedLimit.toString());
@@ -552,6 +563,7 @@ describe("DefiCore", async () => {
 
   describe("updateCollateral", () => {
     const liquidityAmount = wei(100);
+    const borrowAmount = wei(50);
     const price = toBN(100);
 
     it("should correctly enable collateral", async () => {
@@ -560,7 +572,7 @@ describe("DefiCore", async () => {
 
       assert.equal((await defiCore.getCurrentBorrowLimitInUSD(USER1)).toString(), 0);
 
-      await defiCore.updateCollateral(daiKey, false, { from: USER1 });
+      const txReceipt = await defiCore.updateCollateral(daiKey, false, { from: USER1 });
 
       assert.equal(
         (await defiCore.getCurrentBorrowLimitInUSD(USER1)).toString(),
@@ -568,12 +580,17 @@ describe("DefiCore", async () => {
           .times(price)
           .times(priceDecimals)
           .idiv(oneToken)
-          .times(getDecimal())
+          .times(getPercentage100())
           .idiv(standardColRatio)
           .toString()
       );
 
       assert.equal(await defiCore.disabledCollateralAssets(USER1, daiKey), false);
+
+      assert.equal(txReceipt.receipt.logs[0].event, "CollateralUpdated");
+      assert.equal(txReceipt.receipt.logs[0].args._userAddr, USER1);
+      assert.isTrue(compareKeys(txReceipt.receipt.logs[0].args._assetKey, daiKey));
+      assert.equal(txReceipt.receipt.logs[0].args._newValue, false);
     });
 
     it("should correctly disable collateral", async () => {
@@ -583,7 +600,7 @@ describe("DefiCore", async () => {
         .times(price)
         .times(priceDecimals)
         .div(oneToken)
-        .times(getDecimal())
+        .times(getPercentage100())
         .div(standardColRatio);
       assert.equal((await defiCore.getCurrentBorrowLimitInUSD(USER1)).toString(), expectedBorrowLimit.toString());
 
@@ -592,6 +609,14 @@ describe("DefiCore", async () => {
       assert.equal((await defiCore.getCurrentBorrowLimitInUSD(USER1)).toString(), 0);
 
       assert.equal(await defiCore.disabledCollateralAssets(USER1, daiKey), true);
+    });
+
+    it("should get exception if borrow limit after disable will be higher than borrow balance", async () => {
+      await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
+      await defiCore.borrowFor(daiKey, borrowAmount, USER1, { from: USER1 });
+
+      const reason = "DefiCore: It is impossible to disable the asset as a collateral.";
+      await truffleAssert.reverts(defiCore.updateCollateral(daiKey, true, { from: USER1 }), reason);
     });
 
     it("should get exception if asset already enabled", async () => {
@@ -625,7 +650,7 @@ describe("DefiCore", async () => {
       assert.isTrue(deepCompareKeys(await userInfoRegistry.getUserSupplyAssets(USER1), [daiKey]));
     });
 
-    it("should correctly mint LPTokens for token with 6 getDecimal() places", async () => {
+    it("should correctly mint LPTokens for token with 6 getPercentage100() places", async () => {
       const USER3 = await accounts(5);
 
       await tokens[1].setDecimals(6);
@@ -650,7 +675,7 @@ describe("DefiCore", async () => {
 
       let liquidityAmount = toBN(10).pow(6).times(100);
 
-      const reason = "LiquidityPool: Incorrect asset amount after conversion.";
+      const reason = "AbstractPool: Incorrect asset amount after conversion.";
 
       await truffleAssert.reverts(defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 }), reason);
 
@@ -658,7 +683,7 @@ describe("DefiCore", async () => {
 
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
 
-      assert.equal((await daiPool.exchangeRate()).toString(), getDecimal().toString());
+      assert.equal((await daiPool.exchangeRate()).toString(), getPercentage100().toString());
       assert.equal((await daiPool.balanceOf(USER1)).toString(), liquidityAmount.toString());
     });
 
@@ -722,7 +747,7 @@ describe("DefiCore", async () => {
       await defiCore.updateCollateral(wEthKey, true, { from: USER1 });
 
       const currentTotalLiquidityAmount = liquidityAmount.times(price).times(priceDecimals).idiv(oneToken);
-      const expectedLimit = currentTotalLiquidityAmount.times(getDecimal()).idiv(standardColRatio);
+      const expectedLimit = currentTotalLiquidityAmount.times(getPercentage100()).idiv(standardColRatio);
 
       let result = await defiCore.getAvailableLiquidity(USER1);
       assert.equal(result[0].toString(), expectedLimit.toString());
@@ -777,7 +802,7 @@ describe("DefiCore", async () => {
       await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER1 });
 
       let expectedTotalSupply = toBN(13000).times(priceDecimals);
-      let expectedAvailableLiquidity = expectedTotalSupply.times(getDecimal()).idiv(standardColRatio);
+      let expectedAvailableLiquidity = expectedTotalSupply.times(getPercentage100()).idiv(standardColRatio);
 
       assert.equal((await defiCore.getTotalSupplyBalanceInUSD(USER1)).toString(), expectedTotalSupply.toString());
       assert.equal((await defiCore.getAvailableLiquidity(USER1))[0].toString(), expectedAvailableLiquidity.toString());
@@ -803,7 +828,7 @@ describe("DefiCore", async () => {
 
       expectedTotalSupply = toBN(1000).times(priceDecimals);
       expectedAvailableLiquidity = expectedTotalSupply
-        .times(getDecimal())
+        .times(getPercentage100())
         .idiv(standardColRatio)
         .minus(expectedTotalBorrow);
 
@@ -831,7 +856,7 @@ describe("DefiCore", async () => {
 
       await defiCore.updateCompoundRate(daiKey, false);
 
-      assert.isTrue((await daiPool.getCurrentRate()).gt(getDecimal()));
+      assert.isTrue((await daiPool.getCurrentRate()).gt(getPercentage100()));
 
       await defiCore.withdrawLiquidity(daiKey, 0, true, { from: USER1 });
 
@@ -873,7 +898,7 @@ describe("DefiCore", async () => {
         .times(price)
         .times(priceDecimals)
         .idiv(oneToken)
-        .times(getDecimal())
+        .times(getPercentage100())
         .idiv(standardColRatio);
       assert.equal((await defiCore.getCurrentBorrowLimitInUSD(USER1)).toString(), expectedLimit.toString());
 
@@ -900,9 +925,19 @@ describe("DefiCore", async () => {
 
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
 
-      const reason = "LiquidityPool: Incorrect asset amount after conversion.";
+      const reason = "AbstractPool: Incorrect asset amount after conversion.";
 
       await truffleAssert.reverts(defiCore.withdrawLiquidity(daiKey, amountToWithdraw, false, { from: USER1 }), reason);
+    });
+
+    it("should not fail getDetailedLiquidityPoolInfo request", async () => {
+      await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
+      await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER2 });
+
+      await defiCore.borrowFor(daiKey, amountToBorrow, USER2, { from: USER2 });
+      await defiCore.withdrawLiquidity(daiKey, 0, true, { from: USER1 });
+
+      await systemPoolsRegistry.getDetailedLiquidityPoolInfo(daiKey);
     });
   });
 
@@ -1134,6 +1169,10 @@ describe("DefiCore", async () => {
     const liquidateAmount = wei(20);
 
     beforeEach("setup", async () => {
+      await systemParameters.setRewardsTokenAddress(rewardsToken.address);
+      await systemPoolsRegistry.updateRewardsAssetKey(rewardsTokenKey);
+      await rewardsDistribution.setupRewardsPerBlockBatch([daiKey, wEthKey], [wei(2), oneToken]);
+
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER2 });
       await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER2 });
@@ -1253,6 +1292,31 @@ describe("DefiCore", async () => {
       );
     });
 
+    it("should get exception if user try to liquidate his position", async () => {
+      await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
+      await defiCore.borrowFor(daiKey, borrowAmount, USER1, { from: USER1 });
+
+      const price = toBN(82).times(priceDecimals);
+      await daiChainlinkOracle.setPrice(price);
+
+      const reason = "DefiCore: User cannot liquidate his position.";
+      await truffleAssert.reverts(
+        defiCore.liquidation(USER1, daiKey, daiKey, liquidateAmount, { from: USER1 }),
+        reason
+      );
+    });
+
+    it("should get exception if try to liquidate zero amount", async () => {
+      await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
+      await defiCore.borrowFor(daiKey, borrowAmount, USER1, { from: USER1 });
+
+      const price = toBN(82).times(priceDecimals);
+      await daiChainlinkOracle.setPrice(price);
+
+      const reason = "DefiCore: Liquidation amount should be more than zero.";
+      await truffleAssert.reverts(defiCore.liquidation(USER1, daiKey, daiKey, 0, { from: USER2 }), reason);
+    });
+
     it("should get exception if try to liquidate disabled as collateral asset", async () => {
       const reason = "DefiCore: Supply asset key must be enabled as collateral.";
 
@@ -1270,7 +1334,7 @@ describe("DefiCore", async () => {
     it("should get exception if try to liquidate more then posible", async () => {
       await daiChainlinkOracle.setPrice(toBN(92).times(priceDecimals));
 
-      const reason = "DefiCore: Liquidation amount should be less then max quantity.";
+      const reason = "DefiCore: Liquidation amount should be less than max quantity.";
       await truffleAssert.reverts(
         defiCore.liquidation(USER1, daiKey, wEthKey, liquidateAmount.times(4), { from: USER2 }),
         reason
@@ -1294,13 +1358,21 @@ describe("DefiCore", async () => {
     const keys = [daiKey, wEthKey, usdtKey];
 
     it("should claim correct rewards", async () => {
+      await systemParameters.setRewardsTokenAddress(rewardsToken.address);
+      await systemPoolsRegistry.updateRewardsAssetKey(rewardsTokenKey);
+      await rewardsDistribution.setupRewardsPerBlockBatch([daiKey, wEthKey, usdtKey], [wei(2), oneToken, wei(5)]);
+
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
 
       await mine(499);
 
       const expectedRewards = wei(100);
 
+      const userBalanceBefore = toBN(await rewardsToken.balanceOf(USER1));
+
       await defiCore.claimDistributionRewards([], true, { from: USER1 });
+
+      const userBalanceAfter = toBN(await rewardsToken.balanceOf(USER1));
 
       const userInfo = await rewardsDistribution.usersDistributionInfo(daiKey, USER1);
 
@@ -1311,10 +1383,18 @@ describe("DefiCore", async () => {
       );
       assert.equal(toBN(userInfo.lastBorrowCumulativeSum).toString(), 0);
 
-      assert.equal(toBN(await governanceToken.balanceOf(USER1)).toString(), expectedRewards.toString());
+      assert.closeTo(
+        userBalanceAfter.minus(userBalanceBefore).toNumber(),
+        expectedRewards.toNumber(),
+        wei(0.01).toNumber()
+      );
     });
 
     it("should claim correct rewards from several pools", async () => {
+      await systemParameters.setRewardsTokenAddress(rewardsToken.address);
+      await systemPoolsRegistry.updateRewardsAssetKey(rewardsTokenKey);
+      await rewardsDistribution.setupRewardsPerBlockBatch([daiKey, wEthKey, usdtKey], [wei(2), oneToken, wei(5)]);
+
       for (let i = 0; i < keys.length; i++) {
         await defiCore.addLiquidity(keys[i], liquidityAmount, { from: USER1 });
       }
@@ -1323,12 +1403,24 @@ describe("DefiCore", async () => {
 
       const expectedRewards = wei(398.9);
 
+      const userBalanceBefore = toBN(await rewardsToken.balanceOf(USER1));
+
       await defiCore.claimDistributionRewards(keys, false, { from: USER1 });
 
-      assert.equal(toBN(await governanceToken.balanceOf(USER1)).toString(), expectedRewards.toString());
+      const userBalanceAfter = toBN(await rewardsToken.balanceOf(USER1));
+
+      assert.closeTo(
+        userBalanceAfter.minus(userBalanceBefore).toNumber(),
+        expectedRewards.toNumber(),
+        wei(0.01).toNumber()
+      );
     });
 
     it("should claim correct rewards after deposit and borrow", async () => {
+      await systemParameters.setRewardsTokenAddress(rewardsToken.address);
+      await systemPoolsRegistry.updateRewardsAssetKey(rewardsTokenKey);
+      await rewardsDistribution.setupRewardsPerBlockBatch([daiKey, wEthKey, usdtKey], [wei(2), oneToken, wei(5)]);
+
       await defiCore.addLiquidity(daiKey, liquidityAmount.times(2), { from: USER1 });
       await defiCore.borrowFor(daiKey, borrowAmount, USER1, { from: USER1 });
 
@@ -1337,7 +1429,11 @@ describe("DefiCore", async () => {
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
       await defiCore.borrowFor(daiKey, borrowAmount.idiv(2), USER1, { from: USER1 });
 
+      const userBalanceBefore = toBN(await rewardsToken.balanceOf(USER1));
+
       await defiCore.claimDistributionRewards([], true, { from: USER1 });
+
+      const userBalanceAfter = toBN(await rewardsToken.balanceOf(USER1));
 
       const userInfo = await rewardsDistribution.usersDistributionInfo(daiKey, USER1);
       const poolInfo = await rewardsDistribution.liquidityPoolsInfo(daiKey);
@@ -1347,14 +1443,19 @@ describe("DefiCore", async () => {
       assert.equal(toBN(userInfo.lastBorrowCumulativeSum).toString(), toBN(poolInfo.borrowCumulativeSum));
 
       const expectedRewards = wei(1002.2);
+
       assert.closeTo(
-        toBN(await governanceToken.balanceOf(USER1)).toNumber(),
+        userBalanceAfter.minus(userBalanceBefore).toNumber(),
         expectedRewards.toNumber(),
-        oneToken.idiv(100).toNumber()
+        wei(0.01).toNumber()
       );
     });
 
     it("should claim correct rewards from several pools with deposits and borrows", async () => {
+      await systemParameters.setRewardsTokenAddress(rewardsToken.address);
+      await systemPoolsRegistry.updateRewardsAssetKey(rewardsTokenKey);
+      await rewardsDistribution.setupRewardsPerBlockBatch([daiKey, wEthKey, usdtKey], [wei(2), oneToken, wei(5)]);
+
       for (let i = 0; i < keys.length; i++) {
         await defiCore.addLiquidity(keys[i], liquidityAmount, { from: USER1 });
         await defiCore.borrowFor(keys[i], borrowAmount, USER1, { from: USER1 });
@@ -1367,17 +1468,46 @@ describe("DefiCore", async () => {
         await defiCore.borrowFor(keys[i], borrowAmount, USER1, { from: USER1 });
       }
 
+      const userBalanceBefore = toBN(await rewardsToken.balanceOf(USER1));
+
       await defiCore.claimDistributionRewards(keys, false, { from: USER1 });
 
+      const userBalanceAfter = toBN(await rewardsToken.balanceOf(USER1));
+
       const expectedRewards = wei(4066.8);
+
       assert.closeTo(
-        toBN(await governanceToken.balanceOf(USER1)).toNumber(),
+        userBalanceAfter.minus(userBalanceBefore).toNumber(),
         expectedRewards.toNumber(),
-        oneToken.idiv(100).toNumber()
+        wei(0.01).toNumber()
       );
     });
 
+    it("should get exception if rewards token doesn't set", async () => {
+      const reason = "DefiCore: Unable to claim distribution rewards.";
+
+      await truffleAssert.reverts(defiCore.claimDistributionRewards([], true, { from: USER1 }), reason);
+    });
+
+    it("should get exception if contract balance less than claim amount", async () => {
+      await systemParameters.setRewardsTokenAddress(rewardsToken.address);
+      await systemPoolsRegistry.updateRewardsAssetKey(rewardsTokenKey);
+
+      await rewardsDistribution.setupRewardsPerBlockBatch([daiKey], [wei(200)]);
+
+      await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
+      await defiCore.borrowFor(daiKey, borrowAmount, USER1, { from: USER1 });
+
+      await mine(50);
+
+      const reason = "DefiCore: Not enough rewards tokens on the contract.";
+      await truffleAssert.reverts(defiCore.claimDistributionRewards([], true, { from: USER1 }), reason);
+    });
+
     it("should get exception if nothing to claim", async () => {
+      await systemParameters.setRewardsTokenAddress(rewardsToken.address);
+      await systemPoolsRegistry.updateRewardsAssetKey(rewardsTokenKey);
+
       const reason = "DefiCore: Nothing to claim.";
 
       await truffleAssert.reverts(defiCore.claimDistributionRewards([], true, { from: USER1 }), reason);
@@ -1391,11 +1521,17 @@ describe("DefiCore", async () => {
     it("should add approve borrow delegatee to the system", async () => {
       amountToBorrow = wei(100);
 
-      await defiCore.approveToDelegateBorrow(wEthKey, amountToBorrow, USER2, 0, { from: USER1 });
+      const txReceipt = await defiCore.approveToDelegateBorrow(wEthKey, amountToBorrow, USER2, 0, { from: USER1 });
 
       const result = await wEthPool.borrowAllowances(USER1, USER2);
 
       assert.equal(amountToBorrow.toString(), toBN(result).toString());
+
+      assert.equal(txReceipt.receipt.logs[0].event, "DelegateBorrowApproved");
+      assert.equal(txReceipt.receipt.logs[0].args._userAddr, USER1);
+      assert.equal(txReceipt.receipt.logs[0].args._delegateeAddr, USER2);
+      assert.isTrue(compareKeys(txReceipt.receipt.logs[0].args._assetKey, wEthKey));
+      assert.equal(toBN(txReceipt.receipt.logs[0].args._newAmount).toString(), amountToBorrow.toString());
     });
 
     it("should get exception if expected allowance is not the same as current", async () => {
@@ -1408,7 +1544,7 @@ describe("DefiCore", async () => {
 
       assert.equal(toBN(await daiPool.borrowAllowances(USER1, USER2)).toString(), 0);
 
-      const reason = "LiquidityPool: The current allowance is not the same as expected.";
+      const reason = "AbstractPool: The current allowance is not the same as expected.";
 
       await truffleAssert.reverts(
         defiCore.approveToDelegateBorrow(daiKey, borrowAmount, USER2, borrowAmount, { from: USER1 }),
@@ -1464,7 +1600,7 @@ describe("DefiCore", async () => {
 
       await wEthPool.updateCompoundRate(false);
 
-      const reason = "LiquidityPool: Not enough allowed to borrow amount.";
+      const reason = "AbstractPool: Not enough allowed to borrow amount.";
       await truffleAssert.reverts(defiCore.delegateBorrow(wEthKey, borrowAmount, USER1, { from: OWNER }), reason);
     });
 
@@ -1609,6 +1745,19 @@ describe("DefiCore", async () => {
       assert.isTrue(deepCompareKeys(await userInfoRegistry.getUserBorrowAssets(USER1), [wEthKey]));
     });
 
+    it("should get exception if debt higher than zero", async () => {
+      await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER1 });
+
+      await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER2 });
+      await defiCore.borrowFor(wEthKey, borrowAmount.times(1.5), USER2, { from: USER2 });
+
+      const price = toBN(82).times(priceDecimals);
+      await daiChainlinkOracle.setPrice(price);
+
+      const reason = "DefiCore: Unable to borrow because the account is in arrears.";
+      await truffleAssert.reverts(defiCore.borrowFor(daiKey, borrowAmount.idiv(5), USER2, { from: USER2 }), reason);
+    });
+
     it("should get exception if borrow amount is zero", async () => {
       const reason = "DefiCore: Borrow amount must be greater than zero.";
       await truffleAssert.reverts(defiCore.borrowFor(wEthKey, 0, USER2, { from: USER1 }), reason);
@@ -1695,9 +1844,67 @@ describe("DefiCore", async () => {
       assert.equal((await defiCore.getMaxToWithdraw(USER2, daiKey)).toString(), 0);
       assert.closeTo(
         (await daiPool.getBorrowPercentage()).toNumber(),
-        maxWithdrawUR.toNumber(),
-        getOnePercent().idiv(100).toNumber()
+        maxUR.toNumber(),
+        getPrecision().idiv(100).toNumber()
       );
+    });
+
+    it("should correctly borrow max possible liquidity and return user info", async () => {
+      await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
+
+      await defiCore.addLiquidity(wEthKey, liquidityAmount.times(2), { from: USER1 });
+
+      let borrowAmount = await defiCore.getMaxToBorrow(USER1, daiKey);
+
+      await defiCore.borrowFor(daiKey, borrowAmount, USER1, { from: USER1 });
+
+      assert.closeTo(
+        (await daiPool.getBorrowPercentage()).toNumber(),
+        getPrecision().times(95).toNumber(),
+        getPrecision().idiv(100).toNumber()
+      );
+
+      const currentTime = toBN(await getCurrentBlockTime());
+
+      await setNextBlockTime(currentTime.plus(1000000).toNumber());
+
+      await defiCore.repayBorrow(daiKey, 0, true, { from: USER1 });
+
+      await defiCore.withdrawLiquidity(daiKey, liquidityAmount.idiv(2), false, { from: USER1 });
+
+      await defiCore.addLiquidity(daiKey, liquidityAmount.idiv(2), { from: USER2 });
+
+      borrowAmount = await defiCore.getMaxToBorrow(USER1, daiKey);
+
+      await defiCore.borrowFor(daiKey, borrowAmount, USER1, { from: USER1 });
+
+      assert.closeTo(
+        (await daiPool.getBorrowPercentage()).toNumber(),
+        getPrecision().times(95).toNumber(),
+        getPrecision().idiv(100).toNumber()
+      );
+
+      await systemPoolsRegistry.getLiquidityPoolsInfo([daiKey]);
+      await userInfoRegistry.getUserMainInfo(USER1);
+    });
+  });
+
+  describe("getMaxToSupply", () => {
+    it("should return correct amount", async () => {
+      assert.equal(
+        (await defiCore.getMaxToSupply(USER1, daiKey)).toString(),
+        (await tokens[1].balanceOf(USER1)).toString()
+      );
+    });
+
+    it("should return correct amount to native pool", async () => {
+      const depositAmount = wei(100);
+
+      await nativeToken.deposit({ from: USER1, value: depositAmount });
+
+      const expectedMaxToSupply = toBN(await web3.eth.getBalance(USER1)).plus(depositAmount);
+
+      assert.equal((await defiCore.getMaxToSupply(USER1, nativeTokenKey)).toString(), expectedMaxToSupply.toString());
     });
   });
 
@@ -1763,10 +1970,41 @@ describe("DefiCore", async () => {
 
       assert.equal((await defiCore.getUserLiquidityAmount(USER1, daiKey)).toString(), 0);
     });
+
+    it("should return correct value if UR = maxUR", async () => {
+      await defiCore.addLiquidity(daiKey, liquidityAmount.times(2), { from: USER1 });
+      await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER2 });
+
+      const maxBorrowAmount = await defiCore.getMaxToBorrow(USER1, wEthKey);
+
+      await defiCore.borrowFor(wEthKey, maxBorrowAmount, USER1, { from: USER1 });
+
+      assert.equal((await wEthPool.getBorrowPercentage()).toString(), maxUR.toString());
+      assert.equal((await defiCore.getMaxToWithdraw(USER2, wEthKey)).toString(), 0);
+    });
+
+    it("should return correct values if users debt > 0", async () => {
+      await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER1 });
+      await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER2 });
+
+      await defiCore.borrowFor(daiKey, borrowAmount.times(1.5), USER1, { from: USER1 });
+
+      const price = toBN(90);
+
+      await wEthChainlinkOracle.setPrice(wei(price, chainlinkPriceDecimals));
+
+      const res = await defiCore.getAvailableLiquidity(USER1);
+
+      assert.equal(res[0].toString(), 0);
+      assert.isTrue(res[1].gt(0));
+
+      assert.equal((await defiCore.getMaxToWithdraw(USER1, wEthKey)).toString(), 0);
+    });
   });
 
   describe("getMaxToBorrow", () => {
     const liquidityAmount = wei(100);
+    const borrowAmount = wei(75);
 
     it("should return correct value if available liquidity less than pool capacity", async () => {
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
@@ -1789,12 +2027,37 @@ describe("DefiCore", async () => {
       assert.equal((await defiCore.getMaxToBorrow(USER1, daiKey)).toString(), 0);
     });
 
+    it("should return correct value if users debt > 0", async () => {
+      await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER1 });
+      await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER2 });
+
+      await defiCore.borrowFor(daiKey, borrowAmount, USER1, { from: USER1 });
+
+      const price = toBN(90);
+
+      await wEthChainlinkOracle.setPrice(wei(price, chainlinkPriceDecimals));
+
+      const res = await defiCore.getAvailableLiquidity(USER1);
+
+      assert.equal(res[0].toString(), 0);
+      assert.isTrue(res[1].gt(0));
+
+      assert.equal((await defiCore.getMaxToBorrow(USER1, daiKey)).toString(), 0);
+    });
+
     it("should correct borrow maximum", async () => {
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
 
       await defiCore.borrowFor(daiKey, await defiCore.getMaxToBorrow(USER1, daiKey), USER1, { from: USER1 });
 
       assert.equal((await defiCore.getAvailableLiquidity(USER1))[0].toString(), 0);
+    });
+
+    it("should return correct max borrow amount for stable pool", async () => {
+      await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
+      await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER1 });
+
+      assert.equal((await defiCore.getMaxToBorrow(USER1, stableKey)).toFixed(), wei(16000).toFixed());
     });
   });
 
@@ -1848,6 +2111,57 @@ describe("DefiCore", async () => {
       await defiCore.repayBorrow(daiKey, 0, true, { from: USER1 });
 
       assert.equal((await defiCore.getUserBorrowedAmount(USER1, daiKey)).toString(), 0);
+    });
+
+    it("should get correct amount for native pool", async () => {
+      let currentBalance = toBN(await web3.eth.getBalance(USER1)).minus(wei(40));
+
+      await defiCore.addLiquidity(nativeTokenKey, currentBalance, { from: USER1, value: currentBalance });
+      await defiCore.borrowFor(nativeTokenKey, borrowAmount, USER1, { from: USER1 });
+
+      await web3.eth.sendTransaction({ to: USER2, from: USER1, gas: wei(1, 7), value: borrowAmount });
+
+      currentBalance = toBN(await web3.eth.getBalance(USER1));
+      assert.equal(
+        (await defiCore.getMaxToRepay(USER1, nativeTokenKey)).toString(),
+        currentBalance.minus(minCurrencyAmount).toString()
+      );
+
+      const depositAmount = currentBalance.idiv(2);
+      await nativeToken.deposit({ from: USER1, value: depositAmount });
+
+      currentBalance = toBN(await web3.eth.getBalance(USER1));
+      assert.equal(
+        (await defiCore.getMaxToRepay(USER1, nativeTokenKey)).toString(),
+        depositAmount.plus(currentBalance).minus(minCurrencyAmount).toString()
+      );
+    });
+  });
+
+  describe("pause/unpause", () => {
+    const liquidityAmount = wei(100);
+    const borrowAmount = wei(50);
+
+    it("should correctly pause and unpause system", async () => {
+      await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
+
+      await defiCore.pause();
+
+      const reason = "Pausable: paused";
+
+      await truffleAssert.reverts(defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 }), reason);
+      await truffleAssert.reverts(defiCore.borrowFor(daiKey, borrowAmount, USER1, { from: USER1 }), reason);
+
+      await defiCore.unpause();
+
+      await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
+      await defiCore.borrowFor(daiKey, borrowAmount, USER1, { from: USER1 });
+    });
+
+    it("should get exception if call by non system owner", async () => {
+      const reason = "DefiCore: Only system owner can call this function.";
+
+      await truffleAssert.reverts(defiCore.pause({ from: USER1 }), reason);
     });
   });
 });

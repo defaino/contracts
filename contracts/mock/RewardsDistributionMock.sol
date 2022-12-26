@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity 0.8.3;
+pragma solidity 0.8.17;
 
 import "../RewardsDistribution.sol";
 
 contract RewardsDistributionMock is RewardsDistribution {
-    function getRewardsPerBlock(bytes32 _assetKey, uint256 _currentUR)
-        external
-        view
-        returns (uint256, uint256)
-    {
+    function getRewardsPerBlock(
+        bytes32 _assetKey,
+        uint256 _currentUR
+    ) external view returns (uint256, uint256) {
         return _getRewardsPerBlock(_assetKey, _currentUR);
     }
 

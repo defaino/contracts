@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity 0.8.3;
+pragma solidity 0.8.17;
 
-import "./ILiquidityPool.sol";
+import "./IBasicPool.sol";
 
 /**
  * This contract calculates and stores information about the distribution of rewards to users for deposits and credits
@@ -45,7 +45,7 @@ interface IRewardsDistribution {
     /// @dev Can call only by eligible contracts (DefiCore and LiquidityPools)
     /// @param _userAddr address of the user to whom the cumulative sums will be updated
     /// @param _liquidityPool required liquidity pool
-    function updateCumulativeSums(address _userAddr, ILiquidityPool _liquidityPool) external;
+    function updateCumulativeSums(address _userAddr, address _liquidityPool) external;
 
     /// @notice Function for withdraw accumulated user rewards. Rewards are updated before withdrawal
     /// @dev Can call only by eligible contracts (DefiCore and LiquidityPools)
@@ -56,7 +56,7 @@ interface IRewardsDistribution {
     function withdrawUserReward(
         bytes32 _assetKey,
         address _userAddr,
-        ILiquidityPool _liquidityPool
+        address _liquidityPool
     ) external returns (uint256 _userReward);
 
     /// @notice Function to update block rewards for desired pools
@@ -69,13 +69,12 @@ interface IRewardsDistribution {
     ) external;
 
     /// @notice Returns the annual distribution rates for the desired pool
-    /// @param _liquidityPool Required liquidity pool
+    /// @param _assetKey required liquidity pool identifier
     /// @return _supplyAPY annual distribution rate for users who deposited in the passed pool
     /// @return _borrowAPY annual distribution rate for users who took credit in the passed pool
-    function getAPY(ILiquidityPool _liquidityPool)
-        external
-        view
-        returns (uint256 _supplyAPY, uint256 _borrowAPY);
+    function getAPY(
+        bytes32 _assetKey
+    ) external view returns (uint256 _supplyAPY, uint256 _borrowAPY);
 
     /// @notice Returns current total user reward from the passed pool
     /// @param _assetKey the key of the desired pool, which will be used to calculate the reward
@@ -85,6 +84,6 @@ interface IRewardsDistribution {
     function getUserReward(
         bytes32 _assetKey,
         address _userAddr,
-        ILiquidityPool _liquidityPool
+        address _liquidityPool
     ) external view returns (uint256 _userReward);
 }

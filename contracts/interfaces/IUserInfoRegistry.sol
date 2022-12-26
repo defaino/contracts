@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity 0.8.3;
+pragma solidity 0.8.17;
 
 /**
  * This is a contract that can be used to obtain information for a specific user.
@@ -7,24 +7,32 @@ pragma solidity 0.8.3;
  * information about the user's rewards, the user's basic information, detailed information about deposits and credits
  */
 interface IUserInfoRegistry {
-    /// @notice The base pool parameters
+    /// @notice The main pool parameters
     /// @param assetKey the key of the current pool. Can be thought of as a pool identifier
     /// @param assetAddr the address of the pool underlying asset
+    struct MainPoolInfo {
+        bytes32 assetKey;
+        address assetAddr;
+    }
+
+    /// @notice The base pool parameters
+    /// @param mainInfo element type MainPoolInfo structure
     /// @param utilizationRatio the current percentage of how much of the pool was borrowed for liquidity
     /// @param isCollateralEnabled shows whether the current asset is enabled as a collateral for a particular user
     struct BasePoolInfo {
-        bytes32 assetKey;
-        address assetAddr;
+        MainPoolInfo mainInfo;
         uint256 utilizationRatio;
         bool isCollateralEnabled;
     }
 
     /// @notice Main user information
+    /// @param userCurrencyBalance total amount of the user's native currency balance
     /// @param totalSupplyBalanceInUSD total amount of the user's deposit for all assets in dollars
     /// @param totalBorrowBalanceInUSD total amount of user credits for all assets in dollars
     /// @param borrowLimitInUSD the total amount in dollars for which the user can take credit
     /// @param borrowLimitUsed current percentage of available collateral use
     struct UserMainInfo {
+        uint256 userCurrencyBalance;
         uint256 totalSupplyBalanceInUSD;
         uint256 totalBorrowBalanceInUSD;
         uint256 borrowLimitInUSD;
@@ -52,6 +60,7 @@ interface IUserInfoRegistry {
     /// @param userDeposit the number of tokens that the user has deposited
     /// @param userDepositInUSD the equivalent of userDeposit param in dollars
     /// @param supplyAPY annual interest rate on the deposit in the current pool
+    /// @param distrSupplyAPY annual distribution rate for users who deposited in the current pool
     struct UserSupplyPoolInfo {
         BasePoolInfo basePoolInfo;
         uint256 marketSize;
@@ -59,6 +68,7 @@ interface IUserInfoRegistry {
         uint256 userDeposit;
         uint256 userDepositInUSD;
         uint256 supplyAPY;
+        uint256 distrSupplyAPY;
     }
 
     /// @notice Structure, which contains information about the pool, in which the user has made a borrow
@@ -68,6 +78,7 @@ interface IUserInfoRegistry {
     /// @param userBorrowAmount the number of tokens that the user has borrowed in this pool
     /// @param userBorrowAmountInUSD the equivalent of userBorrowAmount param in dollars
     /// @param borrowAPY the annual interest rate on the loan, which is received by users who have taken a loan in the current pool
+    /// @param distrBorrowAPY annual distribution rate for users who took credit in the current pool
     struct UserBorrowPoolInfo {
         BasePoolInfo basePoolInfo;
         uint256 availableToBorrow;
@@ -75,10 +86,11 @@ interface IUserInfoRegistry {
         uint256 userBorrowAmount;
         uint256 userBorrowAmountInUSD;
         uint256 borrowAPY;
+        uint256 distrBorrowAPY;
     }
 
     /// @notice A structure that contains information about the user's credit and deposit in the current pool
-    /// @param userWalletBalance current user balance in pool underlying tokens
+    /// @param userWalletBalance current user balance in pool underlying tokens (token balance + currency balance, if native pool)
     /// @param userWalletBalanceInUSD the equivalent of userWalletBalance param in dollars
     /// @param userSupplyBalance the number of tokens that the user has deposited
     /// @param userSupplyBalanceInUSD the equivalent of userSupplyBalance param in dollars
@@ -112,8 +124,9 @@ interface IUserInfoRegistry {
     /// @param supplyAssetKeys array of keys from pools where user deposited
     /// @param totalBorrowedAmount total amount of user credits for all assets in dollars
     struct UserLiquidationInfo {
-        bytes32[] borrowAssetKeys;
-        bytes32[] supplyAssetKeys;
+        address userAddr;
+        MainPoolInfo[] borrowPoolsInfo;
+        MainPoolInfo[] sypplyPoolsInfo;
         uint256 totalBorrowedAmount;
     }
 
@@ -176,53 +189,51 @@ interface IUserInfoRegistry {
     /// @notice A function that returns a structure with information about user awards
     /// @param _userAddr user address
     /// @return a RewardsDistributionInfo structure
-    function getUserDistributionRewards(address _userAddr)
-        external
-        view
-        returns (RewardsDistributionInfo memory);
+    function getUserDistributionRewards(
+        address _userAddr
+    ) external view returns (RewardsDistributionInfo memory);
 
     /// @notice The function that returns an array of structures with information about the pool where the user has made a deposit
     /// @param _userAddr user address
     /// @return _supplyPoolsInfo an array of UserSupplyPoolInfo structures
-    function getUserSupplyPoolsInfo(address _userAddr, bytes32[] calldata _assetKeys)
-        external
-        view
-        returns (UserSupplyPoolInfo[] memory _supplyPoolsInfo);
+    function getUserSupplyPoolsInfo(
+        address _userAddr,
+        bytes32[] calldata _assetKeys
+    ) external view returns (UserSupplyPoolInfo[] memory _supplyPoolsInfo);
 
     /// @notice A function that returns an array of structures with information about the pool where the user took credit
     /// @param _userAddr user address
     /// @param _assetKeys an array of pool keys for which you want to get information
     /// @return _borrowPoolsInfo an array of UserBorrowPoolInfo structures
-    function getUserBorrowPoolsInfo(address _userAddr, bytes32[] calldata _assetKeys)
-        external
-        view
-        returns (UserBorrowPoolInfo[] memory _borrowPoolsInfo);
+    function getUserBorrowPoolsInfo(
+        address _userAddr,
+        bytes32[] calldata _assetKeys
+    ) external view returns (UserBorrowPoolInfo[] memory _borrowPoolsInfo);
 
     /// @notice The function that returns information about the deposit and credit of the user in the pool
     /// @param _userAddr user address
     /// @param _assetKey pool key for which you want to get information
     /// @return an UserPoolInfo structure
-    function getUserPoolInfo(address _userAddr, bytes32 _assetKey)
-        external
-        view
-        returns (UserPoolInfo memory);
+    function getUserPoolInfo(
+        address _userAddr,
+        bytes32 _assetKey
+    ) external view returns (UserPoolInfo memory);
 
     /// @notice A function that returns information about the maximum values for the user
     /// @param _userAddr user address
     /// @param _assetKey pool key for which you want to get information
     /// @return an UserMaxValues structure
-    function getUserMaxValues(address _userAddr, bytes32 _assetKey)
-        external
-        view
-        returns (UserMaxValues memory);
+    function getUserMaxValues(
+        address _userAddr,
+        bytes32 _assetKey
+    ) external view returns (UserMaxValues memory);
 
     /// @notice A function that returns general information for the liquidation of a specific user
     /// @param _accounts accounts for which you need to get information
     /// @return _resultArr an array of UserLiquidationInfo structures
-    function getUsersLiquidiationInfo(address[] calldata _accounts)
-        external
-        view
-        returns (UserLiquidationInfo[] memory _resultArr);
+    function getUsersLiquidiationInfo(
+        address[] calldata _accounts
+    ) external view returns (UserLiquidationInfo[] memory _resultArr);
 
     /// @notice Function for getting detailed liquidation information for a particular user
     /// @param _userAddr user address

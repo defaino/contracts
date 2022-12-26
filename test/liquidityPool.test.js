@@ -1,10 +1,11 @@
 const { setNextBlockTime, mine, getCurrentBlockNumber } = require("./helpers/hardhatTimeTraveller");
 const { toBytes, deepCompareKeys } = require("./helpers/bytesCompareLibrary");
-const { getInterestRateLibraryData } = require("../deploy/helpers/deployHelper");
-const { toBN, accounts, getOnePercent, getDecimal, wei } = require("../scripts/utils");
+const { toBN, accounts, getPrecision, getPercentage100, wei } = require("../scripts/utils");
 
 const truffleAssert = require("truffle-assertions");
 const Reverter = require("./helpers/reverter");
+const { web3, network } = require("hardhat");
+const { assert } = require("chai");
 
 const Registry = artifacts.require("Registry");
 const DefiCore = artifacts.require("DefiCore");
@@ -12,16 +13,17 @@ const SystemParameters = artifacts.require("SystemParameters");
 const AssetParameters = artifacts.require("AssetParameters");
 const RewardsDistribution = artifacts.require("RewardsDistributionMock");
 const UserInfoRegistry = artifacts.require("UserInfoRegistry");
-const LiquidityPoolRegistry = artifacts.require("LiquidityPoolRegistry");
-const LiquidityPoolFactory = artifacts.require("LiquidityPoolFactory");
+const SystemPoolsRegistry = artifacts.require("SystemPoolsRegistry");
+const SystemPoolsFactory = artifacts.require("SystemPoolsFactory");
 const LiquidityPool = artifacts.require("LiquidityPool");
 const LiquidityPoolMock = artifacts.require("LiquidityPoolMock");
-const PriceManager = artifacts.require("PriceManagerMock");
+const PriceManager = artifacts.require("PriceManager");
 const InterestRateLibrary = artifacts.require("InterestRateLibrary");
-const GovernanceToken = artifacts.require("GovernanceToken");
+const WETH = artifacts.require("WETH");
 
 const MockERC20 = artifacts.require("MockERC20");
 const ChainlinkOracleMock = artifacts.require("ChainlinkOracleMock");
+const IntegrationMock = artifacts.require("IntegrationMock");
 
 MockERC20.numberFormat = "BigNumber";
 DefiCore.numberFormat = "BigNumber";
@@ -35,42 +37,54 @@ describe("LiquidityPool", () => {
   let OWNER;
   let USER1;
   let USER2;
-  let NOTHING;
 
   let registry;
   let assetParameters;
-  let liquidityPool;
+  let systemParameters;
   let defiCore;
   let rewardsDistribution;
   let userInfoRegistry;
-  let priceManager;
-  let liquidityPoolRegistry;
+  let systemPoolsRegistry;
+
+  let nativePool;
+  let liquidityPool;
+  let batPool;
+
+  let rewardsToken;
+  let nativeToken;
 
   let tokenChainlinkOracle;
 
-  const standardColRatio = getDecimal().times("1.25");
+  const standardColRatio = getPercentage100().times("1.25");
   const oneToken = toBN(10).pow(18);
-  const tokensAmount = wei(100000);
-  const reserveFactor = getOnePercent().times("15");
-  const liquidationDiscount = getOnePercent().times(8);
-  const liquidationBoundary = getOnePercent().times(50);
+  const tokensAmount = wei(5000);
+  const reserveFactor = getPrecision().times("15");
+  const liquidationDiscount = getPrecision().times(8);
+  const liquidationBoundary = getPrecision().times(50);
+  const minCurrencyAmount = wei(0.1);
 
-  const firstSlope = getOnePercent().times(4);
-  const secondSlope = getDecimal();
-  const utilizationBreakingPoint = getOnePercent().times(80);
-  const maxUR = getOnePercent().times(95);
+  const firstSlope = getPrecision().times(4);
+  const secondSlope = getPercentage100();
+  const utilizationBreakingPoint = getPrecision().times(80);
+  const maxUR = getPrecision().times(95);
 
   const priceDecimals = toBN(10).pow(8);
   const chainlinkPriceDecimals = toBN(8);
 
-  const minSupplyDistributionPart = getOnePercent().times(15);
-  const minBorrowDistributionPart = getOnePercent().times(10);
+  const minSupplyDistributionPart = getPrecision().times(15);
+  const minBorrowDistributionPart = getPrecision().times(10);
 
   let tokens = [];
 
+  const zeroKey = toBytes("");
   const tokenKey = toBytes("Token");
   const batKey = toBytes("BAT");
-  const governanceTokenKey = toBytes("GTK");
+  const rewardsTokenKey = toBytes("RTK");
+  const nativeTokenKey = toBytes("BNB");
+
+  async function getLiquidityPoolAddr(assetKey) {
+    return (await systemPoolsRegistry.poolsInfo(assetKey))[0];
+  }
 
   function getNormalizedAmount(
     normalizedAmount,
@@ -80,7 +94,7 @@ describe("LiquidityPool", () => {
     amountWithoutInterest = oneToken
   ) {
     if (isAdding || toBN(amountWithoutInterest).toNumber() != 0) {
-      const normalizedAdditionalAmount = additionalAmount.times(getDecimal()).idiv(currentRate);
+      const normalizedAdditionalAmount = additionalAmount.times(getPercentage100()).idiv(currentRate);
 
       return isAdding
         ? normalizedAmount.plus(normalizedAdditionalAmount)
@@ -92,16 +106,20 @@ describe("LiquidityPool", () => {
 
   function exchangeRate(liquidityAmount, totalSupply, normBorrowedAmount, aggreagatedBorrowedAmount, currentRate) {
     if (totalSupply.eq(0)) {
-      return getDecimal();
+      return getPercentage100();
     }
 
-    const absoluteBorrowAmount = normBorrowedAmount.times(currentRate).idiv(getDecimal());
+    const absoluteBorrowAmount = normBorrowedAmount.times(currentRate).idiv(getPercentage100());
     const borrowInterest = absoluteBorrowAmount
       .minus(aggreagatedBorrowedAmount)
-      .times(getDecimal().minus(reserveFactor))
-      .idiv(getDecimal());
+      .times(getPercentage100().minus(reserveFactor))
+      .idiv(getPercentage100());
 
-    return borrowInterest.plus(liquidityAmount).plus(aggreagatedBorrowedAmount).times(getDecimal()).idiv(totalSupply);
+    return borrowInterest
+      .plus(liquidityAmount)
+      .plus(aggreagatedBorrowedAmount)
+      .times(getPercentage100())
+      .idiv(totalSupply);
   }
 
   async function deployTokens(symbols) {
@@ -126,23 +144,18 @@ describe("LiquidityPool", () => {
     return neededTokens;
   }
 
-  async function createLiquidityPool(assetKey, asset, symbol, isCollateral) {
-    const chainlinkOracle = await ChainlinkOracleMock.new(wei(100, chainlinkPriceDecimals), chainlinkPriceDecimals);
+  async function createLiquidityPool(assetKey, asset, symbol, isCollateral, price = 100) {
+    const chainlinkOracle = await ChainlinkOracleMock.new(wei(price, chainlinkPriceDecimals), chainlinkPriceDecimals);
 
-    await liquidityPoolRegistry.addLiquidityPool(
-      asset.address,
-      assetKey,
-      chainlinkOracle.address,
-      NOTHING,
-      symbol,
-      isCollateral
-    );
+    await systemPoolsRegistry.addLiquidityPool(asset.address, assetKey, chainlinkOracle.address, symbol, isCollateral);
 
-    await asset.approveArbitraryBacth(
-      await liquidityPoolRegistry.liquidityPools(assetKey),
-      [OWNER, USER1, USER2],
-      [tokensAmount, tokensAmount, tokensAmount]
-    );
+    if (assetKey != nativeTokenKey) {
+      await asset.approveArbitraryBacth(
+        await getLiquidityPoolAddr(assetKey),
+        [OWNER, USER1, USER2],
+        [tokensAmount, tokensAmount, tokensAmount]
+      );
+    }
 
     await assetParameters.setupAllParameters(assetKey, [
       [standardColRatio, reserveFactor, liquidationDiscount, maxUR],
@@ -150,28 +163,25 @@ describe("LiquidityPool", () => {
       [minSupplyDistributionPart, minBorrowDistributionPart],
     ]);
 
-    await priceManager.setPrice(assetKey, 100);
-
     return chainlinkOracle;
   }
 
-  async function deployGovernancePool(governanceTokenAddr, symbol) {
-    await liquidityPoolRegistry.addLiquidityPool(
-      governanceTokenAddr,
-      governanceTokenKey,
-      ADDRESS_NULL,
-      NOTHING,
+  async function deployRewardsPool(rewardsTokenAddr, symbol) {
+    const chainlinkOracle = await ChainlinkOracleMock.new(wei(10, chainlinkPriceDecimals), chainlinkPriceDecimals);
+
+    await systemPoolsRegistry.addLiquidityPool(
+      rewardsTokenAddr,
+      rewardsTokenKey,
+      chainlinkOracle.address,
       symbol,
       true
     );
 
-    await assetParameters.setupAllParameters(governanceTokenKey, [
+    await assetParameters.setupAllParameters(rewardsTokenKey, [
       [standardColRatio, reserveFactor, liquidationDiscount, maxUR],
       [0, firstSlope, secondSlope, utilizationBreakingPoint],
       [minSupplyDistributionPart, minBorrowDistributionPart],
     ]);
-
-    await priceManager.setPrice(governanceTokenKey, 10);
   }
 
   before("setup", async () => {
@@ -180,10 +190,10 @@ describe("LiquidityPool", () => {
     USER2 = await accounts(2);
     NOTHING = await accounts(9);
 
-    const governanceToken = await GovernanceToken.new(OWNER);
-    const interestRateLibrary = await InterestRateLibrary.new(
-      getInterestRateLibraryData("deploy/data/InterestRatesExactData.txt")
-    );
+    rewardsToken = await MockERC20.new("MockRTK", "RTK");
+    nativeToken = await WETH.new();
+
+    const interestRateLibrary = await InterestRateLibrary.new();
 
     registry = await Registry.new();
     const _defiCore = await DefiCore.new();
@@ -191,66 +201,65 @@ describe("LiquidityPool", () => {
     const _assetParameters = await AssetParameters.new();
     const _rewardsDistribution = await RewardsDistribution.new();
     const _userInfoRegistry = await UserInfoRegistry.new();
-    const _liquidityPoolRegistry = await LiquidityPoolRegistry.new();
-    const _liquidityPoolFactory = await LiquidityPoolFactory.new();
+    const _systemPoolsRegistry = await SystemPoolsRegistry.new();
+    const _liquidityPoolFactory = await SystemPoolsFactory.new();
     const _liquidityPoolImpl = await LiquidityPool.new();
     const _priceManager = await PriceManager.new();
+
+    await registry.__OwnableContractsRegistry_init();
 
     await registry.addProxyContract(await registry.DEFI_CORE_NAME(), _defiCore.address);
     await registry.addProxyContract(await registry.SYSTEM_PARAMETERS_NAME(), _systemParameters.address);
     await registry.addProxyContract(await registry.ASSET_PARAMETERS_NAME(), _assetParameters.address);
     await registry.addProxyContract(await registry.REWARDS_DISTRIBUTION_NAME(), _rewardsDistribution.address);
     await registry.addProxyContract(await registry.USER_INFO_REGISTRY_NAME(), _userInfoRegistry.address);
-    await registry.addProxyContract(await registry.LIQUIDITY_POOL_REGISTRY_NAME(), _liquidityPoolRegistry.address);
-    await registry.addProxyContract(await registry.LIQUIDITY_POOL_FACTORY_NAME(), _liquidityPoolFactory.address);
+    await registry.addProxyContract(await registry.SYSTEM_POOLS_REGISTRY_NAME(), _systemPoolsRegistry.address);
+    await registry.addProxyContract(await registry.SYSTEM_POOLS_FACTORY_NAME(), _liquidityPoolFactory.address);
     await registry.addProxyContract(await registry.PRICE_MANAGER_NAME(), _priceManager.address);
 
     await registry.addContract(await registry.INTEREST_RATE_LIBRARY_NAME(), interestRateLibrary.address);
-    await registry.addContract(await registry.GOVERNANCE_TOKEN_NAME(), governanceToken.address);
 
     defiCore = await DefiCore.at(await registry.getDefiCoreContract());
     assetParameters = await AssetParameters.at(await registry.getAssetParametersContract());
     userInfoRegistry = await UserInfoRegistry.at(await registry.getUserInfoRegistryContract());
-    liquidityPoolRegistry = await LiquidityPoolRegistry.at(await registry.getLiquidityPoolRegistryContract());
+    systemPoolsRegistry = await SystemPoolsRegistry.at(await registry.getSystemPoolsRegistryContract());
     rewardsDistribution = await RewardsDistribution.at(await registry.getRewardsDistributionContract());
-    priceManager = await PriceManager.at(await registry.getPriceManagerContract());
-
-    const systemParameters = await SystemParameters.at(await registry.getSystemParametersContract());
+    systemParameters = await SystemParameters.at(await registry.getSystemParametersContract());
 
     await registry.injectDependencies(await registry.DEFI_CORE_NAME());
+    await registry.injectDependencies(await registry.SYSTEM_PARAMETERS_NAME());
     await registry.injectDependencies(await registry.ASSET_PARAMETERS_NAME());
     await registry.injectDependencies(await registry.REWARDS_DISTRIBUTION_NAME());
     await registry.injectDependencies(await registry.USER_INFO_REGISTRY_NAME());
-    await registry.injectDependencies(await registry.LIQUIDITY_POOL_REGISTRY_NAME());
-    await registry.injectDependencies(await registry.LIQUIDITY_POOL_FACTORY_NAME());
+    await registry.injectDependencies(await registry.SYSTEM_POOLS_REGISTRY_NAME());
+    await registry.injectDependencies(await registry.SYSTEM_POOLS_FACTORY_NAME());
     await registry.injectDependencies(await registry.PRICE_MANAGER_NAME());
 
-    await deployTokens([await governanceToken.symbol(), "DAI", "BAT"]);
+    tokens.push(rewardsToken);
+    await deployTokens(["DAI", "BAT"]);
+    tokens.push(nativeToken);
 
-    await systemParameters.systemParametersInitialize();
-    await assetParameters.assetParametersInitialize();
-    await rewardsDistribution.rewardsDistributionInitialize();
-    await liquidityPoolRegistry.liquidityPoolRegistryInitialize(_liquidityPoolImpl.address);
-    await priceManager.priceManagerInitialize(tokenKey, tokens[1].address);
+    await defiCore.defiCoreInitialize();
+    await systemPoolsRegistry.systemPoolsRegistryInitialize(_liquidityPoolImpl.address, nativeTokenKey, zeroKey);
 
-    await interestRateLibrary.addNewRates(
-      110, // Start percentage
-      getInterestRateLibraryData("deploy/data/InterestRatesData.txt")
-    );
-
-    await deployGovernancePool(governanceToken.address, await governanceToken.symbol());
+    await deployRewardsPool(rewardsToken.address, await rewardsToken.symbol());
 
     tokenChainlinkOracle = await createLiquidityPool(tokenKey, tokens[1], "DAI", true);
     await createLiquidityPool(batKey, tokens[2], "BAT", true);
+    await createLiquidityPool(nativeTokenKey, tokens[3], "BNB", true, 10);
 
-    liquidityPool = await LiquidityPool.at(await liquidityPoolRegistry.liquidityPools(tokenKey));
-    batPool = await LiquidityPool.at(await liquidityPoolRegistry.liquidityPools(batKey));
-
-    await rewardsDistribution.setupRewardsPerBlockBatch([governanceTokenKey, tokenKey], [wei(2), oneToken]);
+    nativePool = await LiquidityPool.at(await getLiquidityPoolAddr(nativeTokenKey));
+    liquidityPool = await LiquidityPool.at(await getLiquidityPoolAddr(tokenKey));
+    batPool = await LiquidityPool.at(await getLiquidityPoolAddr(batKey));
 
     await systemParameters.setupLiquidationBoundary(liquidationBoundary);
+    await systemParameters.setupMinCurrencyAmount(minCurrencyAmount);
+    await systemParameters.setRewardsTokenAddress(ADDRESS_NULL);
 
-    await governanceToken.transfer(defiCore.address, tokensAmount.times(10));
+    await rewardsToken.mintArbitrary(defiCore.address, tokensAmount);
+
+    await nativeToken.approve(nativePool.address, tokensAmount);
+    await nativeToken.approve(nativePool.address, tokensAmount, { from: USER2 });
 
     await reverter.snapshot();
   });
@@ -275,7 +284,7 @@ describe("LiquidityPool", () => {
 
       const currentRate = await liquidityPool.getCurrentRate();
 
-      assert.isTrue(currentRate.gt(getDecimal()));
+      assert.isTrue(currentRate.gt(getPercentage100()));
 
       await setNextBlockTime(neededTime.plus(1000).toNumber());
 
@@ -285,7 +294,7 @@ describe("LiquidityPool", () => {
     });
   });
 
-  describe("addLiqudity", () => {
+  describe("addLiquidity", () => {
     const liquidityAmount = wei(100);
     const amountToBorrow = wei(50);
     const neededTime = toBN(100000);
@@ -319,17 +328,12 @@ describe("LiquidityPool", () => {
       await setNextBlockTime(neededTime.toNumber());
       await liquidityPool.updateCompoundRate(false);
 
-      assert.isTrue((await liquidityPool.exchangeRate()).gt(getDecimal()));
+      assert.isTrue((await liquidityPool.exchangeRate()).gt(getPercentage100()));
 
-      const expectedBalance = liquidityAmount.times(getDecimal()).idiv(await liquidityPool.exchangeRate());
+      const expectedBalance = liquidityAmount.times(getPercentage100()).idiv(await liquidityPool.exchangeRate());
       await defiCore.addLiquidity(tokenKey, liquidityAmount, { from: USER2 });
 
       assert.equal((await liquidityPool.balanceOf(USER2)).toString(), expectedBalance.toString());
-    });
-
-    it("should get exception if the user does not have enough tokens", async () => {
-      const reason = "LiquidityPool: Not enough tokens on account.";
-      await truffleAssert.reverts(defiCore.addLiquidity(tokenKey, tokensAmount.plus(100), { from: USER1 }), reason);
     });
 
     it("should correctly add liquidity to current block", async () => {
@@ -338,15 +342,168 @@ describe("LiquidityPool", () => {
       const testBlock = await getCurrentBlockNumber();
       await defiCore.addLiquidity(tokenKey, liquidityAmount, { from: USER1 });
 
-      assert.equal((await liquidityPool.lastLiquidity(USER1, testBlock + 1)).toString(), liquidityAmount.toString());
+      let result = await liquidityPool.lastLiquidity(USER1);
+
+      assert.equal(result[0].toString(), liquidityAmount.toString());
+      assert.equal(result[1].toString(), testBlock + 1);
 
       await mine(500);
 
       await defiCore.addLiquidity(tokenKey, liquidityAmount, { from: USER1 });
 
+      result = await liquidityPool.lastLiquidity(USER1);
+
+      assert.equal(result[0].toString(), liquidityAmount.toString());
+      assert.equal(result[1].toString(), testBlock + 500 + 2);
+    });
+
+    it("should correctly add liquidity several times in one block", async () => {
+      const user1PrivateKey = "0x7d79a02f88fd37c07afc54ab97ea4ac90ef90f676f618bcc91158a9416a831a9";
+
+      const nonce = await web3.eth.getTransactionCount(USER1, "latest"); // nonce starts counting from 0
+
+      const data = defiCore.contract.methods.addLiquidity(tokenKey, liquidityAmount).encodeABI();
+
+      let transaction = {
+        to: defiCore.address,
+        gas: 3000000,
+        nonce: nonce,
+        data: data,
+      };
+
+      let signedTx = await web3.eth.accounts.signTransaction(transaction, user1PrivateKey);
+
+      await network.provider.send("evm_setAutomine", [false]);
+
+      web3.eth.sendSignedTransaction(signedTx.rawTransaction);
+
+      transaction = {
+        to: defiCore.address,
+        gas: 3000000,
+        nonce: nonce + 1,
+        data: data,
+      };
+
+      signedTx = await web3.eth.accounts.signTransaction(transaction, user1PrivateKey);
+
+      web3.eth.sendSignedTransaction(signedTx.rawTransaction);
+
+      await mine(1);
+
+      await network.provider.send("evm_setAutomine", [true]);
+
+      const testBlock = await getCurrentBlockNumber();
+
+      let result = await liquidityPool.lastLiquidity(USER1);
+
+      assert.equal(result[0].toString(), liquidityAmount.times(2).toString());
+      assert.equal(result[1].toString(), testBlock);
+    });
+
+    it("should correctly add liquidity to native pool without tokens", async () => {
+      assert.equal((await nativeToken.balanceOf(USER2)).toString(), 0);
+
+      const balanceBefore = toBN(await web3.eth.getBalance(USER2));
+
+      await defiCore.addLiquidity(nativeTokenKey, liquidityAmount, { from: USER2, value: liquidityAmount.times(1.5) });
+
+      const balanceAfter = toBN(await web3.eth.getBalance(USER2));
+
+      assert.closeTo(
+        balanceBefore.minus(balanceAfter).toNumber(),
+        liquidityAmount.toNumber(),
+        oneToken.idiv(100).toNumber()
+      );
       assert.equal(
-        (await liquidityPool.lastLiquidity(USER1, testBlock + 500 + 2)).toString(),
+        (await defiCore.getUserLiquidityAmount(USER2, nativeTokenKey)).toString(),
         liquidityAmount.toString()
+      );
+    });
+
+    it("should correctly add liquidity to native pool without currency", async () => {
+      await nativeToken.deposit({ from: USER2, value: liquidityAmount });
+
+      assert.equal((await nativeToken.balanceOf(USER2)).toString(), liquidityAmount.toString());
+
+      await defiCore.addLiquidity(nativeTokenKey, liquidityAmount.idiv(2), { from: USER2 });
+
+      assert.equal((await nativeToken.balanceOf(USER2)).toString(), liquidityAmount.idiv(2).toString());
+      assert.equal(
+        (await defiCore.getUserLiquidityAmount(USER2, nativeTokenKey)).toString(),
+        liquidityAmount.idiv(2).toString()
+      );
+    });
+
+    it("should correctly add liquidity to native pool with currency and tokens", async () => {
+      await nativeToken.deposit({ from: USER2, value: liquidityAmount });
+
+      const balanceBefore = toBN(await web3.eth.getBalance(USER2));
+
+      await defiCore.addLiquidity(nativeTokenKey, liquidityAmount.times(1.5), { from: USER2, value: liquidityAmount });
+
+      const balanceAfter = toBN(await web3.eth.getBalance(USER2));
+
+      assert.equal((await nativeToken.balanceOf(USER2)).toString(), 0);
+      assert.equal((await nativeToken.balanceOf(nativePool.address)).toString(), liquidityAmount.times(1.5).toString());
+      assert.closeTo(
+        balanceBefore.minus(balanceAfter).toNumber(),
+        liquidityAmount.idiv(2).toNumber(),
+        oneToken.idiv(100).toNumber()
+      );
+      assert.equal(
+        (await defiCore.getUserLiquidityAmount(USER2, nativeTokenKey)).toString(),
+        liquidityAmount.times(1.5).toString()
+      );
+      assert.equal(
+        toBN(await web3.eth.getBalance(nativeToken.address)).toString(),
+        liquidityAmount.times(1.5).toString()
+      );
+    });
+
+    it("should get exception if failed to transfer extra currency", async () => {
+      const integrationContract = await IntegrationMock.new();
+
+      const reason = "LiquidityPool: Failed to return extra currency.";
+
+      await truffleAssert.reverts(
+        integrationContract.addLiquidity(defiCore.address, nativeTokenKey, liquidityAmount, {
+          value: liquidityAmount.times(1.5),
+        }),
+        reason
+      );
+    });
+
+    it("should get exception if user have enough tokens", async () => {
+      const reason = "LiquidityPool: There are enough tokens to deposit the entire amount.";
+
+      await nativeToken.deposit({ from: USER2, value: liquidityAmount });
+
+      await truffleAssert.reverts(
+        defiCore.addLiquidity(nativeTokenKey, liquidityAmount.idiv(2), { from: USER2, value: liquidityAmount }),
+        reason
+      );
+    });
+
+    it("should get exception if the user does not have enough tokens", async () => {
+      const reason = "LiquidityPool: Not enough tokens on account.";
+      await truffleAssert.reverts(defiCore.addLiquidity(tokenKey, tokensAmount.plus(100), { from: USER1 }), reason);
+    });
+
+    it("should get exception if currency amount less than needed", async () => {
+      const reason = "LiquidityPool: Wrong native currency amount.";
+
+      await truffleAssert.reverts(
+        defiCore.addLiquidity(nativeTokenKey, liquidityAmount, { from: USER2, value: liquidityAmount.minus(1) }),
+        reason
+      );
+    });
+
+    it("should get exception if try to pass currency to nonnative pool", async () => {
+      const reason = "LiquidityPool: Unable to add currency to a nonnative pool.";
+
+      await truffleAssert.reverts(
+        defiCore.addLiquidity(tokenKey, liquidityAmount, { from: USER2, value: liquidityAmount }),
+        reason
       );
     });
   });
@@ -388,12 +545,11 @@ describe("LiquidityPool", () => {
     let liquidityPoolMock;
     let normalizedAmount = wei(100);
     let additionalAmount = wei(50);
-    let compoundRate = getDecimal();
+    let compoundRate = getPercentage100();
 
     beforeEach("setup", async () => {
-      liquidityPoolMock = await LiquidityPoolMock.new(registry.address, NOTHING, someKey, "MOCK");
-
-      await priceManager.setPrice(someKey, 100);
+      const chainlinkOracle = await ChainlinkOracleMock.new(wei(100, chainlinkPriceDecimals), chainlinkPriceDecimals);
+      liquidityPoolMock = await LiquidityPoolMock.new(registry.address, chainlinkOracle.address, someKey, "MOCK");
     });
 
     it("should return correct values if CR = 0", async () => {
@@ -411,7 +567,7 @@ describe("LiquidityPool", () => {
     });
 
     it("should return correct values if CR != 0", async () => {
-      compoundRate = getDecimal().times("1.2");
+      compoundRate = getPercentage100().times("1.2");
 
       let result = toBN(
         await liquidityPoolMock.getNormalizedAmount(0, normalizedAmount, additionalAmount, compoundRate, true)
@@ -432,7 +588,7 @@ describe("LiquidityPool", () => {
     it("should return correct values if CR != 0 and additional amount equal to absolute amount", async () => {
       normalizedAmount = wei(100);
       additionalAmount = wei(150);
-      compoundRate = getDecimal().times("1.5");
+      compoundRate = getPercentage100().times("1.5");
 
       const result = toBN(
         await liquidityPoolMock.getNormalizedAmount(0, normalizedAmount, additionalAmount, compoundRate, false)
@@ -443,7 +599,7 @@ describe("LiquidityPool", () => {
     it("should return correct values if CR != 0 and normalized amount equal to zero", async () => {
       normalizedAmount = toBN(0);
       additionalAmount = wei(150);
-      compoundRate = getDecimal().times("1.5");
+      compoundRate = getPercentage100().times("1.5");
 
       const result = toBN(
         await liquidityPoolMock.getNormalizedAmount(0, normalizedAmount, additionalAmount, compoundRate, true)
@@ -460,6 +616,7 @@ describe("LiquidityPool", () => {
     const withdrawTime = neededTime.times(2);
 
     beforeEach("setup", async () => {
+      await defiCore.addLiquidity(nativeTokenKey, liquidityAmount, { from: USER2, value: liquidityAmount });
       await defiCore.addLiquidity(tokenKey, liquidityAmount, { from: USER1 });
       await defiCore.addLiquidity(tokenKey, liquidityAmount, { from: USER2 });
 
@@ -509,10 +666,10 @@ describe("LiquidityPool", () => {
       await setNextBlockTime(neededTime.toNumber());
       await liquidityPool.updateCompoundRate(false);
 
-      assert.isTrue(toBN(await liquidityPool.exchangeRate()).gt(getDecimal()));
+      assert.isTrue(toBN(await liquidityPool.exchangeRate()).gt(getPercentage100()));
 
       const expectedBurnAmount = toBN(amountToWithdraw)
-        .times(getDecimal())
+        .times(getPercentage100())
         .idiv(await liquidityPool.exchangeRate());
 
       await defiCore.withdrawLiquidity(tokenKey, amountToWithdraw, false, { from: USER1 });
@@ -532,7 +689,7 @@ describe("LiquidityPool", () => {
       const someKey = toBytes("SOME_KEY");
       await createLiquidityPool(someKey, newTokens[0], "SOME_KEY", true);
 
-      const somePool = await LiquidityPool.at(await liquidityPoolRegistry.liquidityPools(someKey));
+      const somePool = await LiquidityPool.at(await getLiquidityPoolAddr(someKey));
 
       await setNextBlockTime(neededTime.toNumber());
       await defiCore.addLiquidity(tokenKey, liquidityAmount, { from: USER1 });
@@ -541,11 +698,32 @@ describe("LiquidityPool", () => {
       const borrowAmount = wei(90);
       await defiCore.borrowFor(someKey, borrowAmount, USER1, { from: USER1 });
 
-      assert.equal(toBN(await somePool.getBorrowPercentage()).toString(), getOnePercent().times(90).toString());
+      assert.equal(toBN(await somePool.getBorrowPercentage()).toString(), getPrecision().times(90).toString());
 
       await setNextBlockTime(withdrawTime.toNumber());
       const reason = "LiquidityPool: Utilization ratio after withdraw cannot be greater than the maximum.";
       await truffleAssert.reverts(defiCore.withdrawLiquidity(someKey, wei(8), false, { from: USER2 }), reason);
+    });
+
+    it("should correctly withdraw currency from native pool", async () => {
+      assert.equal((await nativePool.balanceOf(USER2)).toString(), liquidityAmount.toString());
+
+      const balanceBefore = toBN(await web3.eth.getBalance(USER2));
+
+      await defiCore.withdrawLiquidity(nativeTokenKey, amountToWithdraw, false, { from: USER2 });
+
+      const balanceAfter = toBN(await web3.eth.getBalance(USER2));
+
+      assert.equal((await nativePool.balanceOf(USER2)).toString(), liquidityAmount.minus(amountToWithdraw).toString());
+      assert.equal(
+        (await nativeToken.balanceOf(nativePool.address)).toString(),
+        liquidityAmount.minus(amountToWithdraw).toString()
+      );
+      assert.closeTo(
+        balanceAfter.minus(balanceBefore).toNumber(),
+        amountToWithdraw.toNumber(),
+        oneToken.idiv(100).toNumber()
+      );
     });
 
     it("should get exception if not enough available liquidity on the contract", async () => {
@@ -557,7 +735,6 @@ describe("LiquidityPool", () => {
         minSupplyDistributionPart,
         minBorrowDistributionPart,
       ]);
-      await priceManager.setPrice(tmpTokenKey, 100);
 
       await setNextBlockTime(neededTime.toNumber());
 
@@ -596,8 +773,8 @@ describe("LiquidityPool", () => {
       await liquidityPool.updateCompoundRate(false);
     });
 
-    it("should return DECIMAL if total supply = 0", async () => {
-      assert.equal(toBN(await liquidityPool.exchangeRate()).toString(), getDecimal().toString());
+    it("should return PERCENTAGE_100 if total supply = 0", async () => {
+      assert.equal(toBN(await liquidityPool.exchangeRate()).toString(), getPercentage100().toString());
     });
 
     it("should return correct exchange rate if borrowed amount = 0", async () => {
@@ -605,11 +782,11 @@ describe("LiquidityPool", () => {
 
       assert.equal(
         toBN(await liquidityPool.exchangeRate()).toString(),
-        exchangeRate(liquidityAmount, liquidityAmount, toBN(0), toBN(0), getDecimal()).toString()
+        exchangeRate(liquidityAmount, liquidityAmount, toBN(0), toBN(0), getPercentage100()).toString()
       );
     });
 
-    it("should return correct exchange rate if current rate greater than getDecimal()", async () => {
+    it("should return correct exchange rate if current rate greater than getPercentage100()", async () => {
       await defiCore.addLiquidity(tokenKey, liquidityAmount, { from: USER1 });
       await defiCore.addLiquidity(tokenKey, liquidityAmount, { from: USER2 });
 
@@ -663,7 +840,7 @@ describe("LiquidityPool", () => {
     });
   });
 
-  describe("borrow", () => {
+  describe("borrowFor", () => {
     const liquidityAmount = wei(200);
     const amountToBorrow = wei(50);
     const startTime = toBN(100000);
@@ -678,6 +855,7 @@ describe("LiquidityPool", () => {
       await defiCore.addLiquidity(tokenKey, liquidityAmount, { from: USER1 });
       await defiCore.addLiquidity(tokenKey, liquidityAmount, { from: USER2 });
       await defiCore.addLiquidity(someKey, liquidityAmount.times(6), { from: USER2 });
+      await defiCore.addLiquidity(nativeTokenKey, liquidityAmount, { from: USER2, value: liquidityAmount });
 
       assert.equal((await tokens[1].balanceOf(liquidityPool.address)).toString(), liquidityAmount.times(2).toString());
       assert.equal(
@@ -695,7 +873,7 @@ describe("LiquidityPool", () => {
 
       await defiCore.borrowFor(tokenKey, liquidityAmount.times(0.9), USER2, { from: USER2 });
 
-      assert.equal(toBN(await liquidityPool.getBorrowPercentage()).toString(), getOnePercent().times(95).toString());
+      assert.equal(toBN(await liquidityPool.getBorrowPercentage()).toString(), getPrecision().times(95).toString());
     });
 
     it("should correctly borrow tokens if normalizedAmount equal to zero", async () => {
@@ -817,6 +995,24 @@ describe("LiquidityPool", () => {
       assert.equal((await liquidityPool.aggregatedBorrowedAmount()).toString(), totalBorrowedAmount.toString());
     });
 
+    it("should correctly borrow native currency", async () => {
+      const balanceBefore = toBN(await web3.eth.getBalance(USER2));
+
+      await defiCore.borrowFor(nativeTokenKey, amountToBorrow, USER2, { from: USER2 });
+
+      const balanceAfter = toBN(await web3.eth.getBalance(USER2));
+
+      assert.equal(
+        (await nativeToken.balanceOf(nativePool.address)).toString(),
+        liquidityAmount.minus(amountToBorrow).toString()
+      );
+      assert.closeTo(
+        balanceAfter.minus(balanceBefore).toNumber(),
+        amountToBorrow.toNumber(),
+        oneToken.idiv(100).toNumber()
+      );
+    });
+
     it("should get exception if the user tries to borrow an amount above the limit", async () => {
       await defiCore.addLiquidity(someKey, liquidityAmount.times(2), { from: USER1 });
       await defiCore.borrowFor(tokenKey, amountToBorrow.times(7), USER1, { from: USER1 });
@@ -838,6 +1034,12 @@ describe("LiquidityPool", () => {
         reason
       );
     });
+
+    it("should get exception if try to call this function directly", async () => {
+      const reason = "AbstractPool: Caller not a DefiCore.";
+
+      await truffleAssert.reverts(liquidityPool.borrowFor(USER1, USER1, amountToBorrow), reason);
+    });
   });
 
   describe("repayBorrow", () => {
@@ -854,6 +1056,7 @@ describe("LiquidityPool", () => {
 
       await defiCore.addLiquidity(tokenKey, liquidityAmount, { from: USER1 });
       await defiCore.addLiquidity(tokenKey, liquidityAmount, { from: USER2 });
+      await defiCore.addLiquidity(nativeTokenKey, liquidityAmount.times(2), { value: liquidityAmount.times(2) });
 
       assert.equal((await tokens[1].balanceOf(liquidityPool.address)).toString(), liquidityAmount.times(2).toString());
       assert.equal(
@@ -939,12 +1142,180 @@ describe("LiquidityPool", () => {
         expectedNormalizedAmount.toString()
       );
 
-      const expectedReserveFunds = currentInterest.times(reserveFactor).idiv(getDecimal());
+      const expectedReserveFunds = repayAmount.times(reserveFactor).idiv(getPercentage100());
+
+      assert.equal((await liquidityPool.totalReserves()).toString(), expectedReserveFunds.toString());
+    });
+
+    it("should correctly repay borrow without tokens", async () => {
+      await defiCore.borrowFor(nativeTokenKey, amountToBorrow, USER2, { from: USER2 });
+
+      const balanceBefore = toBN(await web3.eth.getBalance(USER2));
+
+      await defiCore.repayBorrow(nativeTokenKey, amountToRepay, false, {
+        from: USER2,
+        value: amountToRepay.times(1.5),
+      });
+
+      const balanceAfter = toBN(await web3.eth.getBalance(USER2));
 
       assert.closeTo(
-        (await liquidityPool.totalReserves()).toNumber(),
-        expectedReserveFunds.toNumber(),
-        oneToken.idiv(1000).toNumber()
+        balanceBefore.minus(balanceAfter).toNumber(),
+        amountToRepay.toNumber(),
+        oneToken.idiv(100).toNumber()
+      );
+      assert.closeTo(
+        (await defiCore.getUserBorrowedAmount(USER2, nativeTokenKey)).toNumber(),
+        amountToBorrow.minus(amountToRepay).toNumber(),
+        oneToken.idiv(10000).toNumber()
+      );
+    });
+
+    it("should correctly repay borrow without currency", async () => {
+      await nativeToken.deposit({ from: USER2, value: amountToRepay });
+      await defiCore.borrowFor(nativeTokenKey, amountToBorrow, USER2, { from: USER2 });
+
+      const balanceBefore = toBN(await web3.eth.getBalance(USER2));
+
+      await defiCore.repayBorrow(nativeTokenKey, amountToRepay, false, { from: USER2 });
+
+      const balanceAfter = toBN(await web3.eth.getBalance(USER2));
+
+      assert.equal((await nativeToken.balanceOf(USER2)).toString(), 0);
+      assert.closeTo(balanceBefore.minus(balanceAfter).toNumber(), 0, oneToken.idiv(100).toNumber());
+      assert.closeTo(
+        (await defiCore.getUserBorrowedAmount(USER2, nativeTokenKey)).toNumber(),
+        amountToBorrow.minus(amountToRepay).toNumber(),
+        oneToken.idiv(10000).toNumber()
+      );
+    });
+
+    it("should correctly repay borrow with currency and tokens", async () => {
+      await nativeToken.deposit({ from: USER2, value: amountToRepay });
+      await defiCore.borrowFor(nativeTokenKey, amountToBorrow, USER2, { from: USER2 });
+
+      const balanceBefore = toBN(await web3.eth.getBalance(USER2));
+
+      await defiCore.repayBorrow(nativeTokenKey, amountToRepay.times(1.5), false, {
+        from: USER2,
+        value: amountToRepay,
+      });
+
+      const balanceAfter = toBN(await web3.eth.getBalance(USER2));
+
+      assert.equal((await nativeToken.balanceOf(USER2)).toString(), 0);
+      assert.closeTo(
+        balanceBefore.minus(balanceAfter).toNumber(),
+        amountToRepay.idiv(2).toNumber(),
+        oneToken.idiv(100).toNumber()
+      );
+      assert.closeTo(
+        (await defiCore.getUserBorrowedAmount(USER2, nativeTokenKey)).toNumber(),
+        amountToBorrow.minus(amountToRepay.times(1.5)).toNumber(),
+        oneToken.idiv(10000).toNumber()
+      );
+    });
+
+    it("should correctly repay max debt with tokens and currency (1)", async () => {
+      await nativeToken.deposit({ from: USER1, value: amountToBorrow.idiv(2) });
+
+      await defiCore.borrowFor(nativeTokenKey, amountToBorrow, USER1, { from: USER1 });
+
+      await nativeToken.approve(nativePool.address, tokensAmount, { from: USER1 });
+
+      const value = (await defiCore.getMaxToRepay(USER1, nativeTokenKey)).minus(amountToBorrow.idiv(2));
+
+      await defiCore.repayBorrow(nativeTokenKey, 0, true, {
+        from: USER1,
+        value: value.plus(wei(1, 12)),
+      });
+
+      assert.equal((await defiCore.getMaxToRepay(USER1, nativeTokenKey)).toString(), 0);
+      assert.equal((await nativeToken.balanceOf(USER1)).toString(), 0);
+    });
+
+    it("should correctly repay max debt with tokens and currency (2)", async () => {
+      await defiCore.borrowFor(nativeTokenKey, amountToBorrow, USER1, { from: USER1 });
+
+      await nativeToken.approve(nativePool.address, tokensAmount, { from: USER1 });
+
+      await defiCore.repayBorrow(nativeTokenKey, 0, true, {
+        from: USER1,
+        value: amountToBorrow.times(1.1),
+      });
+
+      assert.equal((await defiCore.getMaxToRepay(USER1, nativeTokenKey)).toString(), 0);
+      assert.equal((await nativeToken.balanceOf(USER1)).toString(), 0);
+    });
+
+    it("should correctly repay max debt with tokens and currency (3)", async () => {
+      await nativeToken.deposit({ from: USER1, value: amountToBorrow.idiv(2) });
+      await defiCore.borrowFor(nativeTokenKey, amountToBorrow.times(2), USER1, { from: USER1 });
+
+      const currentBalance = toBN(await web3.eth.getBalance(USER1));
+      const expectedBalance = wei(50);
+
+      await web3.eth.sendTransaction({
+        to: USER2,
+        from: USER1,
+        gas: wei(1, 7),
+        value: currentBalance.minus(expectedBalance),
+      });
+
+      assert.closeTo(
+        toBN(await web3.eth.getBalance(USER1)).toNumber(),
+        expectedBalance.toNumber(),
+        wei(0.001).toNumber()
+      );
+
+      await nativeToken.approve(nativePool.address, tokensAmount, { from: USER1 });
+
+      const value = (await defiCore.getMaxToRepay(USER1, nativeTokenKey)).minus(amountToBorrow.idiv(2));
+      const gasLimit = toBN(7000000);
+
+      const txReceipt = await defiCore.repayBorrow(nativeTokenKey, 0, true, {
+        from: USER1,
+        value: value,
+        gas: gasLimit,
+      });
+
+      assert.equal((await defiCore.getMaxToRepay(USER1, nativeTokenKey)).toString(), 0);
+      assert.equal((await nativeToken.balanceOf(USER1)).toString(), 0);
+      assert.equal(
+        toBN(await web3.eth.getBalance(USER1)).toString(),
+        minCurrencyAmount.minus(toBN(txReceipt.receipt.gasUsed).times(txReceipt.receipt.effectiveGasPrice)).toString()
+      );
+      assert.closeTo(
+        (await defiCore.getUserBorrowedAmount(USER1, nativeTokenKey)).toNumber(),
+        amountToBorrow.times(2).minus(value.plus(amountToRepay)).toNumber(),
+        wei(0.00001).toNumber()
+      );
+    });
+
+    it("should correctly repay max debt with tokens and currency (4)", async () => {
+      await nativeToken.deposit({ from: USER1, value: amountToBorrow.idiv(2) });
+      await defiCore.borrowFor(nativeTokenKey, amountToBorrow, USER1, { from: USER1 });
+
+      await nativeToken.approve(nativePool.address, tokensAmount, { from: USER1 });
+
+      const currentBalance = toBN(await web3.eth.getBalance(USER1));
+      const value = wei(10);
+
+      await defiCore.repayBorrow(nativeTokenKey, 0, true, {
+        from: USER1,
+        value: value,
+      });
+
+      assert.equal((await nativeToken.balanceOf(USER1)).toString(), 0);
+      assert.closeTo(
+        toBN(await web3.eth.getBalance(USER1)).toNumber(),
+        currentBalance.minus(value).toNumber(),
+        wei(0.01).toNumber()
+      );
+      assert.closeTo(
+        (await defiCore.getUserBorrowedAmount(USER1, nativeTokenKey)).toNumber(),
+        amountToBorrow.minus(value.plus(amountToRepay)).toNumber(),
+        wei(0.00001).toNumber()
       );
     });
 
@@ -954,7 +1325,7 @@ describe("LiquidityPool", () => {
 
       assert.equal((await liquidityPool.borrowInfos(USER1)).normalizedAmount.toString(), 0);
 
-      const reason = "LiquidityPool: Repay amount cannot be a zero.";
+      const reason = "AbstractPool: Repay amount cannot be a zero.";
       await truffleAssert.reverts(defiCore.repayBorrow(tokenKey, 0, true, { from: USER3 }), reason);
     });
 
@@ -971,7 +1342,7 @@ describe("LiquidityPool", () => {
 
       assert.equal((await tokens[1].balanceOf(USER3)).toString(), 0);
 
-      const reason = "LiquidityPool: Repay amount cannot be a zero.";
+      const reason = "AbstractPool: Repay amount cannot be a zero.";
       await truffleAssert.reverts(defiCore.repayBorrow(tokenKey, 0, true, { from: USER3 }), reason);
     });
   });
@@ -1026,7 +1397,13 @@ describe("LiquidityPool", () => {
       const wEthKey = toBytes("WETH");
       const wEthToken = (await getTokens("WETH"))[0];
       const wEthChainlinkOracle = await createLiquidityPool(wEthKey, wEthToken, "WETH", true);
-      await rewardsDistribution.setupRewardsPerBlockBatch([wEthKey], [wei(2)]);
+
+      await systemParameters.setRewardsTokenAddress(rewardsToken.address);
+      await systemPoolsRegistry.updateRewardsAssetKey(rewardsTokenKey);
+      await rewardsDistribution.setupRewardsPerBlockBatch(
+        [rewardsTokenKey, tokenKey, wEthKey],
+        [wei(2), oneToken, wei(2)]
+      );
 
       const newDaiPrice = toBN(10).times(priceDecimals);
       const newWEthPrice = toBN(120).times(priceDecimals);
@@ -1038,7 +1415,7 @@ describe("LiquidityPool", () => {
       await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER1 });
 
       let expectedTotalSupply = toBN(13000).times(priceDecimals);
-      let expectedAvailableLiquidity = expectedTotalSupply.times(getDecimal()).idiv(standardColRatio);
+      let expectedAvailableLiquidity = expectedTotalSupply.times(getPercentage100()).idiv(standardColRatio);
 
       assert.equal(toBN(await defiCore.getTotalSupplyBalanceInUSD(USER1)).toString(), expectedTotalSupply.toString());
       assert.equal(
@@ -1057,12 +1434,12 @@ describe("LiquidityPool", () => {
         expectedAvailableLiquidity.toString()
       );
 
-      const wEthPool = await LiquidityPool.at(await liquidityPoolRegistry.liquidityPools(wEthKey));
+      const wEthPool = await LiquidityPool.at(await getLiquidityPoolAddr(wEthKey));
       await wEthPool.transfer(USER2, await wEthPool.balanceOf(USER1), { from: USER1 });
 
       expectedTotalSupply = toBN(1000).times(priceDecimals);
       expectedAvailableLiquidity = expectedTotalSupply
-        .times(getDecimal())
+        .times(getPercentage100())
         .idiv(standardColRatio)
         .minus(expectedTotalBorrow);
 
@@ -1074,6 +1451,10 @@ describe("LiquidityPool", () => {
     });
 
     it("should correctly update cumulative sums for sender and recipient", async () => {
+      await systemParameters.setRewardsTokenAddress(rewardsToken.address);
+      await systemPoolsRegistry.updateRewardsAssetKey(rewardsTokenKey);
+      await rewardsDistribution.setupRewardsPerBlockBatch([rewardsTokenKey, tokenKey], [wei(2), oneToken]);
+
       await defiCore.addLiquidity(tokenKey, liquidityAmount, { from: USER1 });
 
       await mine(499);
@@ -1109,6 +1490,147 @@ describe("LiquidityPool", () => {
       assert.isTrue(deepCompareKeys([], await userInfoRegistry.getUserSupplyAssets(USER1)));
       assert.isTrue(deepCompareKeys([tokenKey], await userInfoRegistry.getUserSupplyAssets(USER2)));
     });
+
+    it("should correctly move last liquidity to the recipient", async () => {
+      await defiCore.addLiquidity(tokenKey, liquidityAmount, { from: USER1 });
+
+      const user1PrivateKey = "0x7d79a02f88fd37c07afc54ab97ea4ac90ef90f676f618bcc91158a9416a831a9";
+      const user2PrivateKey = "0x3b3da990511ac5bd539db5fbad1647d1181e15a401dfa648ee525cf3473489a4";
+
+      const nonceUser1 = await web3.eth.getTransactionCount(USER1, "latest");
+      const nonceUser2 = await web3.eth.getTransactionCount(USER2, "latest");
+
+      let data = defiCore.contract.methods.addLiquidity(tokenKey, liquidityAmount).encodeABI();
+
+      let transaction = {
+        to: defiCore.address,
+        gas: 1000000,
+        nonce: nonceUser1,
+        data: data,
+      };
+
+      let signedTx = await web3.eth.accounts.signTransaction(transaction, user1PrivateKey);
+
+      await network.provider.send("evm_setAutomine", [false]);
+
+      web3.eth.sendSignedTransaction(signedTx.rawTransaction);
+
+      transaction = {
+        to: defiCore.address,
+        gas: 1000000,
+        nonce: nonceUser2,
+        data: data,
+      };
+
+      signedTx = await web3.eth.accounts.signTransaction(transaction, user2PrivateKey);
+      web3.eth.sendSignedTransaction(signedTx.rawTransaction);
+
+      const transferAmount = wei(150);
+
+      data = liquidityPool.contract.methods.transfer(USER2, transferAmount).encodeABI();
+
+      transaction = {
+        from: USER1,
+        to: liquidityPool.address,
+        gas: 1000000,
+        nonce: nonceUser1 + 1,
+        data: data,
+      };
+
+      signedTx = await web3.eth.accounts.signTransaction(transaction, user1PrivateKey);
+
+      web3.eth.sendSignedTransaction(signedTx.rawTransaction);
+
+      await mine(1);
+
+      await network.provider.send("evm_setAutomine", [true]);
+
+      const testBlock = await getCurrentBlockNumber();
+
+      assert.equal(
+        toBN(await defiCore.getUserLiquidityAmount(USER1, tokenKey)).toString(),
+        liquidityAmount.times(2).minus(transferAmount).toString()
+      );
+      assert.equal(
+        toBN(await defiCore.getUserLiquidityAmount(USER2, tokenKey)).toString(),
+        liquidityAmount.plus(transferAmount).toString()
+      );
+
+      let result = await liquidityPool.lastLiquidity(USER1);
+
+      assert.equal(result[0].toString(), liquidityAmount.idiv(2).toString());
+      assert.equal(result[1].toString(), testBlock);
+
+      result = await liquidityPool.lastLiquidity(USER2);
+
+      assert.equal(result[0].toString(), liquidityAmount.times(1.5).toString());
+      assert.equal(result[1].toString(), testBlock);
+    });
+
+    it("should not move last liquidity if sender have enough lp tokens", async () => {
+      await defiCore.addLiquidity(tokenKey, liquidityAmount, { from: USER1 });
+      await defiCore.addLiquidity(tokenKey, liquidityAmount, { from: USER2 });
+
+      const user1PrivateKey = "0x7d79a02f88fd37c07afc54ab97ea4ac90ef90f676f618bcc91158a9416a831a9";
+
+      const nonceUser1 = await web3.eth.getTransactionCount(USER1, "latest");
+
+      let data = defiCore.contract.methods.addLiquidity(tokenKey, liquidityAmount).encodeABI();
+
+      let transaction = {
+        to: defiCore.address,
+        gas: 1000000,
+        nonce: nonceUser1,
+        data: data,
+      };
+
+      let signedTx = await web3.eth.accounts.signTransaction(transaction, user1PrivateKey);
+
+      await network.provider.send("evm_setAutomine", [false]);
+
+      web3.eth.sendSignedTransaction(signedTx.rawTransaction);
+
+      const transferAmount = wei(80);
+
+      data = liquidityPool.contract.methods.transfer(USER2, transferAmount).encodeABI();
+
+      transaction = {
+        from: USER1,
+        to: liquidityPool.address,
+        gas: 1000000,
+        nonce: nonceUser1 + 1,
+        data: data,
+      };
+
+      signedTx = await web3.eth.accounts.signTransaction(transaction, user1PrivateKey);
+
+      web3.eth.sendSignedTransaction(signedTx.rawTransaction);
+
+      await mine(1);
+
+      await network.provider.send("evm_setAutomine", [true]);
+
+      const testBlock = await getCurrentBlockNumber();
+
+      assert.equal(
+        toBN(await defiCore.getUserLiquidityAmount(USER1, tokenKey)).toString(),
+        liquidityAmount.times(2).minus(transferAmount).toString()
+      );
+      assert.equal(
+        toBN(await defiCore.getUserLiquidityAmount(USER2, tokenKey)).toString(),
+        liquidityAmount.plus(transferAmount).toString()
+      );
+
+      let result = await liquidityPool.lastLiquidity(USER1);
+
+      assert.equal(result[0].toString(), liquidityAmount.toString());
+      assert.equal(result[1].toString(), testBlock);
+
+      result = await liquidityPool.lastLiquidity(USER2);
+
+      assert.equal(result[0].toString(), liquidityAmount.toString());
+      assert.equal(result[1].toString(), testBlock - 1);
+    });
   });
 
   describe("getBorrowPercentage", () => {
@@ -1124,7 +1646,7 @@ describe("LiquidityPool", () => {
         liquidityAmount.minus(amountToBorrow).toString()
       );
 
-      const expectedPercentage = amountToBorrow.times(getDecimal()).div(liquidityAmount);
+      const expectedPercentage = amountToBorrow.times(getPercentage100()).div(liquidityAmount);
 
       assert.equal(toBN(await liquidityPool.getBorrowPercentage()).toString(), expectedPercentage.toString());
     });
@@ -1155,9 +1677,9 @@ describe("LiquidityPool", () => {
       await defiCore.addLiquidity(tokenKey, liquidityAmount, { from: USER1 });
       await defiCore.borrowFor(tokenKey, amountToBorrow, USER1, { from: USER1 });
 
-      assert.equal(toBN(await liquidityPool.getBorrowPercentage()).toString(), getOnePercent().times(44).toString());
+      assert.equal(toBN(await liquidityPool.getBorrowPercentage()).toString(), getPrecision().times(44).toString());
 
-      const expectedPercentage = getOnePercent().times(2.2);
+      const expectedPercentage = getPrecision().times(2.2);
 
       assert.equal(toBN(await liquidityPool.getAnnualBorrowRate()).toString(), expectedPercentage.toString());
     });
@@ -1169,9 +1691,9 @@ describe("LiquidityPool", () => {
       await defiCore.addLiquidity(tokenKey, liquidityAmount, { from: USER1 });
       await defiCore.borrowFor(tokenKey, amountToBorrow, USER1, { from: USER1 });
 
-      assert.equal(toBN(await liquidityPool.getBorrowPercentage()).toString(), getOnePercent().times(89.66).toString());
+      assert.equal(toBN(await liquidityPool.getBorrowPercentage()).toString(), getPrecision().times(89.66).toString());
 
-      const expectedPercentage = getOnePercent().times(50.368);
+      const expectedPercentage = getPrecision().times(50.368);
 
       assert.equal(toBN(await liquidityPool.getAnnualBorrowRate()).toString(), expectedPercentage.toString());
     });
@@ -1192,9 +1714,9 @@ describe("LiquidityPool", () => {
       await defiCore.addLiquidity(tokenKey, liquidityAmount, { from: USER1 });
       await defiCore.borrowFor(tokenKey, borrowAmount, USER1, { from: USER1 });
 
-      assert.equal(toBN(await liquidityPool.getAnnualBorrowRate()).toString(), getOnePercent().times(28).toString());
+      assert.equal(toBN(await liquidityPool.getAnnualBorrowRate()).toString(), getPrecision().times(28).toString());
 
-      const expectedAPY = getOnePercent().times("20.23");
+      const expectedAPY = getPrecision().times("20.23");
 
       assert.equal(toBN(await liquidityPool.getAPY()).toString(), expectedAPY.toString());
     });
@@ -1240,7 +1762,7 @@ describe("LiquidityPool", () => {
     it("should correctly withdraw all funds", async () => {
       const totalReserves = toBN(await liquidityPool.totalReserves());
 
-      await liquidityPoolRegistry.withdrawReservedFunds(RECIPIENT, tokenKey, 0, true);
+      await systemPoolsRegistry.withdrawReservedFunds(RECIPIENT, tokenKey, 0, true);
 
       assert.equal(toBN(await tokens[1].balanceOf(RECIPIENT)).toString(), totalReserves.toString());
       assert.equal(toBN(await liquidityPool.totalReserves()).toString(), 0);
@@ -1249,7 +1771,7 @@ describe("LiquidityPool", () => {
     it("should correctly withdraw part of all funds", async () => {
       const totalReserves = toBN(await liquidityPool.totalReserves());
 
-      await liquidityPoolRegistry.withdrawReservedFunds(RECIPIENT, tokenKey, totalReserves.idiv(2), false);
+      await systemPoolsRegistry.withdrawReservedFunds(RECIPIENT, tokenKey, totalReserves.idiv(2), false);
 
       assert.equal(toBN(await tokens[1].balanceOf(RECIPIENT)).toString(), totalReserves.idiv(2).toString());
       assert.closeTo(toBN(await liquidityPool.totalReserves()).toNumber(), totalReserves.idiv(2).toNumber(), 5);
@@ -1261,7 +1783,7 @@ describe("LiquidityPool", () => {
       const reason = "LiquidityPool: Not enough reserved funds.";
 
       await truffleAssert.reverts(
-        liquidityPoolRegistry.withdrawReservedFunds(RECIPIENT, tokenKey, totalReserves.plus(1), false),
+        systemPoolsRegistry.withdrawReservedFunds(RECIPIENT, tokenKey, totalReserves.plus(1), false),
         reason
       );
     });
@@ -1320,7 +1842,7 @@ describe("LiquidityPool", () => {
       await deployTokens("AAVE");
 
       const aaveKey = toBytes("AAVE");
-      await createLiquidityPool(aaveKey, tokens[3], "AAVE", true);
+      await createLiquidityPool(aaveKey, tokens[4], "AAVE", true);
 
       await defiCore.addLiquidity(aaveKey, liquidityAmount.times(3));
 
@@ -1347,6 +1869,44 @@ describe("LiquidityPool", () => {
         oneToken.idiv(1000).toNumber()
       );
     });
+
+    it("should correctly repay debt in native pool", async () => {
+      const amountToLiquidate = wei(20);
+
+      await tokens[1].mintArbitrary(USER3, tokensAmount);
+      await tokens[1].approveArbitraryBacth(liquidityPool.address, [USER3], [tokensAmount]);
+
+      await defiCore.addLiquidity(tokenKey, liquidityAmount.idiv(10), { from: USER3 });
+      await defiCore.addLiquidity(nativeTokenKey, liquidityAmount, { from: USER2, value: liquidityAmount });
+
+      await defiCore.borrowFor(nativeTokenKey, amountToBorrow, USER3, { from: USER3 });
+
+      const newPrice = toBN(75);
+      await tokenChainlinkOracle.setPrice(wei(newPrice, chainlinkPriceDecimals));
+
+      await nativeToken.deposit({ from: USER2, value: amountToLiquidate });
+
+      const balanceBefore = toBN(await web3.eth.getBalance(USER2));
+
+      await defiCore.liquidation(USER3, tokenKey, nativeTokenKey, amountToLiquidate.times(1.5), {
+        from: USER2,
+        value: amountToLiquidate,
+      });
+
+      const balanceAfter = toBN(await web3.eth.getBalance(USER2));
+
+      assert.equal((await nativeToken.balanceOf(USER2)).toString(), 0);
+      assert.closeTo(
+        balanceBefore.minus(balanceAfter).toNumber(),
+        amountToLiquidate.idiv(2).toNumber(),
+        oneToken.idiv(10).toNumber()
+      );
+      assert.closeTo(
+        (await defiCore.getUserBorrowedAmount(USER3, nativeTokenKey)).toNumber(),
+        amountToBorrow.minus(amountToLiquidate.times(1.5)).toNumber(),
+        oneToken.idiv(1000).toNumber()
+      );
+    });
   });
 
   describe("liquidate", () => {
@@ -1364,7 +1924,7 @@ describe("LiquidityPool", () => {
       someChainlinkOracle = await createLiquidityPool(someKey, newTokens[0], "SOME_KEY", true);
 
       await someChainlinkOracle.setPrice(priceDecimals.times(140));
-      somePool = await LiquidityPool.at(await liquidityPoolRegistry.liquidityPools(someKey));
+      somePool = await LiquidityPool.at(await getLiquidityPoolAddr(someKey));
 
       await defiCore.addLiquidity(tokenKey, liquidityAmount, { from: USER1 });
       await defiCore.addLiquidity(tokenKey, liquidityAmount, { from: USER2 });
@@ -1391,7 +1951,6 @@ describe("LiquidityPool", () => {
       const price = toBN(86);
 
       await tokenChainlinkOracle.setPrice(price.times(priceDecimals));
-      await priceManager.setPrice(tokenKey, price);
 
       await defiCore.liquidation(USER1, tokenKey, someKey, amountToLiquidate, { from: USER2 });
 
@@ -1412,6 +1971,32 @@ describe("LiquidityPool", () => {
       assert.equal(
         toBN(await liquidityPool.getAggregatedLiquidityAmount()).toString(),
         liquidityAmount.times(2).minus(amountToLiquidate.times(140).idiv(price).idiv("0.92")).toString()
+      );
+    });
+
+    it("should correctly repay debt in native pool", async () => {
+      await defiCore.addLiquidity(nativeTokenKey, liquidityAmount, { from: OWNER, value: liquidityAmount });
+      await defiCore.borrowFor(tokenKey, borrowAmount.idiv(7), OWNER, { from: OWNER });
+
+      const newPrice = toBN(115);
+      await tokenChainlinkOracle.setPrice(wei(newPrice, chainlinkPriceDecimals));
+
+      const balanceBefore = toBN(await web3.eth.getBalance(USER2));
+
+      await defiCore.liquidation(OWNER, nativeTokenKey, tokenKey, wei(3), { from: USER2 });
+
+      const balanceAfter = toBN(await web3.eth.getBalance(USER2));
+      const expectedReceiveAmount = wei(37.5);
+
+      assert.closeTo(
+        balanceAfter.minus(balanceBefore).toNumber(),
+        expectedReceiveAmount.toNumber(),
+        oneToken.idiv(10).toNumber()
+      );
+      assert.closeTo(
+        (await defiCore.getUserLiquidityAmount(OWNER, nativeTokenKey)).toNumber(),
+        liquidityAmount.minus(expectedReceiveAmount).toNumber(),
+        oneToken.idiv(1000).toNumber()
       );
     });
   });

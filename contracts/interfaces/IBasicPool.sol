@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity 0.8.3;
+pragma solidity 0.8.17;
 
 /**
- * This is the central contract of the protocol, which is the pool for liquidity.
- * All interaction takes place through the DefiCore contract
+ * This is the basic abstract loan pool.
+ * Needed to inherit from it all the custom pools of the system
  */
-interface ILiquidityPool {
+interface IBasicPool {
     /// @notice A structure that contains information about user borrows
     /// @param borrowAmount absolute amount of borrow in tokens
     /// @param normalizedAmount normalized user borrow amount
@@ -28,34 +28,6 @@ interface ILiquidityPool {
         address userAddr;
     }
 
-    /// @notice The function that is needed to initialize the pool after it is created
-    /// @dev This function can call only once
-    /// @param _assetAddr address of the underlying pool asset
-    /// @param _assetKey pool key of the current liquidity pool
-    /// @param _tokenSymbol symbol of the underlying pool asset
-    function liquidityPoolInitialize(
-        address _assetAddr,
-        bytes32 _assetKey,
-        string memory _tokenSymbol
-    ) external;
-
-    /// @notice Function for adding liquidity to the pool
-    /// @dev Only DefiCore contract can call this function. The function takes the amount with 18 decimals
-    /// @param _userAddr address of the user to whom the liquidity will be added
-    /// @param _liquidityAmount amount of liquidity to add
-    function addLiquidity(address _userAddr, uint256 _liquidityAmount) external;
-
-    /// @notice Function for withdraw liquidity from the passed address
-    /// @dev Only DefiCore contract can call this function. The function takes the amount with 18 decimals
-    /// @param _userAddr address of the user from which the liquidity will be withdrawn
-    /// @param _liquidityAmount amount of liquidity to withdraw
-    /// @param _isMaxWithdraw the flag that shows whether to withdraw the maximum available amount or not
-    function withdrawLiquidity(
-        address _userAddr,
-        uint256 _liquidityAmount,
-        bool _isMaxWithdraw
-    ) external;
-
     /// @notice The function is needed to allow addresses to borrow against your address for the desired amount
     /// @dev Only DefiCore contract can call this function. The function takes the amount with 18 decimals
     /// @param _userAddr address of the user who makes the approval
@@ -74,11 +46,7 @@ interface ILiquidityPool {
     /// @param _userAddr address of the user to whom the credit will be taken
     /// @param _recipient the address that will receive the borrowed tokens
     /// @param _amountToBorrow amount to borrow in tokens
-    function borrowFor(
-        address _userAddr,
-        address _recipient,
-        uint256 _amountToBorrow
-    ) external;
+    function borrowFor(address _userAddr, address _recipient, uint256 _amountToBorrow) external;
 
     /// @notice A function by which you can take credit for the address that gave you permission to do so
     /// @dev Only DefiCore contract can call this function. The function takes the amount with 18 decimals
@@ -103,21 +71,10 @@ interface ILiquidityPool {
         address _closureAddr,
         uint256 _repayAmount,
         bool _isMaxRepay
-    ) external returns (uint256);
-
-    /// @notice Function for writing off the collateral from the address of the person being liquidated during liquidation
-    /// @dev Only DefiCore contract can call this function. The function takes the amount with 18 decimals
-    /// @param _userAddr address of the user from whom the collateral will be debited
-    /// @param _liquidatorAddr address of the liquidator to whom the tokens will be sent
-    /// @param _liquidityAmount number of tokens to send
-    function liquidate(
-        address _userAddr,
-        address _liquidatorAddr,
-        uint256 _liquidityAmount
-    ) external;
+    ) external payable returns (uint256);
 
     /// @notice Function for withdrawal of reserve funds from the pool
-    /// @dev Only LiquidityPoolRegistry contract can call this function. The function takes the amount with 18 decimals
+    /// @dev Only SystemPoolsRegistry contract can call this function. The function takes the amount with 18 decimals
     /// @param _recipientAddr the address of the user who will receive the reserve tokens
     /// @param _amountToWithdraw number of reserve funds for withdrawal
     /// @param _isAllFunds flag that shows whether to withdraw all reserve funds or not
@@ -125,7 +82,7 @@ interface ILiquidityPool {
         address _recipientAddr,
         uint256 _amountToWithdraw,
         bool _isAllFunds
-    ) external;
+    ) external returns (uint256);
 
     /// @notice Function to update the compound rate with or without interval
     /// @param _withInterval flag that shows whether to update the rate with or without interval
@@ -148,64 +105,17 @@ interface ILiquidityPool {
     /// @return total reserve funds
     function totalReserves() external view returns (uint256);
 
-    /// @notice Function for getting the liquidity entered by the user in a certain block
-    /// @param _userAddr address of the user for whom you want to get information
-    /// @param _blockNumber number of the block for which you want to get information
-    /// @return liquidity amount
-    function lastLiquidity(address _userAddr, uint256 _blockNumber)
-        external
-        view
-        returns (uint256);
-
     /// @notice Function to get information about the user's borrow
     /// @param _userAddr address of the user for whom you want to get information
-    /// @return _borrowAmount absolute amount of borrow in tokens, _normalizedAmount normalized user borrow amount
-    function borrowInfos(address _userAddr)
-        external
-        view
-        returns (uint256 _borrowAmount, uint256 _normalizedAmount);
-
-    /// @notice Function to get the annual rate on the deposit
-    /// @return annual deposit interest rate
-    function getAPY() external view returns (uint256);
-
-    /// @notice Function to get the total liquidity in the pool with interest
-    /// @return total liquidity in the pool with interest
-    function getTotalLiquidity() external view returns (uint256);
+    /// @return borrowAmount absolute amount of borrow in tokens
+    /// @return normalizedAmount normalized user borrow amount
+    function borrowInfos(
+        address _userAddr
+    ) external view returns (uint256 borrowAmount, uint256 normalizedAmount);
 
     /// @notice Function to get the total borrowed amount with interest
     /// @return total borrowed amount with interest
     function getTotalBorrowedAmount() external view returns (uint256);
-
-    /// @notice Function to get the current amount of liquidity in the pool without reserve funds
-    /// @return aggregated liquidity amount without reserve funds
-    function getAggregatedLiquidityAmount() external view returns (uint256);
-
-    /// @notice Function to get the current percentage of how many tokens were borrowed
-    /// @return an borrow percentage (utilization ratio)
-    function getBorrowPercentage() external view returns (uint256);
-
-    /// @notice Function for obtaining available liquidity for credit
-    /// @return an available to borrow liquidity
-    function getAvailableToBorrowLiquidity() external view returns (uint256);
-
-    /// @notice Function to get the current annual interest rate on the borrow
-    /// @return _annualBorrowRate current annual interest rate on the borrow
-    function getAnnualBorrowRate() external view returns (uint256 _annualBorrowRate);
-
-    /// @notice Function to convert from the amount in the asset to the amount in lp tokens
-    /// @param _assetAmount amount in asset tokens
-    /// @return an amount in lp tokens
-    function convertAssetToLPTokens(uint256 _assetAmount) external view returns (uint256);
-
-    /// @notice Function to convert from the amount amount in lp tokens to the amount in the asset
-    /// @param _lpTokensAmount amount in lp tokens
-    /// @return an amount in asset tokens
-    function convertLPTokensToAsset(uint256 _lpTokensAmount) external view returns (uint256);
-
-    /// @notice Function to get the exchange rate between asset tokens and lp tokens
-    /// @return current exchange rate
-    function exchangeRate() external view returns (uint256);
 
     /// @notice Function to convert the amount in tokens to the amount in dollars
     /// @param _assetAmount amount in asset tokens
@@ -232,4 +142,115 @@ interface ILiquidityPool {
     /// @notice Function to get the current compound rate
     /// @return a current compound rate
     function getNewCompoundRate() external view returns (uint256);
+
+    /// @notice Function to get the current annual interest rate on the borrow
+    /// @return a current annual interest rate on the borrow
+    function getAnnualBorrowRate() external view returns (uint256);
+}
+
+/**
+ * Pool contract only for loans with a fixed annual rate
+ */
+interface IStablePool is IBasicPool {
+    /// @notice Function to initialize a new stable pool
+    /// @param _assetAddr address of the underlying pool asset
+    /// @param _assetKey pool key of the current liquidity pool
+    function stablePoolInitialize(address _assetAddr, bytes32 _assetKey) external;
+}
+
+/**
+ * This is the central contract of the protocol, which is the pool for liquidity.
+ * All interaction takes place through the DefiCore contract
+ */
+interface ILiquidityPool is IBasicPool {
+    /// @notice A structure that contains information about user last added liquidity
+    /// @param liquidity a total amount of the last liquidity
+    /// @param blockNumber block number at the time of the last liquidity entry
+    struct UserLastLiquidity {
+        uint256 liquidity;
+        uint256 blockNumber;
+    }
+
+    /// @notice The function that is needed to initialize the pool after it is created
+    /// @dev This function can call only once
+    /// @param _assetAddr address of the underlying pool asset
+    /// @param _assetKey pool key of the current liquidity pool
+    /// @param _tokenSymbol symbol of the underlying pool asset
+    function liquidityPoolInitialize(
+        address _assetAddr,
+        bytes32 _assetKey,
+        string memory _tokenSymbol
+    ) external;
+
+    /// @notice Function for adding liquidity to the pool
+    /// @dev Only DefiCore contract can call this function. The function takes the amount with 18 decimals
+    /// @param _userAddr address of the user to whom the liquidity will be added
+    /// @param _liquidityAmount amount of liquidity to add
+    function addLiquidity(address _userAddr, uint256 _liquidityAmount) external payable;
+
+    /// @notice Function for withdraw liquidity from the passed address
+    /// @dev Only DefiCore contract can call this function. The function takes the amount with 18 decimals
+    /// @param _userAddr address of the user from which the liquidity will be withdrawn
+    /// @param _liquidityAmount amount of liquidity to withdraw
+    /// @param _isMaxWithdraw the flag that shows whether to withdraw the maximum available amount or not
+    function withdrawLiquidity(
+        address _userAddr,
+        uint256 _liquidityAmount,
+        bool _isMaxWithdraw
+    ) external;
+
+    /// @notice Function for writing off the collateral from the address of the person being liquidated during liquidation
+    /// @dev Only DefiCore contract can call this function. The function takes the amount with 18 decimals
+    /// @param _userAddr address of the user from whom the collateral will be debited
+    /// @param _liquidatorAddr address of the liquidator to whom the tokens will be sent
+    /// @param _liquidityAmount number of tokens to send
+    function liquidate(
+        address _userAddr,
+        address _liquidatorAddr,
+        uint256 _liquidityAmount
+    ) external;
+
+    /// @notice Function for getting the liquidity entered by the user in a certain block
+    /// @param _userAddr address of the user for whom you want to get information
+    /// @return liquidity amount
+    function lastLiquidity(address _userAddr) external view returns (uint256, uint256);
+
+    /// @notice Function to get the annual rate on the deposit
+    /// @return annual deposit interest rate
+    function getAPY() external view returns (uint256);
+
+    /// @notice Function to get the total liquidity in the pool with interest
+    /// @return total liquidity in the pool with interest
+    function getTotalLiquidity() external view returns (uint256);
+
+    /// @notice Function to get the current amount of liquidity in the pool without reserve funds
+    /// @return aggregated liquidity amount without reserve funds
+    function getAggregatedLiquidityAmount() external view returns (uint256);
+
+    /// @notice Function to get the current percentage of how many tokens were borrowed
+    /// @return an borrow percentage (utilization ratio)
+    function getBorrowPercentage() external view returns (uint256);
+
+    /// @notice Function for obtaining available liquidity for credit
+    /// @return an available to borrow liquidity
+    function getAvailableToBorrowLiquidity() external view returns (uint256);
+
+    /// @notice Function to convert from the amount in the asset to the amount in lp tokens
+    /// @param _assetAmount amount in asset tokens
+    /// @return an amount in lp tokens
+    function convertAssetToLPTokens(uint256 _assetAmount) external view returns (uint256);
+
+    /// @notice Function to convert from the amount amount in lp tokens to the amount in the asset
+    /// @param _lpTokensAmount amount in lp tokens
+    /// @return an amount in asset tokens
+    function convertLPTokensToAsset(uint256 _lpTokensAmount) external view returns (uint256);
+
+    /// @notice Function to get the exchange rate between asset tokens and lp tokens
+    /// @return current exchange rate
+    function exchangeRate() external view returns (uint256);
+
+    /// @notice Function for getting the last liquidity by current block
+    /// @param _userAddr address of the user for whom you want to get information
+    /// @return a last liquidity amount (if current block number != last block number returns zero)
+    function getCurrentLastLiquidity(address _userAddr) external view returns (uint256);
 }

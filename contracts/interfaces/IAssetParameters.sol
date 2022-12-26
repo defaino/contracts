@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity 0.8.3;
+pragma solidity 0.8.17;
 
 /**
  * This is a contract for storage and convenient retrieval of asset parameters
@@ -85,6 +85,8 @@ interface IAssetParameters {
         uint256 _borrowDistrPart
     );
 
+    event AnnualBorrowRateUpdated(bytes32 _assetKey, uint256 _newAnnualBorrowRate);
+
     /// @notice This event is emitted when the pool freeze parameter is set
     /// @param _assetKey the key of the pool for which the parameter is set
     /// @param _newValue new value of the pool freeze parameter
@@ -96,10 +98,16 @@ interface IAssetParameters {
     event CollateralParamUpdated(bytes32 _assetKey, bool _isCollateral);
 
     /// @notice System function needed to set parameters during pool creation
-    /// @dev Only LiquidityPoolRegistry can call this function
+    /// @dev Only SystemPoolsRegistry contract can call this function
     /// @param _assetKey the key of the pool for which the parameters are set
     /// @param _isCollateral a flag that indicates whether a pool can even be a collateral
     function setPoolInitParams(bytes32 _assetKey, bool _isCollateral) external;
+
+    /// @notice Function for setting the annual borrow rate of the stable pool
+    /// @dev Only contract owner can call this function. Only for stable pools
+    /// @param _assetKey pool key for which parameters will be set
+    /// @param _newAnnualBorrowRate new annual borrow rate parameter
+    function setupAnnualBorrowRate(bytes32 _assetKey, uint256 _newAnnualBorrowRate) external;
 
     /// @notice Function for setting the main parameters of the pool
     /// @dev Only contract owner can call this function
@@ -111,8 +119,10 @@ interface IAssetParameters {
     /// @dev Only contract owner can call this function
     /// @param _assetKey pool key for which parameters will be set
     /// @param _interestParams structure with the interest rate parameters of the pool
-    function setupInterestRateModel(bytes32 _assetKey, InterestRateParams calldata _interestParams)
-        external;
+    function setupInterestRateModel(
+        bytes32 _assetKey,
+        InterestRateParams calldata _interestParams
+    ) external;
 
     /// @notice Function for setting the distribution minimums of the pool
     /// @dev Only contract owner can call this function
@@ -149,6 +159,11 @@ interface IAssetParameters {
     /// @return true, if the pool is available as a collateral, false otherwise
     function isAvailableAsCollateral(bytes32 _assetKey) external view returns (bool);
 
+    /// @notice Function for getting annual borrow rate
+    /// @param _assetKey the key of the pool for which you want to get information
+    /// @return an annual borrow rate
+    function getAnnualBorrowRate(bytes32 _assetKey) external view returns (uint256);
+
     /// @notice Function for getting the main parameters of the pool
     /// @param _assetKey the key of the pool for which you want to get information
     /// @return a structure with the main parameters of the pool
@@ -157,18 +172,16 @@ interface IAssetParameters {
     /// @notice Function for getting the interest rate parameters of the pool
     /// @param _assetKey the key of the pool for which you want to get information
     /// @return a structure with the interest rate parameters of the pool
-    function getInterestRateParams(bytes32 _assetKey)
-        external
-        view
-        returns (InterestRateParams memory);
+    function getInterestRateParams(
+        bytes32 _assetKey
+    ) external view returns (InterestRateParams memory);
 
     /// @notice Function for getting the distribution minimums of the pool
     /// @param _assetKey the key of the pool for which you want to get information
     /// @return a structure with the distribution minimums of the pool
-    function getDistributionMinimums(bytes32 _assetKey)
-        external
-        view
-        returns (DistributionMinimums memory);
+    function getDistributionMinimums(
+        bytes32 _assetKey
+    ) external view returns (DistributionMinimums memory);
 
     /// @notice Function to get the collateralization ratio for the desired pool
     /// @param _assetKey the key of the pool for which you want to get information

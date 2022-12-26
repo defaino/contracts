@@ -53,8 +53,8 @@ module.exports = async (deployer) => {
     "Inject LiquidityPoolRegistry"
   );
   logTransaction(
-    await registry.injectDependencies(await registry.LIQUIDITY_POOL_FACTORY_NAME()),
-    "Inject LiquidityPoolFactory"
+    await registry.injectDependencies(await registry.SYSTEM_POOLS_FACTORY_NAME()),
+    "Inject SystemPoolsFactory"
   );
   logTransaction(await registry.injectDependencies(await registry.PRICE_MANAGER_NAME()), "Inject PriceManager");
 
@@ -77,7 +77,7 @@ module.exports = async (deployer) => {
   logAddress("RewardsDistribution", rewardsDistribution.address);
   logAddress("UserInfoRegistry", await registry.getUserInfoRegistryContract());
   logAddress("LiquidityPoolRegistry", liquidityPoolRegistry.address);
-  logAddress("LiquidityPoolFactory", await registry.getLiquidityPoolFactoryContract());
+  logAddress("SystemPoolsFactory", await registry.getLiquidityPoolFactoryContract());
   logAddress("PriceManager", priceManager.address);
 
   logAddress("InterestRateLibrary", interestRateLibrary.address);

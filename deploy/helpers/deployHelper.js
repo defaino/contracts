@@ -1,4 +1,4 @@
-const { toBN, wei, getOnePercent, getDecimal } = require("../../scripts/utils.js");
+const { toBN, wei, getPrecision, getPercentage100 } = require("../../scripts/utils.js");
 const fs = require("fs");
 const web3 = require("web3");
 
@@ -12,10 +12,10 @@ function toBytes(string) {
 
 function percentToStr(percent, isColRatio = false) {
   if (isColRatio) {
-    return toBN(100).times(getDecimal()).div(percent).toFixed() + "%";
+    return toBN(100).times(getPercentage100()).div(percent).toFixed() + "%";
   }
 
-  return toBN(percent).idiv(getOnePercent()).toFixed() + "%";
+  return toBN(percent).idiv(getPrecision()).toFixed() + "%";
 }
 
 function getInterestRateLibraryData(path) {
@@ -47,7 +47,7 @@ function parsePoolsData(path) {
 }
 
 function convertToPercents(arr) {
-  const onePercent = getOnePercent();
+  const onePercent = getPrecision();
 
   for (let i = 0; i < arr.length; i++) {
     arr[i] = onePercent.times(arr[i]);
