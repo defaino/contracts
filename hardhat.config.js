@@ -49,12 +49,12 @@ module.exports = {
       gasMultiplier: 1.2,
       timeout: 60000,
     },
-    bsc_mainnet: {
+    bsc: {
       url: "https://bsc-dataseed.binance.org/",
       accounts: privateKey(),
       gasMultiplier: 1.2,
     },
-    eth_mainnet: {
+    ethereum: {
       url: `https://mainnet.infura.io/v3/${process.env.INFURA_KEY}`,
       accounts: privateKey(),
       gasMultiplier: 1.2,

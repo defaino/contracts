@@ -1,17 +1,23 @@
 const Registry = artifacts.require("Registry");
 const SystemParameters = artifacts.require("SystemParameters");
 
-const { logTransaction } = require("../runners/logger.js");
-const { getPrecision } = require("../../scripts/utils.js");
+const { getPrecision, wei } = require("../scripts/utils.js");
 
-module.exports = async (deployer) => {
+module.exports = async (deployer, logger) => {
   const registry = await Registry.deployed();
   const systemParameters = await SystemParameters.at(await registry.getSystemParametersContract());
 
   const liquidationBoundary = getPrecision().times(50);
 
-  logTransaction(
+  logger.logTransaction(
     await systemParameters.setupLiquidationBoundary(liquidationBoundary),
     "Add liquidation boundary parameter"
+  );
+
+  const minCurrencyAmount = wei(0.01);
+
+  logger.logTransaction(
+    await systemParameters.setupMinCurrencyAmount(minCurrencyAmount),
+    "Add min currency amount parameter"
   );
 };

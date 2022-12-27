@@ -1,27 +1,32 @@
 const MockERC20 = artifacts.require("MockERC20");
-const GovernanceToken = artifacts.require("GovernanceToken");
+const WETH = artifacts.require("WETH");
 
 const { getAssetKey, parsePoolsData } = require("../deploy/helpers/deployHelper");
 
-const TOKENS_OWNER = "0xc143351Fc176cB67D4b1016b27793b5D47E526C8"; // OWNER ADDRESS
-
-module.exports = async (deployer) => {
+async function main() {
   const dataArr = parsePoolsData("deploy/data/poolsData.json");
 
   let tokenDecimals = 18;
 
-  const governanceTokenSymbol = dataArr[0].symbol;
-  const governanceToken = await deployer.new(GovernanceToken, TOKENS_OWNER);
+  const rewardsTokenSymbol = dataArr[0].symbol;
+  const rewardsToken = await MockERC20.new("Mock" + rewardsTokenSymbol, rewardsTokenSymbol);
 
-  console.log(`Token symbol - ${governanceTokenSymbol}, token key - ${getAssetKey(governanceTokenSymbol)}`);
-  console.log(`Token address - ${governanceToken.address}, token decimals - ${tokenDecimals}`);
+  console.log(`Token symbol - ${rewardsTokenSymbol}, token key - ${getAssetKey(rewardsTokenSymbol)}`);
+  console.log(`Token address - ${rewardsToken.address}, token decimals - ${tokenDecimals}`);
   console.log("----------------------");
 
-  for (let i = 1; i < dataArr.length; i++) {
+  const nativeTokenSymbol = dataArr[1].symbol;
+  const nativeToken = await WETH.new();
+
+  console.log(`Token symbol - ${nativeTokenSymbol}, token key - ${getAssetKey(nativeTokenSymbol)}`);
+  console.log(`Token address - ${nativeToken.address}, token decimals - ${tokenDecimals}`);
+  console.log("----------------------");
+
+  for (let i = 2; i < dataArr.length; i++) {
     tokenDecimals = 18;
 
     const currentSymbol = dataArr[i].symbol;
-    const token = await deployer.new(MockERC20, "Mock" + currentSymbol, currentSymbol);
+    const token = await MockERC20.new("Mock" + currentSymbol, currentSymbol);
 
     if (currentSymbol == "USDC" || currentSymbol == "USDT") {
       tokenDecimals = 6;
@@ -35,4 +40,11 @@ module.exports = async (deployer) => {
     console.log(`Token address - ${token.address}, token decimals - ${tokenDecimals}`);
     console.log("----------------------");
   }
-};
+}
+
+// We recommend this pattern to be able to use async/await everywhere
+// and properly handle errors.
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
