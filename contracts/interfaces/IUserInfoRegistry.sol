@@ -148,112 +148,112 @@ interface IUserInfoRegistry {
 
     /// @notice A system function that is needed to update users' assets after LP token transfers
     /// @dev Only LiquidityPools contracts can call this function
-    /// @param _assetKey the key of the specific liquidity pool
-    /// @param _from the address of the user who sends the tokens
-    /// @param _to the address of the user to whom the tokens are sent
-    /// @param _amount number of LP tokens that are transferred
+    /// @param assetKey_ the key of the specific liquidity pool
+    /// @param from_ the address of the user who sends the tokens
+    /// @param to_ the address of the user to whom the tokens are sent
+    /// @param amount_ number of LP tokens that are transferred
     function updateAssetsAfterTransfer(
-        bytes32 _assetKey,
-        address _from,
-        address _to,
-        uint256 _amount
+        bytes32 assetKey_,
+        address from_,
+        address to_,
+        uint256 amount_
     ) external;
 
     /// @notice System function, which is needed to update the list of keys of pools of the user, in which he put a deposit
     /// @dev Only DefiCore contracts can call this function
-    /// @param _userAddr the address of the user for whom the pool key list will be updated
-    /// @param _assetKey the key of the specific liquidity pool
-    function updateUserSupplyAssets(address _userAddr, bytes32 _assetKey) external;
+    /// @param userAddr_ the address of the user for whom the pool key list will be updated
+    /// @param assetKey_ the key of the specific liquidity pool
+    function updateUserSupplyAssets(address userAddr_, bytes32 assetKey_) external;
 
     /// @notice System function required to update the list of keys of pools the user has taken credit from
     /// @dev Only DefiCore contracts can call this function
-    /// @param _userAddr the address of the user for whom the pool key list will be updated
-    /// @param _assetKey the key of the specific liquidity pool
-    function updateUserBorrowAssets(address _userAddr, bytes32 _assetKey) external;
+    /// @param userAddr_ the address of the user for whom the pool key list will be updated
+    /// @param assetKey_ the key of the specific liquidity pool
+    function updateUserBorrowAssets(address userAddr_, bytes32 assetKey_) external;
 
     /// @notice The function that returns for a particular user a list of keys from pools where he has deposited
-    /// @param _userAddr user address
+    /// @param userAddr_ user address
     /// @return an array of keys of pools, in which the user has made a deposit
-    function getUserSupplyAssets(address _userAddr) external view returns (bytes32[] memory);
+    function getUserSupplyAssets(address userAddr_) external view returns (bytes32[] memory);
 
     /// @notice A function that returns, for a specific user, a list of keys from the pools where he took credit
-    /// @param _userAddr user address
+    /// @param userAddr_ user address
     /// @return an array of keys of pools, in which the user took credit
-    function getUserBorrowAssets(address _userAddr) external view returns (bytes32[] memory);
+    function getUserBorrowAssets(address userAddr_) external view returns (bytes32[] memory);
 
     /// @notice A function that returns a structure with main user parameters
-    /// @param _userAddr user address
+    /// @param userAddr_ user address
     /// @return an UserMainInfo structure
-    function getUserMainInfo(address _userAddr) external view returns (UserMainInfo memory);
+    function getUserMainInfo(address userAddr_) external view returns (UserMainInfo memory);
 
     /// @notice A function that returns a structure with information about user awards
-    /// @param _userAddr user address
+    /// @param userAddr_ user address
     /// @return a RewardsDistributionInfo structure
     function getUserDistributionRewards(
-        address _userAddr
+        address userAddr_
     ) external view returns (RewardsDistributionInfo memory);
 
     /// @notice The function that returns an array of structures with information about the pool where the user has made a deposit
-    /// @param _userAddr user address
-    /// @return _supplyPoolsInfo an array of UserSupplyPoolInfo structures
+    /// @param userAddr_ user address
+    /// @return supplyPoolsInfo_ an array of UserSupplyPoolInfo structures
     function getUserSupplyPoolsInfo(
-        address _userAddr,
-        bytes32[] calldata _assetKeys
-    ) external view returns (UserSupplyPoolInfo[] memory _supplyPoolsInfo);
+        address userAddr_,
+        bytes32[] calldata assetKeys_
+    ) external view returns (UserSupplyPoolInfo[] memory supplyPoolsInfo_);
 
     /// @notice A function that returns an array of structures with information about the pool where the user took credit
-    /// @param _userAddr user address
-    /// @param _assetKeys an array of pool keys for which you want to get information
-    /// @return _borrowPoolsInfo an array of UserBorrowPoolInfo structures
+    /// @param userAddr_ user address
+    /// @param assetKeys_ an array of pool keys for which you want to get information
+    /// @return borrowPoolsInfo_ an array of UserBorrowPoolInfo structures
     function getUserBorrowPoolsInfo(
-        address _userAddr,
-        bytes32[] calldata _assetKeys
-    ) external view returns (UserBorrowPoolInfo[] memory _borrowPoolsInfo);
+        address userAddr_,
+        bytes32[] calldata assetKeys_
+    ) external view returns (UserBorrowPoolInfo[] memory borrowPoolsInfo_);
 
     /// @notice The function that returns information about the deposit and credit of the user in the pool
-    /// @param _userAddr user address
-    /// @param _assetKey pool key for which you want to get information
+    /// @param userAddr_ user address
+    /// @param assetKey_ pool key for which you want to get information
     /// @return an UserPoolInfo structure
     function getUserPoolInfo(
-        address _userAddr,
-        bytes32 _assetKey
+        address userAddr_,
+        bytes32 assetKey_
     ) external view returns (UserPoolInfo memory);
 
     /// @notice A function that returns information about the maximum values for the user
-    /// @param _userAddr user address
-    /// @param _assetKey pool key for which you want to get information
+    /// @param userAddr_ user address
+    /// @param assetKey_ pool key for which you want to get information
     /// @return an UserMaxValues structure
     function getUserMaxValues(
-        address _userAddr,
-        bytes32 _assetKey
+        address userAddr_,
+        bytes32 assetKey_
     ) external view returns (UserMaxValues memory);
 
     /// @notice A function that returns general information for the liquidation of a specific user
-    /// @param _accounts accounts for which you need to get information
-    /// @return _resultArr an array of UserLiquidationInfo structures
+    /// @param accounts_ accounts for which you need to get information
+    /// @return resultArr_ an array of UserLiquidationInfo structures
     function getUsersLiquidiationInfo(
-        address[] calldata _accounts
-    ) external view returns (UserLiquidationInfo[] memory _resultArr);
+        address[] calldata accounts_
+    ) external view returns (UserLiquidationInfo[] memory resultArr_);
 
     /// @notice Function for getting detailed liquidation information for a particular user
-    /// @param _userAddr user address
-    /// @param _borrowAssetKey key of the pool where the user took the credit
-    /// @param _receiveAssetKey the key of the pool in which the user has deposited
+    /// @param userAddr_ user address
+    /// @param borrowAssetKey_ key of the pool where the user took the credit
+    /// @param receiveAssetKey_ the key of the pool in which the user has deposited
     /// @return an UserLiquidationData structure
     function getUserLiquidationData(
-        address _userAddr,
-        bytes32 _borrowAssetKey,
-        bytes32 _receiveAssetKey
+        address userAddr_,
+        bytes32 borrowAssetKey_,
+        bytes32 receiveAssetKey_
     ) external view returns (UserLiquidationData memory);
 
     /// @notice Function for obtaining the maximum possible amount for liquidation
-    /// @param _userAddr user address
-    /// @param _supplyAssetKey the key of the pool in which the user has deposited
-    /// @param _borrowAssetKey key of the pool where the user took the credit
-    /// @return _maxQuantityInUSD maximum amount for liquidation in dollars
+    /// @param userAddr_ user address
+    /// @param supplyAssetKey_ the key of the pool in which the user has deposited
+    /// @param borrowAssetKey_ key of the pool where the user took the credit
+    /// @return maxQuantityInUSD_ maximum amount for liquidation in dollars
     function getMaxLiquidationQuantity(
-        address _userAddr,
-        bytes32 _supplyAssetKey,
-        bytes32 _borrowAssetKey
-    ) external view returns (uint256 _maxQuantityInUSD);
+        address userAddr_,
+        bytes32 supplyAssetKey_,
+        bytes32 borrowAssetKey_
+    ) external view returns (uint256 maxQuantityInUSD_);
 }

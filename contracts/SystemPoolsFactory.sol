@@ -10,56 +10,56 @@ import "./interfaces/ISystemPoolsFactory.sol";
 import "./interfaces/IBasicPool.sol";
 
 contract SystemPoolsFactory is ISystemPoolsFactory, AbstractDependant {
-    IRegistry private registry;
-    ISystemPoolsRegistry private systemPoolsRegistry;
+    IRegistry internal _registry;
+    ISystemPoolsRegistry internal _systemPoolsRegistry;
 
     modifier onlySystemPoolsRegistry() {
         require(
-            address(systemPoolsRegistry) == msg.sender,
+            address(_systemPoolsRegistry) == msg.sender,
             "SystemPoolsFactory: Caller not a SystemPoolsRegistry."
         );
         _;
     }
 
     function setDependencies(address _contractsRegistry) external override dependant {
-        registry = IRegistry(_contractsRegistry);
+        _registry = IRegistry(_contractsRegistry);
 
-        systemPoolsRegistry = ISystemPoolsRegistry(registry.getSystemPoolsRegistryContract());
+        _systemPoolsRegistry = ISystemPoolsRegistry(_registry.getSystemPoolsRegistryContract());
     }
 
     function newLiquidityPool(
-        address _assetAddr,
-        bytes32 _assetKey,
-        string calldata _tokenSymbol
+        address assetAddr_,
+        bytes32 assetKey_,
+        string calldata tokenSymbol_
     ) external override onlySystemPoolsRegistry returns (address) {
-        address _proxyAddr = _createPool(ISystemPoolsRegistry.PoolType.LIQUIDITY_POOL);
+        address proxyAddr_ = _createPool(ISystemPoolsRegistry.PoolType.LIQUIDITY_POOL);
 
-        ILiquidityPool(_proxyAddr).liquidityPoolInitialize(_assetAddr, _assetKey, _tokenSymbol);
+        ILiquidityPool(proxyAddr_).liquidityPoolInitialize(assetAddr_, assetKey_, tokenSymbol_);
 
-        return _proxyAddr;
+        return proxyAddr_;
     }
 
     function newStablePool(
-        address _assetAddr,
-        bytes32 _assetKey
+        address assetAddr_,
+        bytes32 assetKey_
     ) external override onlySystemPoolsRegistry returns (address) {
-        address _proxyAddr = _createPool(ISystemPoolsRegistry.PoolType.STABLE_POOL);
+        address proxyAddr_ = _createPool(ISystemPoolsRegistry.PoolType.STABLE_POOL);
 
-        IStablePool(_proxyAddr).stablePoolInitialize(_assetAddr, _assetKey);
+        IStablePool(proxyAddr_).stablePoolInitialize(assetAddr_, assetKey_);
 
-        return _proxyAddr;
+        return proxyAddr_;
     }
 
-    function _createPool(ISystemPoolsRegistry.PoolType _poolType) internal returns (address) {
-        ISystemPoolsRegistry _poolsRegistry = systemPoolsRegistry;
+    function _createPool(ISystemPoolsRegistry.PoolType poolType_) internal returns (address) {
+        ISystemPoolsRegistry _poolsRegistry = _systemPoolsRegistry;
 
-        address _proxyAddr = address(
-            new PublicBeaconProxy(_poolsRegistry.getPoolsBeacon(_poolType), "")
+        address proxyAddr_ = address(
+            new PublicBeaconProxy(_poolsRegistry.getPoolsBeacon(poolType_), "")
         );
 
-        AbstractDependant(_proxyAddr).setDependencies(address(registry));
-        AbstractDependant(_proxyAddr).setInjector(address(_poolsRegistry));
+        AbstractDependant(proxyAddr_).setDependencies(address(_registry));
+        AbstractDependant(proxyAddr_).setInjector(address(_poolsRegistry));
 
-        return _proxyAddr;
+        return proxyAddr_;
     }
 }

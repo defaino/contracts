@@ -24,18 +24,18 @@ contract StablePermitToken is IStablePermitToken, ERC20Permit {
     }
 
     constructor(
-        string memory _name,
-        string memory _symbol,
-        IRegistry _registry
-    ) ERC20Permit(_name) ERC20(_name, _symbol) {
-        registry = _registry;
+        string memory name_,
+        string memory symbol_,
+        IRegistry registry_
+    ) ERC20Permit(name_) ERC20(name_, symbol_) {
+        registry = registry_;
     }
 
-    function mint(address _account, uint256 _amount) external override onlyDesiredPool {
-        _mint(_account, _amount);
+    function mint(address account_, uint256 amount_) external override onlyDesiredPool {
+        _mint(account_, amount_);
     }
 
-    function burn(address _account, uint256 _amount) external override onlyDesiredPool {
-        _burn(_account, _amount);
+    function burn(address account_, uint256 amount_) external override onlyDesiredPool {
+        _burn(account_, amount_);
     }
 }

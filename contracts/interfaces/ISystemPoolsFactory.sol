@@ -9,20 +9,20 @@ import "./ISystemPoolsRegistry.sol";
 interface ISystemPoolsFactory {
     /// @notice This function is needed for deploying a new liquidity pool
     /// @dev Only SystemPoolsRegistry contract can call this function
-    /// @param _assetAddr address of the underlying pool asset
-    /// @param _assetKey pool key of the new liquidity pool
-    /// @param _tokenSymbol symbol of the underlying pool asset
+    /// @param assetAddr_ address of the underlying pool asset
+    /// @param assetKey_ pool key of the new liquidity pool
+    /// @param tokenSymbol_ symbol of the underlying pool asset
     /// @return a new liquidity pool address
     function newLiquidityPool(
-        address _assetAddr,
-        bytes32 _assetKey,
-        string calldata _tokenSymbol
+        address assetAddr_,
+        bytes32 assetKey_,
+        string calldata tokenSymbol_
     ) external returns (address);
 
     /// @notice This function is needed for deploying a new stable pool
     /// @dev Only SystemPoolsRegistry contract can call this function
-    /// @param _assetAddr address of the underlying pool asset
-    /// @param _assetKey pool key of the new stable pool
+    /// @param assetAddr_ address of the underlying pool asset
+    /// @param assetKey_ pool key of the new stable pool
     /// @return a new stable pool address
-    function newStablePool(address _assetAddr, bytes32 _assetKey) external returns (address);
+    function newStablePool(address assetAddr_, bytes32 assetKey_) external returns (address);
 }

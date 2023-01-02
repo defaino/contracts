@@ -9,17 +9,17 @@ contract ChainlinkOracleMock is AggregatorV2V3Interface {
 
     string public override description = "Description";
 
-    constructor(int256 _price, uint8 _decimals) {
-        price = _price;
-        decimals = _decimals;
+    constructor(int256 price_, uint8 decimals_) {
+        price = price_;
+        decimals = decimals_;
     }
 
-    function setPrice(int256 _newPrice) external {
-        price = _newPrice;
+    function setPrice(int256 newPrice_) external {
+        price = newPrice_;
     }
 
-    function setDecimals(uint8 _newDecimals) external {
-        decimals = _newDecimals;
+    function setDecimals(uint8 newDecimals_) external {
+        decimals = newDecimals_;
     }
 
     function latestAnswer() external view override returns (int256) {
@@ -34,13 +34,11 @@ contract ChainlinkOracleMock is AggregatorV2V3Interface {
         return block.timestamp;
     }
 
-    function getAnswer(uint256 roundId) external view override returns (int256) {
-        roundId;
+    function getAnswer(uint256) external view override returns (int256) {
         return price;
     }
 
-    function getTimestamp(uint256 roundId) external view override returns (uint256) {
-        roundId;
+    function getTimestamp(uint256) external view override returns (uint256) {
         return block.timestamp;
     }
 
@@ -48,39 +46,18 @@ contract ChainlinkOracleMock is AggregatorV2V3Interface {
         return uint256(price);
     }
 
-    // getRoundData and latestRoundData should both raise "No data present"
-    // if they do not have data to report, instead of returning unset values
-    // which could be misinterpreted as actual reported values.
     function getRoundData(
-        uint80 _roundId
-    )
-        external
-        view
-        override
-        returns (
-            uint80 roundId,
-            int256 answer,
-            uint256 startedAt,
-            uint256 updatedAt,
-            uint80 answeredInRound
-        )
-    {
-        _roundId;
-        return (_roundId, price, block.timestamp, block.timestamp, _roundId);
+        uint80 roundId_
+    ) external view override returns (uint80, int256, uint256, uint256, uint80) {
+        return (roundId_, price, block.timestamp, block.timestamp, roundId_);
     }
 
     function latestRoundData()
         external
         view
         override
-        returns (
-            uint80 roundId,
-            int256 answer,
-            uint256 startedAt,
-            uint256 updatedAt,
-            uint80 answeredInRound
-        )
+        returns (uint80, int256, uint256, uint256, uint80)
     {
-        return (roundId, price, block.timestamp, block.timestamp, roundId);
+        return (0, price, block.timestamp, block.timestamp, 0);
     }
 }

@@ -42,16 +42,15 @@ contract AssetParameters is IAssetParameters, AbstractDependant {
 
     bytes32 public constant ANNUAL_BORROW_RATE_KEY = keccak256("ANNUAL_BORROW_RATE");
 
-    address private systemOwnerAddr;
-    ISystemParameters private systemParameters;
-    ISystemPoolsRegistry private systemPoolsRegistry;
-    IPriceManager private priceManager;
+    address internal _systemOwnerAddr;
+    ISystemParameters internal _systemParameters;
+    ISystemPoolsRegistry internal _systemPoolsRegistry;
 
-    mapping(bytes32 => mapping(bytes32 => PureParameters.Param)) private _parameters;
+    mapping(bytes32 => mapping(bytes32 => PureParameters.Param)) internal _parameters;
 
     modifier onlyExists(bytes32 _assetKey) {
         require(
-            systemPoolsRegistry.onlyExistingPool(_assetKey),
+            _systemPoolsRegistry.onlyExistingPool(_assetKey),
             "AssetParameters: Asset doesn't exist."
         );
         _;
@@ -59,304 +58,303 @@ contract AssetParameters is IAssetParameters, AbstractDependant {
 
     modifier onlySystemOwner() {
         require(
-            msg.sender == systemOwnerAddr,
+            msg.sender == _systemOwnerAddr,
             "AssetParameters: Only system owner can call this function."
         );
         _;
     }
 
-    function setDependencies(address _contractsRegistry) external override dependant {
-        IRegistry _registry = IRegistry(_contractsRegistry);
+    function setDependencies(address contractsRegistry_) external override dependant {
+        IRegistry registry_ = IRegistry(contractsRegistry_);
 
-        systemOwnerAddr = _registry.getSystemOwner();
-        systemParameters = ISystemParameters(_registry.getSystemParametersContract());
-        systemPoolsRegistry = ISystemPoolsRegistry(_registry.getSystemPoolsRegistryContract());
-        priceManager = IPriceManager(_registry.getPriceManagerContract());
+        _systemOwnerAddr = registry_.getSystemOwner();
+        _systemParameters = ISystemParameters(registry_.getSystemParametersContract());
+        _systemPoolsRegistry = ISystemPoolsRegistry(registry_.getSystemPoolsRegistryContract());
     }
 
-    function setPoolInitParams(bytes32 _assetKey, bool _isCollateral) external override {
+    function setPoolInitParams(bytes32 assetKey_, bool isCollateral_) external override {
         require(
-            address(systemPoolsRegistry) == msg.sender,
+            address(_systemPoolsRegistry) == msg.sender,
             "AssetParameters: Caller not a SystemPoolsRegistry."
         );
 
-        _parameters[_assetKey][FREEZE_KEY] = PureParameters.makeBoolParam(false);
-        emit FreezeParamUpdated(_assetKey, false);
+        _parameters[assetKey_][FREEZE_KEY] = PureParameters.makeBoolParam(false);
+        emit FreezeParamUpdated(assetKey_, false);
 
-        _parameters[_assetKey][ENABLE_COLLATERAL_KEY] = PureParameters.makeBoolParam(
-            _isCollateral
+        _parameters[assetKey_][ENABLE_COLLATERAL_KEY] = PureParameters.makeBoolParam(
+            isCollateral_
         );
-        emit CollateralParamUpdated(_assetKey, _isCollateral);
+        emit CollateralParamUpdated(assetKey_, isCollateral_);
     }
 
     function setupAnnualBorrowRate(
-        bytes32 _assetKey,
-        uint256 _newAnnualBorrowRate
-    ) external override onlySystemOwner onlyExists(_assetKey) {
+        bytes32 assetKey_,
+        uint256 newAnnualBorrowRate_
+    ) external override onlySystemOwner onlyExists(assetKey_) {
         require(
-            systemParameters.getStablePoolsAvailability(),
+            _systemParameters.getStablePoolsAvailability(),
             "AssetParameters: Stable pools unavailable."
         );
-        (address _poolAddr, ISystemPoolsRegistry.PoolType _poolType) = systemPoolsRegistry
-            .poolsInfo(_assetKey);
+        (address poolAddr_, ISystemPoolsRegistry.PoolType poolType_) = _systemPoolsRegistry
+            .poolsInfo(assetKey_);
 
         require(
-            _poolType == ISystemPoolsRegistry.PoolType.STABLE_POOL,
+            poolType_ == ISystemPoolsRegistry.PoolType.STABLE_POOL,
             "AssetParameters: Incorrect pool type."
         );
 
         require(
-            _newAnnualBorrowRate <= PRECISION * 25,
+            newAnnualBorrowRate_ <= PRECISION * 25,
             "AssetParameters: Annual borrow rate is higher than possible."
         );
 
-        if (PureParameters.paramExists(_parameters[_assetKey][ANNUAL_BORROW_RATE_KEY])) {
-            IBasicPool(_poolAddr).updateCompoundRate(false);
+        if (PureParameters.paramExists(_parameters[assetKey_][ANNUAL_BORROW_RATE_KEY])) {
+            IBasicPool(poolAddr_).updateCompoundRate(false);
         }
 
-        _parameters[_assetKey][ANNUAL_BORROW_RATE_KEY] = PureParameters.makeUintParam(
-            _newAnnualBorrowRate
+        _parameters[assetKey_][ANNUAL_BORROW_RATE_KEY] = PureParameters.makeUintParam(
+            newAnnualBorrowRate_
         );
 
-        emit AnnualBorrowRateUpdated(_assetKey, _newAnnualBorrowRate);
+        emit AnnualBorrowRateUpdated(assetKey_, newAnnualBorrowRate_);
     }
 
     function setupMainParameters(
-        bytes32 _assetKey,
-        MainPoolParams calldata _mainParams
-    ) external override onlySystemOwner onlyExists(_assetKey) {
-        _setupMainParameters(_assetKey, _mainParams);
+        bytes32 assetKey_,
+        MainPoolParams calldata mainParams_
+    ) external override onlySystemOwner onlyExists(assetKey_) {
+        _setupMainParameters(assetKey_, mainParams_);
     }
 
     function setupInterestRateModel(
-        bytes32 _assetKey,
-        InterestRateParams calldata _interestParams
-    ) external override onlySystemOwner onlyExists(_assetKey) {
-        _setupInterestRateParams(_assetKey, _interestParams);
+        bytes32 assetKey_,
+        InterestRateParams calldata interestParams_
+    ) external override onlySystemOwner onlyExists(assetKey_) {
+        _setupInterestRateParams(assetKey_, interestParams_);
     }
 
     function setupDistributionsMinimums(
-        bytes32 _assetKey,
-        DistributionMinimums calldata _distrMinimums
-    ) external override onlySystemOwner onlyExists(_assetKey) {
-        _setupDistributionsMinimums(_assetKey, _distrMinimums);
+        bytes32 assetKey_,
+        DistributionMinimums calldata distrMinimums_
+    ) external override onlySystemOwner onlyExists(assetKey_) {
+        _setupDistributionsMinimums(assetKey_, distrMinimums_);
     }
 
     function setupAllParameters(
-        bytes32 _assetKey,
-        AllPoolParams calldata _poolParams
-    ) external override onlySystemOwner onlyExists(_assetKey) {
-        _setupInterestRateParams(_assetKey, _poolParams.interestRateParams);
-        _setupMainParameters(_assetKey, _poolParams.mainParams);
-        _setupDistributionsMinimums(_assetKey, _poolParams.distrMinimums);
+        bytes32 assetKey_,
+        AllPoolParams calldata poolParams_
+    ) external override onlySystemOwner onlyExists(assetKey_) {
+        _setupInterestRateParams(assetKey_, poolParams_.interestRateParams);
+        _setupMainParameters(assetKey_, poolParams_.mainParams);
+        _setupDistributionsMinimums(assetKey_, poolParams_.distrMinimums);
     }
 
-    function freeze(bytes32 _assetKey) external override onlySystemOwner onlyExists(_assetKey) {
-        _parameters[_assetKey][FREEZE_KEY] = PureParameters.makeBoolParam(true);
+    function freeze(bytes32 assetKey_) external override onlySystemOwner onlyExists(assetKey_) {
+        _parameters[assetKey_][FREEZE_KEY] = PureParameters.makeBoolParam(true);
 
-        emit FreezeParamUpdated(_assetKey, true);
+        emit FreezeParamUpdated(assetKey_, true);
     }
 
     function enableCollateral(
-        bytes32 _assetKey
-    ) external override onlySystemOwner onlyExists(_assetKey) {
-        _parameters[_assetKey][ENABLE_COLLATERAL_KEY] = PureParameters.makeBoolParam(true);
+        bytes32 assetKey_
+    ) external override onlySystemOwner onlyExists(assetKey_) {
+        _parameters[assetKey_][ENABLE_COLLATERAL_KEY] = PureParameters.makeBoolParam(true);
 
-        emit CollateralParamUpdated(_assetKey, true);
+        emit CollateralParamUpdated(assetKey_, true);
     }
 
-    function isPoolFrozen(bytes32 _assetKey) external view override returns (bool) {
-        return _getParam(_assetKey, FREEZE_KEY).getBoolFromParam();
+    function isPoolFrozen(bytes32 assetKey_) external view override returns (bool) {
+        return _getParam(assetKey_, FREEZE_KEY).getBoolFromParam();
     }
 
-    function isAvailableAsCollateral(bytes32 _assetKey) external view override returns (bool) {
-        return _getParam(_assetKey, ENABLE_COLLATERAL_KEY).getBoolFromParam();
+    function isAvailableAsCollateral(bytes32 assetKey_) external view override returns (bool) {
+        return _getParam(assetKey_, ENABLE_COLLATERAL_KEY).getBoolFromParam();
     }
 
-    function getAnnualBorrowRate(bytes32 _assetKey) external view override returns (uint256) {
-        return _getParam(_assetKey, ANNUAL_BORROW_RATE_KEY).getUintFromParam();
+    function getAnnualBorrowRate(bytes32 assetKey_) external view override returns (uint256) {
+        return _getParam(assetKey_, ANNUAL_BORROW_RATE_KEY).getUintFromParam();
     }
 
     function getMainPoolParams(
-        bytes32 _assetKey
+        bytes32 assetKey_
     ) external view override returns (MainPoolParams memory) {
         return
             MainPoolParams(
-                _getParam(_assetKey, COL_RATIO_KEY).getUintFromParam(),
-                _getParam(_assetKey, RESERVE_FACTOR_KEY).getUintFromParam(),
-                _getParam(_assetKey, LIQUIDATION_DISCOUNT_KEY).getUintFromParam(),
-                _getParam(_assetKey, MAX_UTILIZATION_RATIO_KEY).getUintFromParam()
+                _getParam(assetKey_, COL_RATIO_KEY).getUintFromParam(),
+                _getParam(assetKey_, RESERVE_FACTOR_KEY).getUintFromParam(),
+                _getParam(assetKey_, LIQUIDATION_DISCOUNT_KEY).getUintFromParam(),
+                _getParam(assetKey_, MAX_UTILIZATION_RATIO_KEY).getUintFromParam()
             );
     }
 
     function getInterestRateParams(
-        bytes32 _assetKey
+        bytes32 assetKey_
     ) external view override returns (InterestRateParams memory) {
         return
             InterestRateParams(
-                _getParam(_assetKey, BASE_PERCENTAGE_KEY).getUintFromParam(),
-                _getParam(_assetKey, FIRST_SLOPE_KEY).getUintFromParam(),
-                _getParam(_assetKey, SECOND_SLOPE_KEY).getUintFromParam(),
-                _getParam(_assetKey, UTILIZATION_BREAKING_POINT_KEY).getUintFromParam()
+                _getParam(assetKey_, BASE_PERCENTAGE_KEY).getUintFromParam(),
+                _getParam(assetKey_, FIRST_SLOPE_KEY).getUintFromParam(),
+                _getParam(assetKey_, SECOND_SLOPE_KEY).getUintFromParam(),
+                _getParam(assetKey_, UTILIZATION_BREAKING_POINT_KEY).getUintFromParam()
             );
     }
 
     function getDistributionMinimums(
-        bytes32 _assetKey
+        bytes32 assetKey_
     ) external view override returns (DistributionMinimums memory) {
         return
             DistributionMinimums(
-                _getParam(_assetKey, MIN_SUPPLY_DISTRIBUTION_PART_KEY).getUintFromParam(),
-                _getParam(_assetKey, MIN_BORROW_DISTRIBUTION_PART_KEY).getUintFromParam()
+                _getParam(assetKey_, MIN_SUPPLY_DISTRIBUTION_PART_KEY).getUintFromParam(),
+                _getParam(assetKey_, MIN_BORROW_DISTRIBUTION_PART_KEY).getUintFromParam()
             );
     }
 
-    function getColRatio(bytes32 _assetKey) external view override returns (uint256) {
-        return _getParam(_assetKey, COL_RATIO_KEY).getUintFromParam();
+    function getColRatio(bytes32 assetKey_) external view override returns (uint256) {
+        return _getParam(assetKey_, COL_RATIO_KEY).getUintFromParam();
     }
 
-    function getReserveFactor(bytes32 _assetKey) external view override returns (uint256) {
-        return _getParam(_assetKey, RESERVE_FACTOR_KEY).getUintFromParam();
+    function getReserveFactor(bytes32 assetKey_) external view override returns (uint256) {
+        return _getParam(assetKey_, RESERVE_FACTOR_KEY).getUintFromParam();
     }
 
-    function getLiquidationDiscount(bytes32 _assetKey) external view override returns (uint256) {
-        return _getParam(_assetKey, LIQUIDATION_DISCOUNT_KEY).getUintFromParam();
+    function getLiquidationDiscount(bytes32 assetKey_) external view override returns (uint256) {
+        return _getParam(assetKey_, LIQUIDATION_DISCOUNT_KEY).getUintFromParam();
     }
 
-    function getMaxUtilizationRatio(bytes32 _assetKey) external view override returns (uint256) {
-        return _getParam(_assetKey, MAX_UTILIZATION_RATIO_KEY).getUintFromParam();
+    function getMaxUtilizationRatio(bytes32 assetKey_) external view override returns (uint256) {
+        return _getParam(assetKey_, MAX_UTILIZATION_RATIO_KEY).getUintFromParam();
     }
 
     function _setupInterestRateParams(
-        bytes32 _assetKey,
-        InterestRateParams calldata _interestParams
+        bytes32 assetKey_,
+        InterestRateParams calldata interestParams_
     ) internal {
         require(
-            _interestParams.basePercentage <= PRECISION * 3,
+            interestParams_.basePercentage <= PRECISION * 3,
             "AssetParameters: The new value of the base percentage is invalid."
         );
         require(
-            _interestParams.firstSlope >= PRECISION * 3 &&
-                _interestParams.firstSlope <= PRECISION * 20,
+            interestParams_.firstSlope >= PRECISION * 3 &&
+                interestParams_.firstSlope <= PRECISION * 20,
             "AssetParameters: The new value of the first slope is invalid."
         );
         require(
-            _interestParams.secondSlope >= PRECISION * 50 &&
-                _interestParams.secondSlope <= PERCENTAGE_100,
+            interestParams_.secondSlope >= PRECISION * 50 &&
+                interestParams_.secondSlope <= PERCENTAGE_100,
             "AssetParameters: The new value of the second slope is invalid."
         );
         require(
-            _interestParams.utilizationBreakingPoint >= PRECISION * 60 &&
-                _interestParams.utilizationBreakingPoint <= PRECISION * 90,
+            interestParams_.utilizationBreakingPoint >= PRECISION * 60 &&
+                interestParams_.utilizationBreakingPoint <= PRECISION * 90,
             "AssetParameters: The new value of the utilization breaking point is invalid."
         );
 
-        _parameters[_assetKey][BASE_PERCENTAGE_KEY] = PureParameters.makeUintParam(
-            _interestParams.basePercentage
+        _parameters[assetKey_][BASE_PERCENTAGE_KEY] = PureParameters.makeUintParam(
+            interestParams_.basePercentage
         );
-        _parameters[_assetKey][FIRST_SLOPE_KEY] = PureParameters.makeUintParam(
-            _interestParams.firstSlope
+        _parameters[assetKey_][FIRST_SLOPE_KEY] = PureParameters.makeUintParam(
+            interestParams_.firstSlope
         );
-        _parameters[_assetKey][SECOND_SLOPE_KEY] = PureParameters.makeUintParam(
-            _interestParams.secondSlope
+        _parameters[assetKey_][SECOND_SLOPE_KEY] = PureParameters.makeUintParam(
+            interestParams_.secondSlope
         );
-        _parameters[_assetKey][UTILIZATION_BREAKING_POINT_KEY] = PureParameters.makeUintParam(
-            _interestParams.utilizationBreakingPoint
+        _parameters[assetKey_][UTILIZATION_BREAKING_POINT_KEY] = PureParameters.makeUintParam(
+            interestParams_.utilizationBreakingPoint
         );
 
         emit InterestRateParamsUpdated(
-            _assetKey,
-            _interestParams.basePercentage,
-            _interestParams.firstSlope,
-            _interestParams.secondSlope,
-            _interestParams.utilizationBreakingPoint
+            assetKey_,
+            interestParams_.basePercentage,
+            interestParams_.firstSlope,
+            interestParams_.secondSlope,
+            interestParams_.utilizationBreakingPoint
         );
     }
 
     function _setupMainParameters(
-        bytes32 _assetKey,
-        MainPoolParams calldata _mainParams
+        bytes32 assetKey_,
+        MainPoolParams calldata mainParams_
     ) internal {
         require(
-            _mainParams.collateralizationRatio >= PRECISION * 111 &&
-                _mainParams.collateralizationRatio <= PRECISION * 200,
+            mainParams_.collateralizationRatio >= PRECISION * 111 &&
+                mainParams_.collateralizationRatio <= PRECISION * 200,
             "AssetParameters: The new value of the collateralization ratio is invalid."
         );
         require(
-            _mainParams.reserveFactor >= PRECISION * 10 &&
-                _mainParams.reserveFactor <= PRECISION * 35,
+            mainParams_.reserveFactor >= PRECISION * 10 &&
+                mainParams_.reserveFactor <= PRECISION * 35,
             "AssetParameters: The new value of the reserve factor is invalid."
         );
         require(
-            _mainParams.liquidationDiscount <= PRECISION * 10,
+            mainParams_.liquidationDiscount <= PRECISION * 10,
             "AssetParameters: The new value of the liquidation discount is invalid."
         );
         require(
-            _mainParams.maxUtilizationRatio >= PRECISION * 94 &&
-                _mainParams.maxUtilizationRatio <= PRECISION * 97,
+            mainParams_.maxUtilizationRatio >= PRECISION * 94 &&
+                mainParams_.maxUtilizationRatio <= PRECISION * 97,
             "AssetParameters: The new value of the max utilization ratio is invalid."
         );
 
-        _parameters[_assetKey][COL_RATIO_KEY] = PureParameters.makeUintParam(
-            _mainParams.collateralizationRatio
+        _parameters[assetKey_][COL_RATIO_KEY] = PureParameters.makeUintParam(
+            mainParams_.collateralizationRatio
         );
-        _parameters[_assetKey][RESERVE_FACTOR_KEY] = PureParameters.makeUintParam(
-            _mainParams.reserveFactor
+        _parameters[assetKey_][RESERVE_FACTOR_KEY] = PureParameters.makeUintParam(
+            mainParams_.reserveFactor
         );
-        _parameters[_assetKey][LIQUIDATION_DISCOUNT_KEY] = PureParameters.makeUintParam(
-            _mainParams.liquidationDiscount
+        _parameters[assetKey_][LIQUIDATION_DISCOUNT_KEY] = PureParameters.makeUintParam(
+            mainParams_.liquidationDiscount
         );
-        _parameters[_assetKey][MAX_UTILIZATION_RATIO_KEY] = PureParameters.makeUintParam(
-            _mainParams.maxUtilizationRatio
+        _parameters[assetKey_][MAX_UTILIZATION_RATIO_KEY] = PureParameters.makeUintParam(
+            mainParams_.maxUtilizationRatio
         );
 
         emit MainParamsUpdated(
-            _assetKey,
-            _mainParams.collateralizationRatio,
-            _mainParams.reserveFactor,
-            _mainParams.liquidationDiscount,
-            _mainParams.maxUtilizationRatio
+            assetKey_,
+            mainParams_.collateralizationRatio,
+            mainParams_.reserveFactor,
+            mainParams_.liquidationDiscount,
+            mainParams_.maxUtilizationRatio
         );
     }
 
     function _setupDistributionsMinimums(
-        bytes32 _assetKey,
-        DistributionMinimums calldata _distrMinimums
+        bytes32 assetKey_,
+        DistributionMinimums calldata distrMinimums_
     ) internal {
         require(
-            _distrMinimums.minSupplyDistrPart >= PRECISION * 5 &&
-                _distrMinimums.minSupplyDistrPart <= PRECISION * 15,
+            distrMinimums_.minSupplyDistrPart >= PRECISION * 5 &&
+                distrMinimums_.minSupplyDistrPart <= PRECISION * 15,
             "AssetParameters: The new value of the minimum supply part is invalid."
         );
         require(
-            _distrMinimums.minBorrowDistrPart >= PRECISION * 5 &&
-                _distrMinimums.minBorrowDistrPart <= PRECISION * 15,
+            distrMinimums_.minBorrowDistrPart >= PRECISION * 5 &&
+                distrMinimums_.minBorrowDistrPart <= PRECISION * 15,
             "AssetParameters: The new value of the minimum borrow part is invalid."
         );
 
-        _parameters[_assetKey][MIN_SUPPLY_DISTRIBUTION_PART_KEY] = PureParameters.makeUintParam(
-            _distrMinimums.minSupplyDistrPart
+        _parameters[assetKey_][MIN_SUPPLY_DISTRIBUTION_PART_KEY] = PureParameters.makeUintParam(
+            distrMinimums_.minSupplyDistrPart
         );
-        _parameters[_assetKey][MIN_BORROW_DISTRIBUTION_PART_KEY] = PureParameters.makeUintParam(
-            _distrMinimums.minBorrowDistrPart
+        _parameters[assetKey_][MIN_BORROW_DISTRIBUTION_PART_KEY] = PureParameters.makeUintParam(
+            distrMinimums_.minBorrowDistrPart
         );
 
         emit DistributionMinimumsUpdated(
-            _assetKey,
-            _distrMinimums.minSupplyDistrPart,
-            _distrMinimums.minBorrowDistrPart
+            assetKey_,
+            distrMinimums_.minSupplyDistrPart,
+            distrMinimums_.minBorrowDistrPart
         );
     }
 
     function _getParam(
-        bytes32 _assetKey,
-        bytes32 _paramKey
+        bytes32 assetKey_,
+        bytes32 paramKey_
     ) internal view returns (PureParameters.Param memory) {
         require(
-            PureParameters.paramExists(_parameters[_assetKey][_paramKey]),
+            PureParameters.paramExists(_parameters[assetKey_][paramKey_]),
             "AssetParameters: Param for this asset doesn't exist."
         );
 
-        return _parameters[_assetKey][_paramKey];
+        return _parameters[assetKey_][paramKey_];
     }
 }

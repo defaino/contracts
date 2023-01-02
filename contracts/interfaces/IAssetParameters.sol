@@ -48,158 +48,158 @@ interface IAssetParameters {
     }
 
     /// @notice This event is emitted when the pool's main parameters are set
-    /// @param _assetKey the key of the pool for which the parameters are set
-    /// @param _colRatio percentage that shows how much collateral will be added from the deposit
-    /// @param _reserveFactor the percentage of the platform's earnings that will be deducted from the interest on the borrows
-    /// @param _liquidationDiscount percentage of the discount that the liquidator will receive on the collateral
-    /// @param _maxUR maximum possible utilization ratio
+    /// @param assetKey the key of the pool for which the parameters are set
+    /// @param colRatio percentage that shows how much collateral will be added from the deposit
+    /// @param reserveFactor the percentage of the platform's earnings that will be deducted from the interest on the borrows
+    /// @param liquidationDiscount percentage of the discount that the liquidator will receive on the collateral
+    /// @param maxUR maximum possible utilization ratio
     event MainParamsUpdated(
-        bytes32 _assetKey,
-        uint256 _colRatio,
-        uint256 _reserveFactor,
-        uint256 _liquidationDiscount,
-        uint256 _maxUR
+        bytes32 assetKey,
+        uint256 colRatio,
+        uint256 reserveFactor,
+        uint256 liquidationDiscount,
+        uint256 maxUR
     );
 
     /// @notice This event is emitted when the pool's interest rate parameters are set
-    /// @param _assetKey the key of the pool for which the parameters are set
-    /// @param _basePercentage annual rate on the borrow, if utilization ratio is equal to 0%
-    /// @param _firstSlope annual rate on the borrow, if utilization ratio is equal to utilizationBreakingPoint
-    /// @param _secondSlope annual rate on the borrow, if utilization ratio is equal to 100%
-    /// @param _utilizationBreakingPoint percentage at which the graph breaks
+    /// @param assetKey the key of the pool for which the parameters are set
+    /// @param basePercentage annual rate on the borrow, if utilization ratio is equal to 0%
+    /// @param firstSlope annual rate on the borrow, if utilization ratio is equal to utilizationBreakingPoint
+    /// @param secondSlope annual rate on the borrow, if utilization ratio is equal to 100%
+    /// @param utilizationBreakingPoint percentage at which the graph breaks
     event InterestRateParamsUpdated(
-        bytes32 _assetKey,
-        uint256 _basePercentage,
-        uint256 _firstSlope,
-        uint256 _secondSlope,
-        uint256 _utilizationBreakingPoint
+        bytes32 assetKey,
+        uint256 basePercentage,
+        uint256 firstSlope,
+        uint256 secondSlope,
+        uint256 utilizationBreakingPoint
     );
 
     /// @notice This event is emitted when the pool's distribution minimums are set
-    /// @param _assetKey the key of the pool for which the parameters are set
-    /// @param _supplyDistrPart percentage, which indicates the minimum part of the reward distribution for users who deposited
-    /// @param _borrowDistrPart percentage, which indicates the minimum part of the reward distribution for users who borrowed
+    /// @param assetKey the key of the pool for which the parameters are set
+    /// @param supplyDistrPart percentage, which indicates the minimum part of the reward distribution for users who deposited
+    /// @param borrowDistrPart percentage, which indicates the minimum part of the reward distribution for users who borrowed
     event DistributionMinimumsUpdated(
-        bytes32 _assetKey,
-        uint256 _supplyDistrPart,
-        uint256 _borrowDistrPart
+        bytes32 assetKey,
+        uint256 supplyDistrPart,
+        uint256 borrowDistrPart
     );
 
-    event AnnualBorrowRateUpdated(bytes32 _assetKey, uint256 _newAnnualBorrowRate);
+    event AnnualBorrowRateUpdated(bytes32 assetKey, uint256 newAnnualBorrowRate);
 
     /// @notice This event is emitted when the pool freeze parameter is set
-    /// @param _assetKey the key of the pool for which the parameter is set
-    /// @param _newValue new value of the pool freeze parameter
-    event FreezeParamUpdated(bytes32 _assetKey, bool _newValue);
+    /// @param assetKey the key of the pool for which the parameter is set
+    /// @param newValue new value of the pool freeze parameter
+    event FreezeParamUpdated(bytes32 assetKey, bool newValue);
 
     /// @notice This event is emitted when the pool collateral parameter is set
-    /// @param _assetKey the key of the pool for which the parameter is set
-    /// @param _isCollateral new value of the pool collateral parameter
-    event CollateralParamUpdated(bytes32 _assetKey, bool _isCollateral);
+    /// @param assetKey the key of the pool for which the parameter is set
+    /// @param isCollateral new value of the pool collateral parameter
+    event CollateralParamUpdated(bytes32 assetKey, bool isCollateral);
 
     /// @notice System function needed to set parameters during pool creation
     /// @dev Only SystemPoolsRegistry contract can call this function
-    /// @param _assetKey the key of the pool for which the parameters are set
-    /// @param _isCollateral a flag that indicates whether a pool can even be a collateral
-    function setPoolInitParams(bytes32 _assetKey, bool _isCollateral) external;
+    /// @param assetKey_ the key of the pool for which the parameters are set
+    /// @param isCollateral_ a flag that indicates whether a pool can even be a collateral
+    function setPoolInitParams(bytes32 assetKey_, bool isCollateral_) external;
 
     /// @notice Function for setting the annual borrow rate of the stable pool
     /// @dev Only contract owner can call this function. Only for stable pools
-    /// @param _assetKey pool key for which parameters will be set
-    /// @param _newAnnualBorrowRate new annual borrow rate parameter
-    function setupAnnualBorrowRate(bytes32 _assetKey, uint256 _newAnnualBorrowRate) external;
+    /// @param assetKey_ pool key for which parameters will be set
+    /// @param newAnnualBorrowRate_ new annual borrow rate parameter
+    function setupAnnualBorrowRate(bytes32 assetKey_, uint256 newAnnualBorrowRate_) external;
 
     /// @notice Function for setting the main parameters of the pool
     /// @dev Only contract owner can call this function
-    /// @param _assetKey pool key for which parameters will be set
-    /// @param _mainParams structure with the main parameters of the pool
-    function setupMainParameters(bytes32 _assetKey, MainPoolParams calldata _mainParams) external;
+    /// @param assetKey_ pool key for which parameters will be set
+    /// @param mainParams_ structure with the main parameters of the pool
+    function setupMainParameters(bytes32 assetKey_, MainPoolParams calldata mainParams_) external;
 
     /// @notice Function for setting the interest rate parameters of the pool
     /// @dev Only contract owner can call this function
-    /// @param _assetKey pool key for which parameters will be set
-    /// @param _interestParams structure with the interest rate parameters of the pool
+    /// @param assetKey_ pool key for which parameters will be set
+    /// @param interestParams_ structure with the interest rate parameters of the pool
     function setupInterestRateModel(
-        bytes32 _assetKey,
-        InterestRateParams calldata _interestParams
+        bytes32 assetKey_,
+        InterestRateParams calldata interestParams_
     ) external;
 
     /// @notice Function for setting the distribution minimums of the pool
     /// @dev Only contract owner can call this function
-    /// @param _assetKey pool key for which parameters will be set
-    /// @param _distrMinimums structure with the distribution minimums of the pool
+    /// @param assetKey_ pool key for which parameters will be set
+    /// @param distrMinimums_ structure with the distribution minimums of the pool
     function setupDistributionsMinimums(
-        bytes32 _assetKey,
-        DistributionMinimums calldata _distrMinimums
+        bytes32 assetKey_,
+        DistributionMinimums calldata distrMinimums_
     ) external;
 
     /// @notice Function for setting all pool parameters
     /// @dev Only contract owner can call this function
-    /// @param _assetKey pool key for which parameters will be set
-    /// @param _poolParams structure with all pool parameters
-    function setupAllParameters(bytes32 _assetKey, AllPoolParams calldata _poolParams) external;
+    /// @param assetKey_ pool key for which parameters will be set
+    /// @param poolParams_ structure with all pool parameters
+    function setupAllParameters(bytes32 assetKey_, AllPoolParams calldata poolParams_) external;
 
     /// @notice Function for freezing the pool
     /// @dev Only contract owner can call this function
-    /// @param _assetKey pool key to be frozen
-    function freeze(bytes32 _assetKey) external;
+    /// @param assetKey_ pool key to be frozen
+    function freeze(bytes32 assetKey_) external;
 
     /// @notice Function to enable the pool as a collateral
     /// @dev Only contract owner can call this function
-    /// @param _assetKey the pool key to be enabled as a collateral
-    function enableCollateral(bytes32 _assetKey) external;
+    /// @param assetKey_ the pool key to be enabled as a collateral
+    function enableCollateral(bytes32 assetKey_) external;
 
     /// @notice Function for getting information about whether the pool is frozen
-    /// @param _assetKey the key of the pool for which you want to get information
+    /// @param assetKey_ the key of the pool for which you want to get information
     /// @return true if the liquidity pool is frozen, false otherwise
-    function isPoolFrozen(bytes32 _assetKey) external view returns (bool);
+    function isPoolFrozen(bytes32 assetKey_) external view returns (bool);
 
     /// @notice Function for getting information about whether a pool can be a collateral
-    /// @param _assetKey the key of the pool for which you want to get information
+    /// @param assetKey_ the key of the pool for which you want to get information
     /// @return true, if the pool is available as a collateral, false otherwise
-    function isAvailableAsCollateral(bytes32 _assetKey) external view returns (bool);
+    function isAvailableAsCollateral(bytes32 assetKey_) external view returns (bool);
 
     /// @notice Function for getting annual borrow rate
-    /// @param _assetKey the key of the pool for which you want to get information
+    /// @param assetKey_ the key of the pool for which you want to get information
     /// @return an annual borrow rate
-    function getAnnualBorrowRate(bytes32 _assetKey) external view returns (uint256);
+    function getAnnualBorrowRate(bytes32 assetKey_) external view returns (uint256);
 
     /// @notice Function for getting the main parameters of the pool
-    /// @param _assetKey the key of the pool for which you want to get information
+    /// @param assetKey_ the key of the pool for which you want to get information
     /// @return a structure with the main parameters of the pool
-    function getMainPoolParams(bytes32 _assetKey) external view returns (MainPoolParams memory);
+    function getMainPoolParams(bytes32 assetKey_) external view returns (MainPoolParams memory);
 
     /// @notice Function for getting the interest rate parameters of the pool
-    /// @param _assetKey the key of the pool for which you want to get information
+    /// @param assetKey_ the key of the pool for which you want to get information
     /// @return a structure with the interest rate parameters of the pool
     function getInterestRateParams(
-        bytes32 _assetKey
+        bytes32 assetKey_
     ) external view returns (InterestRateParams memory);
 
     /// @notice Function for getting the distribution minimums of the pool
-    /// @param _assetKey the key of the pool for which you want to get information
+    /// @param assetKey_ the key of the pool for which you want to get information
     /// @return a structure with the distribution minimums of the pool
     function getDistributionMinimums(
-        bytes32 _assetKey
+        bytes32 assetKey_
     ) external view returns (DistributionMinimums memory);
 
     /// @notice Function to get the collateralization ratio for the desired pool
-    /// @param _assetKey the key of the pool for which you want to get information
+    /// @param assetKey_ the key of the pool for which you want to get information
     /// @return current collateralization ratio value
-    function getColRatio(bytes32 _assetKey) external view returns (uint256);
+    function getColRatio(bytes32 assetKey_) external view returns (uint256);
 
     /// @notice Function to get the reserve factor for the desired pool
-    /// @param _assetKey the key of the pool for which you want to get information
+    /// @param assetKey_ the key of the pool for which you want to get information
     /// @return current reserve factor value
-    function getReserveFactor(bytes32 _assetKey) external view returns (uint256);
+    function getReserveFactor(bytes32 assetKey_) external view returns (uint256);
 
     /// @notice Function to get the liquidation discount for the desired pool
-    /// @param _assetKey the key of the pool for which you want to get information
+    /// @param assetKey_ the key of the pool for which you want to get information
     /// @return current liquidation discount value
-    function getLiquidationDiscount(bytes32 _assetKey) external view returns (uint256);
+    function getLiquidationDiscount(bytes32 assetKey_) external view returns (uint256);
 
     /// @notice Function to get the max utilization ratio for the desired pool
-    /// @param _assetKey the key of the pool for which you want to get information
+    /// @param assetKey_ the key of the pool for which you want to get information
     /// @return maximum possible utilization ratio value
-    function getMaxUtilizationRatio(bytes32 _assetKey) external view returns (uint256);
+    function getMaxUtilizationRatio(bytes32 assetKey_) external view returns (uint256);
 }

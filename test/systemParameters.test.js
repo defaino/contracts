@@ -48,7 +48,7 @@ describe("SystemParameters", () => {
 
       assert.equal(await systemParameters.getRewardsTokenAddress(), ADDRESS_NULL);
       assert.equal(txReceipt.receipt.logs[0].event, "RewardsTokenUpdated");
-      assert.equal(txReceipt.receipt.logs[0].args._rewardsToken, ADDRESS_NULL);
+      assert.equal(txReceipt.receipt.logs[0].args.rewardsToken, ADDRESS_NULL);
 
       await systemParameters.setRewardsTokenAddress(NOTHING);
 
@@ -92,7 +92,7 @@ describe("SystemParameters", () => {
 
       assert.equal(await systemParameters.getStablePoolsAvailability(), true);
       assert.equal(txReceipt.receipt.logs[0].event, "StablePoolsAvailabilityUpdated");
-      assert.equal(txReceipt.receipt.logs[0].args._newValue, true);
+      assert.equal(txReceipt.receipt.logs[0].args.newValue, true);
     });
   });
 

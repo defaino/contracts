@@ -8,51 +8,51 @@ import "../common/Globals.sol";
  */
 library MathHelper {
     /// @notice Function for calculating a new normalized value from the passed data
-    /// @param _amountWithoutInterest the amount without interest. Needed to correctly calculate the normalized value at 0
-    /// @param _normalizedAmount current normalized amount
-    /// @param _additionalAmount the amount by which the normalized value will change
-    /// @param _currentRate current compound rate
-    /// @param _isAdding true if the amount will be added, false otherwise
-    /// @return _newNormalizedAmount new calculated normalized value
+    /// @param amountWithoutInterest_ the amount without interest. Needed to correctly calculate the normalized value at 0
+    /// @param normalizedAmount_ current normalized amount
+    /// @param additionalAmount_ the amount by which the normalized value will change
+    /// @param currentRate_ current compound rate
+    /// @param isAdding_ true if the amount will be added, false otherwise
+    /// @return newNormalizedAmount_ new calculated normalized value
     function getNormalizedAmount(
-        uint256 _amountWithoutInterest,
-        uint256 _normalizedAmount,
-        uint256 _additionalAmount,
-        uint256 _currentRate,
-        bool _isAdding
-    ) internal pure returns (uint256 _newNormalizedAmount) {
-        if (_isAdding || _amountWithoutInterest != 0) {
-            uint256 _normalizedAdditionalAmount = divWithPrecision(
-                _additionalAmount,
-                _currentRate
+        uint256 amountWithoutInterest_,
+        uint256 normalizedAmount_,
+        uint256 additionalAmount_,
+        uint256 currentRate_,
+        bool isAdding_
+    ) internal pure returns (uint256 newNormalizedAmount_) {
+        if (isAdding_ || amountWithoutInterest_ != 0) {
+            uint256 normalizedAdditionalAmount_ = divWithPrecision(
+                additionalAmount_,
+                currentRate_
             );
 
-            _newNormalizedAmount = _isAdding
-                ? _normalizedAmount + _normalizedAdditionalAmount
-                : _normalizedAmount - _normalizedAdditionalAmount;
+            newNormalizedAmount_ = isAdding_
+                ? normalizedAmount_ + normalizedAdditionalAmount_
+                : normalizedAmount_ - normalizedAdditionalAmount_;
         }
     }
 
     /// @notice Function for division with precision
-    /// @param _number the multiplicand
-    /// @param _denominator the divisor
+    /// @param number_ the multiplicand
+    /// @param denominator_ the divisor
     /// @return a type uint256 calculation result
     function divWithPrecision(
-        uint256 _number,
-        uint256 _denominator
+        uint256 number_,
+        uint256 denominator_
     ) internal pure returns (uint256) {
-        return mulDiv(_number, PERCENTAGE_100, _denominator);
+        return mulDiv(number_, PERCENTAGE_100, denominator_);
     }
 
     /// @notice Function for multiplication with precision
-    /// @param _number the multiplicand
-    /// @param _numerator the multiplier
+    /// @param number_ the multiplicand
+    /// @param numerator_ the multiplier
     /// @return a type uint256 calculation result
     function mulWithPrecision(
-        uint256 _number,
-        uint256 _numerator
+        uint256 number_,
+        uint256 numerator_
     ) internal pure returns (uint256) {
-        return mulDiv(_number, _numerator, PERCENTAGE_100);
+        return mulDiv(number_, numerator_, PERCENTAGE_100);
     }
 
     /// @notice Calculates floor(a×b÷denominator) with full precision. Throws if result overflows a uint256 or denominator == 0

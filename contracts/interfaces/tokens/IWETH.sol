@@ -7,9 +7,9 @@ import "@openzeppelin/contracts/token/ERC20/extensions/draft-IERC20Permit.sol";
 interface IWETH is IERC20Metadata, IERC20Permit {
     function deposit() external payable;
 
-    function depositTo(address _recipient) external payable;
+    function depositTo(address recipient_) external payable;
 
-    function withdraw(uint256 _amount) external;
+    function withdraw(uint256 amount_) external;
 
-    function withdrawTo(address _recipient, uint256 _amount) external;
+    function withdrawTo(address recipient_, uint256 amount_) external;
 }

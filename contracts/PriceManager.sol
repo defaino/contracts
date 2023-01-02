@@ -10,52 +10,52 @@ import "./interfaces/ISystemPoolsRegistry.sol";
 import "./common/Globals.sol";
 
 contract PriceManager is IPriceManager, AbstractDependant {
-    ISystemPoolsRegistry private systemPoolsRegistry;
+    ISystemPoolsRegistry internal _systemPoolsRegistry;
 
     mapping(bytes32 => PriceFeed) public priceFeeds;
 
-    function setDependencies(address _contractsRegistry) external override dependant {
-        systemPoolsRegistry = ISystemPoolsRegistry(
-            IRegistry(_contractsRegistry).getSystemPoolsRegistryContract()
+    function setDependencies(address contractsRegistry_) external override dependant {
+        _systemPoolsRegistry = ISystemPoolsRegistry(
+            IRegistry(contractsRegistry_).getSystemPoolsRegistryContract()
         );
     }
 
     function addOracle(
-        bytes32 _assetKey,
-        address _assetAddr,
-        address _chainlinkOracle
+        bytes32 assetKey_,
+        address assetAddr_,
+        address chainlinkOracle_
     ) external override {
         require(
-            address(systemPoolsRegistry) == msg.sender,
+            address(_systemPoolsRegistry) == msg.sender,
             "PriceManager: Caller not a SystemPoolsRegistry."
         );
 
-        (, ISystemPoolsRegistry.PoolType _poolType) = systemPoolsRegistry.poolsInfo(_assetKey);
+        (, ISystemPoolsRegistry.PoolType poolType_) = _systemPoolsRegistry.poolsInfo(assetKey_);
 
-        if (_poolType == ISystemPoolsRegistry.PoolType.LIQUIDITY_POOL) {
+        if (poolType_ == ISystemPoolsRegistry.PoolType.LIQUIDITY_POOL) {
             require(
-                _chainlinkOracle != address(0),
+                chainlinkOracle_ != address(0),
                 "PriceManager: The oracle must not be a null address."
             );
         }
 
-        priceFeeds[_assetKey] = PriceFeed(_assetAddr, AggregatorV2V3Interface(_chainlinkOracle));
+        priceFeeds[assetKey_] = PriceFeed(assetAddr_, AggregatorV2V3Interface(chainlinkOracle_));
 
-        emit OracleAdded(_assetKey, _chainlinkOracle);
+        emit OracleAdded(assetKey_, chainlinkOracle_);
     }
 
-    function getPrice(bytes32 _assetKey) external view override returns (uint256, uint8) {
+    function getPrice(bytes32 assetKey_) external view override returns (uint256, uint8) {
         require(
-            priceFeeds[_assetKey].assetAddr != address(0),
+            priceFeeds[assetKey_].assetAddr != address(0),
             "PriceManager: The oracle for assets does not exists."
         );
 
-        AggregatorV2V3Interface _priceFeed = priceFeeds[_assetKey].chainlinkOracle;
+        AggregatorV2V3Interface priceFeed_ = priceFeeds[assetKey_].chainlinkOracle;
 
-        if (address(_priceFeed) == address(0)) {
+        if (address(priceFeed_) == address(0)) {
             return (10 ** PRICE_DECIMALS, PRICE_DECIMALS);
         }
 
-        return (uint256(_priceFeed.latestAnswer()), _priceFeed.decimals());
+        return (uint256(priceFeed_.latestAnswer()), priceFeed_.decimals());
     }
 }

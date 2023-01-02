@@ -5,10 +5,10 @@ import "../interfaces/IDefiCore.sol";
 
 contract IntegrationMock {
     function addLiquidity(
-        address _defiCoreAddr,
-        bytes32 _assetKey,
-        uint256 _liquidityAmount
+        address defiCoreAddr_,
+        bytes32 assetKey_,
+        uint256 liquidityAmount_
     ) external payable {
-        IDefiCore(_defiCoreAddr).addLiquidity{value: msg.value}(_assetKey, _liquidityAmount);
+        IDefiCore(defiCoreAddr_).addLiquidity{value: msg.value}(assetKey_, liquidityAmount_);
     }
 }

@@ -30,12 +30,12 @@ abstract contract AbstractPool is IBasicPool, Initializable, AbstractDependant {
 
     uint256 public constant UPDATE_RATE_INTERVAL = 1 hours;
 
-    IDefiCore internal defiCore;
-    IAssetParameters internal assetParameters;
-    ISystemParameters internal systemParameters;
-    ISystemPoolsRegistry internal systemPoolsRegistry;
-    IPriceManager internal priceManager;
-    IInterestRateLibrary internal interestRateLibrary;
+    IDefiCore internal _defiCore;
+    IAssetParameters internal _assetParameters;
+    ISystemParameters internal _systemParameters;
+    ISystemPoolsRegistry internal _systemPoolsRegistry;
+    IPriceManager internal _priceManager;
+    IInterestRateLibrary internal _interestRateLibrary;
 
     CompoundRateKeeper public compoundRateKeeper;
 
@@ -50,164 +50,164 @@ abstract contract AbstractPool is IBasicPool, Initializable, AbstractDependant {
     mapping(address => mapping(address => uint256)) public borrowAllowances;
 
     modifier onlyDefiCore() {
-        require(address(defiCore) == msg.sender, "AbstractPool: Caller not a DefiCore.");
+        require(address(_defiCore) == msg.sender, "AbstractPool: Caller not a DefiCore.");
         _;
     }
 
     modifier onlySystemPoolsRegistry() {
         require(
-            address(systemPoolsRegistry) == msg.sender,
+            address(_systemPoolsRegistry) == msg.sender,
             "AbstractPool: Caller not a SystemPoolsRegistry."
         );
         _;
     }
 
-    function setDependencies(address _contractsRegistry) public virtual override dependant {
-        IRegistry _registry = IRegistry(_contractsRegistry);
+    function setDependencies(address contractsRegistry_) public virtual override dependant {
+        IRegistry registry_ = IRegistry(contractsRegistry_);
 
-        defiCore = IDefiCore(_registry.getDefiCoreContract());
-        assetParameters = IAssetParameters(_registry.getAssetParametersContract());
-        systemParameters = ISystemParameters(_registry.getSystemParametersContract());
-        systemPoolsRegistry = ISystemPoolsRegistry(_registry.getSystemPoolsRegistryContract());
-        priceManager = IPriceManager(_registry.getPriceManagerContract());
-        interestRateLibrary = IInterestRateLibrary(_registry.getInterestRateLibraryContract());
+        _defiCore = IDefiCore(registry_.getDefiCoreContract());
+        _assetParameters = IAssetParameters(registry_.getAssetParametersContract());
+        _systemParameters = ISystemParameters(registry_.getSystemParametersContract());
+        _systemPoolsRegistry = ISystemPoolsRegistry(registry_.getSystemPoolsRegistryContract());
+        _priceManager = IPriceManager(registry_.getPriceManagerContract());
+        _interestRateLibrary = IInterestRateLibrary(registry_.getInterestRateLibraryContract());
     }
 
     function approveToBorrow(
-        address _userAddr,
-        uint256 _approveAmount,
-        address _delegateeAddr,
-        uint256 _currentAllowance
+        address userAddr_,
+        uint256 approveAmount_,
+        address delegateeAddr_,
+        uint256 currentAllowance_
     ) external override onlyDefiCore {
         require(
-            borrowAllowances[_userAddr][_delegateeAddr] == _currentAllowance,
+            borrowAllowances[userAddr_][delegateeAddr_] == currentAllowance_,
             "AbstractPool: The current allowance is not the same as expected."
         );
-        borrowAllowances[_userAddr][_delegateeAddr] = _approveAmount;
+        borrowAllowances[userAddr_][delegateeAddr_] = approveAmount_;
     }
 
     function borrowFor(
-        address _userAddr,
-        address _recipient,
-        uint256 _amountToBorrow
+        address userAddr_,
+        address recipient_,
+        uint256 amountToBorrow_
     ) external override onlyDefiCore {
-        _borrowFor(_userAddr, _recipient, _amountToBorrow);
+        _borrowFor(userAddr_, recipient_, amountToBorrow_);
     }
 
     function delegateBorrow(
-        address _userAddr,
-        address _delegatee,
-        uint256 _amountToBorrow
+        address userAddr_,
+        address delegatee_,
+        uint256 amountToBorrow_
     ) external override onlyDefiCore {
-        uint256 borrowAllowance = borrowAllowances[_userAddr][_delegatee];
+        uint256 borrowAllowance_ = borrowAllowances[userAddr_][delegatee_];
 
         require(
-            borrowAllowance >= _amountToBorrow,
+            borrowAllowance_ >= amountToBorrow_,
             "AbstractPool: Not enough allowed to borrow amount."
         );
 
-        borrowAllowances[_userAddr][_delegatee] = borrowAllowance - _amountToBorrow;
+        borrowAllowances[userAddr_][delegatee_] = borrowAllowance_ - amountToBorrow_;
 
-        _borrowFor(_userAddr, _delegatee, _amountToBorrow);
+        _borrowFor(userAddr_, delegatee_, amountToBorrow_);
     }
 
     function repayBorrowFor(
-        address _userAddr,
-        address _closureAddr,
-        uint256 _repayAmount,
-        bool _isMaxRepay
+        address userAddr_,
+        address closureAddr_,
+        uint256 repayAmount_,
+        bool isMaxRepay_
     ) external payable override onlyDefiCore returns (uint256) {
-        RepayBorrowVars memory _repayBorrowVars = _getRepayBorrowVars(
-            _userAddr,
-            _repayAmount,
-            _isMaxRepay
+        RepayBorrowVars memory repayBorrowVars_ = _getRepayBorrowVars(
+            userAddr_,
+            repayAmount_,
+            isMaxRepay_
         );
 
-        _beforeRepayCheck(_repayBorrowVars.repayAmount, _closureAddr);
+        _beforeRepayCheck(repayBorrowVars_.repayAmount, closureAddr_);
 
-        if (_repayBorrowVars.currentAbsoluteAmount == 0) {
+        if (repayBorrowVars_.currentAbsoluteAmount == 0) {
             return 0;
         }
 
-        BorrowInfo storage borrowInfo = borrowInfos[_userAddr];
+        BorrowInfo storage borrowInfo = borrowInfos[userAddr_];
 
-        uint256 _currentInterest = _repayBorrowVars.currentAbsoluteAmount -
+        uint256 currentInterest_ = repayBorrowVars_.currentAbsoluteAmount -
             borrowInfo.borrowAmount;
 
-        if (_repayBorrowVars.repayAmount > _currentInterest) {
+        if (repayBorrowVars_.repayAmount > currentInterest_) {
             borrowInfo.borrowAmount =
-                _repayBorrowVars.currentAbsoluteAmount -
-                _repayBorrowVars.repayAmount;
-            aggregatedBorrowedAmount -= _repayBorrowVars.repayAmount - _currentInterest;
+                repayBorrowVars_.currentAbsoluteAmount -
+                repayBorrowVars_.repayAmount;
+            aggregatedBorrowedAmount -= repayBorrowVars_.repayAmount - currentInterest_;
         }
 
         aggregatedNormalizedBorrowedAmount = MathHelper.getNormalizedAmount(
             aggregatedBorrowedAmount,
             aggregatedNormalizedBorrowedAmount,
-            _repayBorrowVars.repayAmount,
-            _repayBorrowVars.currentRate,
+            repayBorrowVars_.repayAmount,
+            repayBorrowVars_.currentRate,
             false
         );
 
         borrowInfo.normalizedAmount = MathHelper.getNormalizedAmount(
             borrowInfo.borrowAmount,
-            _repayBorrowVars.normalizedAmount,
-            _repayBorrowVars.repayAmount,
-            _repayBorrowVars.currentRate,
+            repayBorrowVars_.normalizedAmount,
+            repayBorrowVars_.repayAmount,
+            repayBorrowVars_.currentRate,
             false
         );
 
-        uint256 _reserveFunds = Math
-            .min(_currentInterest, _repayBorrowVars.repayAmount)
-            .mulWithPrecision(assetParameters.getReserveFactor(assetKey));
+        uint256 reserveFunds_ = Math
+            .min(currentInterest_, repayBorrowVars_.repayAmount)
+            .mulWithPrecision(_assetParameters.getReserveFactor(assetKey));
 
-        totalReserves += _reserveFunds;
+        totalReserves += reserveFunds_;
 
-        _repayAssetTokens(_repayBorrowVars.repayAmount, _closureAddr);
+        _repayAssetTokens(repayBorrowVars_.repayAmount, closureAddr_);
 
-        return _repayBorrowVars.repayAmount;
+        return repayBorrowVars_.repayAmount;
     }
 
     function withdrawReservedFunds(
-        address _recipientAddr,
-        uint256 _amountToWithdraw,
-        bool _isAllFunds
+        address recipientAddr_,
+        uint256 amountToWithdraw_,
+        bool isAllFunds_
     ) external override onlySystemPoolsRegistry returns (uint256) {
-        uint256 _currentReserveAmount = totalReserves;
+        uint256 currentReserveAmount_ = totalReserves;
 
-        if (_currentReserveAmount == 0) {
+        if (currentReserveAmount_ == 0) {
             return 0;
         }
 
-        if (_isAllFunds) {
-            _amountToWithdraw = _currentReserveAmount;
+        if (isAllFunds_) {
+            amountToWithdraw_ = currentReserveAmount_;
         } else {
             require(
-                _amountToWithdraw <= _currentReserveAmount,
+                amountToWithdraw_ <= currentReserveAmount_,
                 "LiquidityPool: Not enough reserved funds."
             );
         }
 
-        totalReserves = _currentReserveAmount - _amountToWithdraw;
+        totalReserves = currentReserveAmount_ - amountToWithdraw_;
 
         IERC20(assetAddr).safeTransfer(
-            _recipientAddr,
-            _convertToUnderlyingAsset(_amountToWithdraw)
+            recipientAddr_,
+            _convertToUnderlyingAsset(amountToWithdraw_)
         );
 
-        return getAmountInUSD(_amountToWithdraw);
+        return getAmountInUSD(amountToWithdraw_);
     }
 
-    function updateCompoundRate(bool _withInterval) public override returns (uint256) {
+    function updateCompoundRate(bool withInterval_) public override returns (uint256) {
         CompoundRateKeeper _cr = compoundRateKeeper;
 
-        if (_withInterval && _cr.getLastUpdate() + UPDATE_RATE_INTERVAL > block.timestamp) {
+        if (withInterval_ && _cr.getLastUpdate() + UPDATE_RATE_INTERVAL > block.timestamp) {
             return _cr.getCurrentRate();
         } else {
             return
                 _cr.update(
                     AnnualRatesConverter.convertToRatePerSecond(
-                        interestRateLibrary,
+                        _interestRateLibrary,
                         getAnnualBorrowRate(),
                         PRECISION
                     )
@@ -226,18 +226,18 @@ abstract contract AbstractPool is IBasicPool, Initializable, AbstractDependant {
             ) + 1;
     }
 
-    function getAmountInUSD(uint256 _assetAmount) public view override returns (uint256) {
-        return _assetAmount.mulDiv(getAssetPrice(), DECIMAL);
+    function getAmountInUSD(uint256 assetAmount_) public view override returns (uint256) {
+        return assetAmount_.mulDiv(getAssetPrice(), DECIMAL);
     }
 
-    function getAmountFromUSD(uint256 _usdAmount) public view override returns (uint256) {
-        return _usdAmount.mulDiv(DECIMAL, getAssetPrice());
+    function getAmountFromUSD(uint256 usdAmount_) public view override returns (uint256) {
+        return usdAmount_.mulDiv(DECIMAL, getAssetPrice());
     }
 
     function getAssetPrice() public view override returns (uint256) {
-        (uint256 _price, uint8 _currentPriceDecimals) = priceManager.getPrice(assetKey);
+        (uint256 price_, uint8 currentPriceDecimals_) = _priceManager.getPrice(assetKey);
 
-        return _price.convert(_currentPriceDecimals, PRICE_DECIMALS);
+        return price_.convert(currentPriceDecimals_, PRICE_DECIMALS);
     }
 
     function getUnderlyingDecimals() public view override returns (uint8) {
@@ -252,7 +252,7 @@ abstract contract AbstractPool is IBasicPool, Initializable, AbstractDependant {
         return
             compoundRateKeeper.getNewCompoundRate(
                 AnnualRatesConverter.convertToRatePerSecond(
-                    interestRateLibrary,
+                    _interestRateLibrary,
                     getAnnualBorrowRate(),
                     PRECISION
                 )
@@ -261,100 +261,101 @@ abstract contract AbstractPool is IBasicPool, Initializable, AbstractDependant {
 
     function getAnnualBorrowRate() public view virtual override returns (uint256);
 
-    function _borrowFor(address _userAddr, address _recipient, uint256 _amountToBorrow) internal {
-        uint256 _currentRate = updateCompoundRate(true);
+    function _borrowFor(address userAddr_, address recipient_, uint256 amountToBorrow_) internal {
+        uint256 currentRate_ = updateCompoundRate(true);
 
-        _beforeBorrowCheck(_amountToBorrow, _userAddr);
+        _beforeBorrowCheck(amountToBorrow_, userAddr_);
 
-        aggregatedBorrowedAmount += _amountToBorrow;
+        aggregatedBorrowedAmount += amountToBorrow_;
         aggregatedNormalizedBorrowedAmount = MathHelper.getNormalizedAmount(
             0,
             aggregatedNormalizedBorrowedAmount,
-            _amountToBorrow,
-            _currentRate,
+            amountToBorrow_,
+            currentRate_,
             true
         );
 
-        BorrowInfo storage borrowInfo = borrowInfos[_userAddr];
+        BorrowInfo storage borrowInfo = borrowInfos[userAddr_];
 
-        borrowInfo.borrowAmount += _amountToBorrow;
+        borrowInfo.borrowAmount += amountToBorrow_;
         borrowInfo.normalizedAmount = MathHelper.getNormalizedAmount(
             0,
             borrowInfo.normalizedAmount,
-            _amountToBorrow,
-            _currentRate,
+            amountToBorrow_,
+            currentRate_,
             true
         );
 
-        _borrowAssetTokens(_amountToBorrow, _recipient);
+        _borrowAssetTokens(amountToBorrow_, recipient_);
     }
 
     function _getRepayBorrowVars(
-        address _userAddr,
-        uint256 _repayAmount,
-        bool _isMaxRepay
-    ) internal returns (RepayBorrowVars memory _repayBorrowVars) {
-        _repayBorrowVars.userAddr = _userAddr;
-        _repayBorrowVars.currentRate = updateCompoundRate(false);
-        _repayBorrowVars.normalizedAmount = borrowInfos[_userAddr].normalizedAmount;
-        _repayBorrowVars.currentAbsoluteAmount = _repayBorrowVars
+        address userAddr_,
+        uint256 repayAmount_,
+        bool isMaxRepay_
+    ) internal returns (RepayBorrowVars memory repayBorrowVars_) {
+        repayBorrowVars_.userAddr = userAddr_;
+        repayBorrowVars_.currentRate = updateCompoundRate(false);
+        repayBorrowVars_.normalizedAmount = borrowInfos[userAddr_].normalizedAmount;
+        repayBorrowVars_.currentAbsoluteAmount = repayBorrowVars_
             .normalizedAmount
-            .mulWithPrecision(_repayBorrowVars.currentRate);
+            .mulWithPrecision(repayBorrowVars_.currentRate);
 
-        if (_isMaxRepay) {
-            uint256 _userBalance = _convertFromUnderlyingAsset(
-                IERC20(assetAddr).balanceOf(_userAddr)
+        if (isMaxRepay_) {
+            uint256 userBalance_ = _convertFromUnderlyingAsset(
+                IERC20(assetAddr).balanceOf(userAddr_)
             );
 
-            if (assetKey == systemPoolsRegistry.nativeAssetKey()) {
-                _userBalance += msg.value;
+            if (assetKey == _systemPoolsRegistry.nativeAssetKey()) {
+                userBalance_ += msg.value;
             }
 
-            _repayBorrowVars.repayAmount = Math.min(
-                _userBalance,
-                _repayBorrowVars.currentAbsoluteAmount
+            repayBorrowVars_.repayAmount = Math.min(
+                userBalance_,
+                repayBorrowVars_.currentAbsoluteAmount
             );
 
             require(
-                _repayBorrowVars.repayAmount > 0,
+                repayBorrowVars_.repayAmount > 0,
                 "AbstractPool: Repay amount cannot be a zero."
             );
         } else {
-            _repayBorrowVars.repayAmount = Math.min(
-                _repayBorrowVars.currentAbsoluteAmount,
-                _repayAmount
+            repayBorrowVars_.repayAmount = Math.min(
+                repayBorrowVars_.currentAbsoluteAmount,
+                repayAmount_
             );
         }
     }
 
     function _abstractPoolInitialize(
-        address _assetAddr,
-        bytes32 _assetKey
+        address assetAddr_,
+        bytes32 assetKey_
     ) internal onlyInitializing {
         compoundRateKeeper = new CompoundRateKeeper();
-        assetAddr = _assetAddr;
-        assetKey = _assetKey;
+
+        assetAddr = assetAddr_;
+        assetKey = assetKey_;
     }
 
-    function _borrowAssetTokens(uint256 _amountToBorrow, address _recipient) internal virtual;
+    function _borrowAssetTokens(uint256 amountToBorrow_, address recipient_) internal virtual;
 
-    function _repayAssetTokens(uint256 _repayAmount, address _payerAddr) internal virtual;
+    function _repayAssetTokens(uint256 repayAmount_, address payerAddr_) internal virtual;
 
-    function _beforeBorrowCheck(uint256 _amountToBorrow, address _borrowerAddr) internal virtual {}
+    function _beforeBorrowCheck(uint256 amountToBorrow_, address borrowerAddr_) internal virtual {}
 
-    function _beforeRepayCheck(uint256 _repayAmount, address _payerAddr) internal virtual {}
+    function _beforeRepayCheck(uint256 repayAmount_, address payerAddr_) internal virtual {}
 
     function _convertToUnderlyingAsset(
-        uint256 _amountToConvert
-    ) internal view returns (uint256 _assetAmount) {
-        _assetAmount = _amountToConvert.from18(getUnderlyingDecimals());
+        uint256 amountToConvert_
+    ) internal view returns (uint256 assetAmount_) {
+        assetAmount_ = amountToConvert_.from18(getUnderlyingDecimals());
 
-        require(_assetAmount > 0, "AbstractPool: Incorrect asset amount after conversion.");
+        require(assetAmount_ > 0, "AbstractPool: Incorrect asset amount after conversion.");
     }
 
     function _convertFromUnderlyingAsset(
-        uint256 _amountToConvert
-    ) internal view returns (uint256 _assetAmount) {
-        return _amountToConvert.to18(getUnderlyingDecimals());
+        uint256 amountToConvert_
+    ) internal view returns (uint256 assetAmount_) {
+        return amountToConvert_.to18(getUnderlyingDecimals());
     }
 }

@@ -31,79 +31,79 @@ library PureParameters {
     }
 
     /// @notice Function for creating a type Param structure with a type uint256 parameter
-    /// @param _number uint256 parameter value
+    /// @param number_ uint256 parameter value
     /// @return a struct with Param type and uint256 parameter value
-    function makeUintParam(uint256 _number) internal pure returns (Param memory) {
-        return Param(bytes32(_number), Types.UINT);
+    function makeUintParam(uint256 number_) internal pure returns (Param memory) {
+        return Param(bytes32(number_), Types.UINT);
     }
 
     /// @notice Function for creating a type Param structure with a type address parameter
-    /// @param _address address parameter value
+    /// @param address_ address parameter value
     /// @return a struct with Param type and address parameter value
-    function makeAddressParam(address _address) internal pure returns (Param memory) {
-        return Param(bytes32(uint256(uint160(_address))), Types.ADDRESS);
+    function makeAddressParam(address address_) internal pure returns (Param memory) {
+        return Param(bytes32(uint256(uint160(address_))), Types.ADDRESS);
     }
 
     /// @notice Function for creating a type Param structure with a type bytes32 parameter
-    /// @param _hash bytes32 parameter value
+    /// @param hash_ bytes32 parameter value
     /// @return a struct with Param type and bytes32 parameter value
-    function makeBytes32Param(bytes32 _hash) internal pure returns (Param memory) {
-        return Param(_hash, Types.BYTES32);
+    function makeBytes32Param(bytes32 hash_) internal pure returns (Param memory) {
+        return Param(hash_, Types.BYTES32);
     }
 
     /// @notice Function for creating a type Param structure with a type bool parameter
-    /// @param _bool bool parameter value
+    /// @param bool_ bool parameter value
     /// @return a struct with Param type and bool parameter value
-    function makeBoolParam(bool _bool) internal pure returns (Param memory) {
-        return Param(bytes32(uint256(_bool ? 1 : 0)), Types.BOOL);
+    function makeBoolParam(bool bool_) internal pure returns (Param memory) {
+        return Param(bytes32(uint256(bool_ ? 1 : 0)), Types.BOOL);
     }
 
     /// @notice Function for getting a value of type uint256 from structure Param
-    /// @param _param object of the structure from which the parameter will be obtained
+    /// @param param_ object of the structure from which the parameter will be obtained
     /// @return a uint256 parameter
-    function getUintFromParam(Param memory _param) internal pure returns (uint256) {
-        require(_param.currentType == Types.UINT, "PureParameters: Parameter not contain uint.");
+    function getUintFromParam(Param memory param_) internal pure returns (uint256) {
+        require(param_.currentType == Types.UINT, "PureParameters: Parameter not contain uint.");
 
-        return uint256(_param.param);
+        return uint256(param_.param);
     }
 
     /// @notice Function for getting a value of type address from structure Param
-    /// @param _param object of the structure from which the parameter will be obtained
+    /// @param param_ object of the structure from which the parameter will be obtained
     /// @return a address parameter
-    function getAddressFromParam(Param memory _param) internal pure returns (address) {
+    function getAddressFromParam(Param memory param_) internal pure returns (address) {
         require(
-            _param.currentType == Types.ADDRESS,
+            param_.currentType == Types.ADDRESS,
             "PureParameters: Parameter not contain address."
         );
 
-        return address(uint160(uint256(_param.param)));
+        return address(uint160(uint256(param_.param)));
     }
 
     /// @notice Function for getting a value of type bytes32 from structure Param
-    /// @param _param object of the structure from which the parameter will be obtained
+    /// @param param_ object of the structure from which the parameter will be obtained
     /// @return a bytes32 parameter
-    function getBytes32FromParam(Param memory _param) internal pure returns (bytes32) {
+    function getBytes32FromParam(Param memory param_) internal pure returns (bytes32) {
         require(
-            _param.currentType == Types.BYTES32,
+            param_.currentType == Types.BYTES32,
             "PureParameters: Parameter not contain bytes32."
         );
 
-        return _param.param;
+        return param_.param;
     }
 
     /// @notice Function for getting a value of type bool from structure Param
-    /// @param _param object of the structure from which the parameter will be obtained
+    /// @param param_ object of the structure from which the parameter will be obtained
     /// @return a bool parameter
-    function getBoolFromParam(Param memory _param) internal pure returns (bool) {
-        require(_param.currentType == Types.BOOL, "PureParameters: Parameter not contain bool.");
+    function getBoolFromParam(Param memory param_) internal pure returns (bool) {
+        require(param_.currentType == Types.BOOL, "PureParameters: Parameter not contain bool.");
 
-        return uint256(_param.param) == 1 ? true : false;
+        return uint256(param_.param) == 1 ? true : false;
     }
 
     /// @notice Function to check if the parameter exists
-    /// @param _param structure with parameters that will be checked
+    /// @param param_ structure with parameters that will be checked
     /// @return true, if the param exists, false otherwise
-    function paramExists(Param memory _param) internal pure returns (bool) {
-        return (_param.currentType != Types.NOT_EXIST);
+    function paramExists(Param memory param_) internal pure returns (bool) {
+        return (param_.currentType != Types.NOT_EXIST);
     }
 }

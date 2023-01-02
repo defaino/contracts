@@ -5,18 +5,18 @@ import "../RewardsDistribution.sol";
 
 contract RewardsDistributionMock is RewardsDistribution {
     function getRewardsPerBlock(
-        bytes32 _assetKey,
-        uint256 _currentUR
+        bytes32 assetKey_,
+        uint256 currentUR_
     ) external view returns (uint256, uint256) {
-        return _getRewardsPerBlock(_assetKey, _currentUR);
+        return _getRewardsPerBlock(assetKey_, currentUR_);
     }
 
     function getNewCumulativeSum(
-        uint256 _rewardPerBlock,
-        uint256 _totalPool,
-        uint256 _prevAP,
-        uint256 _blocksDelta
+        uint256 rewardPerBlock_,
+        uint256 totalPool_,
+        uint256 prevAP_,
+        uint256 blocksDelta_
     ) external pure returns (uint256) {
-        return _countNewCumulativeSum(_rewardPerBlock, _totalPool, _prevAP, _blocksDelta);
+        return _countNewCumulativeSum(rewardPerBlock_, totalPool_, prevAP_, blocksDelta_);
     }
 }

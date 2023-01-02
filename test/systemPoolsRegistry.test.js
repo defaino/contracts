@@ -268,12 +268,12 @@ describe("SystemPoolsRegistry", () => {
         true
       );
 
-      assert.equal(txReceipt.receipt.logs.length, 1);
+      assert.equal(txReceipt.receipt.logs.length, 2);
 
-      assert.equal(txReceipt.receipt.logs[0].event, "PoolAdded");
+      assert.equal(txReceipt.receipt.logs[1].event, "PoolAdded");
 
-      assert.equal(fromBytes(txReceipt.receipt.logs[0].args._assetKey), "DAI");
-      assert.equal(txReceipt.receipt.logs[0].args._poolAddr, await getLiquidityPoolAddr(daiKey));
+      assert.equal(fromBytes(txReceipt.receipt.logs[1].args.assetKey), "DAI");
+      assert.equal(txReceipt.receipt.logs[1].args.poolAddr, await getLiquidityPoolAddr(daiKey));
     });
 
     it("should get exception if asset key is empty string", async () => {
@@ -329,11 +329,11 @@ describe("SystemPoolsRegistry", () => {
       const txReceipt = await systemPoolsRegistry.addStablePool(someToken.address, someKey, NOTHING);
       const result = await systemPoolsRegistry.poolsInfo(someKey);
 
-      assert.equal(txReceipt.receipt.logs[0].event, "PoolAdded");
-      assert.isTrue(compareKeys(txReceipt.receipt.logs[0].args._assetKey, someKey));
-      assert.equal(txReceipt.receipt.logs[0].args._assetAddr, someToken.address);
-      assert.equal(txReceipt.receipt.logs[0].args._poolAddr, result[0]);
-      assert.equal(txReceipt.receipt.logs[0].args._poolType, 1);
+      assert.equal(txReceipt.receipt.logs[1].event, "PoolAdded");
+      assert.isTrue(compareKeys(txReceipt.receipt.logs[1].args.assetKey, someKey));
+      assert.equal(txReceipt.receipt.logs[1].args.assetAddr, someToken.address);
+      assert.equal(txReceipt.receipt.logs[1].args.poolAddr, result[0]);
+      assert.equal(txReceipt.receipt.logs[1].args.poolType, 1);
       assert.equal(result[1], 1);
     });
 

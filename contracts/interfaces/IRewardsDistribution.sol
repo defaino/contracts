@@ -43,47 +43,47 @@ interface IRewardsDistribution {
 
     /// @notice Function to update the cumulative sums for a particular user in the passed pool
     /// @dev Can call only by eligible contracts (DefiCore and LiquidityPools)
-    /// @param _userAddr address of the user to whom the cumulative sums will be updated
-    /// @param _liquidityPool required liquidity pool
-    function updateCumulativeSums(address _userAddr, address _liquidityPool) external;
+    /// @param userAddr_ address of the user to whom the cumulative sums will be updated
+    /// @param liquidityPool_ required liquidity pool
+    function updateCumulativeSums(address userAddr_, address liquidityPool_) external;
 
     /// @notice Function for withdraw accumulated user rewards. Rewards are updated before withdrawal
     /// @dev Can call only by eligible contracts (DefiCore and LiquidityPools)
-    /// @param _assetKey the key of the desired pool, which will be used to calculate the reward
-    /// @param _userAddr the address of the user for whom the reward will be counted
-    /// @param _liquidityPool required liquidity pool
-    /// @return _userReward total user reward from the passed pool
+    /// @param assetKey_ the key of the desired pool, which will be used to calculate the reward
+    /// @param userAddr_ the address of the user for whom the reward will be counted
+    /// @param liquidityPool_ required liquidity pool
+    /// @return userReward_ total user reward from the passed pool
     function withdrawUserReward(
-        bytes32 _assetKey,
-        address _userAddr,
-        address _liquidityPool
-    ) external returns (uint256 _userReward);
+        bytes32 assetKey_,
+        address userAddr_,
+        address liquidityPool_
+    ) external returns (uint256 userReward_);
 
     /// @notice Function to update block rewards for desired pools
     /// @dev Can call only by contract owner. The passed arrays must be of the same length
-    /// @param _assetKeys array of pool identifiers
-    /// @param _rewardsPerBlock array of new rewards per block
+    /// @param assetKeys_ array of pool identifiers
+    /// @param rewardsPerBlock_ array of new rewards per block
     function setupRewardsPerBlockBatch(
-        bytes32[] calldata _assetKeys,
-        uint256[] calldata _rewardsPerBlock
+        bytes32[] calldata assetKeys_,
+        uint256[] calldata rewardsPerBlock_
     ) external;
 
     /// @notice Returns the annual distribution rates for the desired pool
-    /// @param _assetKey required liquidity pool identifier
-    /// @return _supplyAPY annual distribution rate for users who deposited in the passed pool
-    /// @return _borrowAPY annual distribution rate for users who took credit in the passed pool
+    /// @param assetKey_ required liquidity pool identifier
+    /// @return supplyAPY_ annual distribution rate for users who deposited in the passed pool
+    /// @return borrowAPY_ annual distribution rate for users who took credit in the passed pool
     function getAPY(
-        bytes32 _assetKey
-    ) external view returns (uint256 _supplyAPY, uint256 _borrowAPY);
+        bytes32 assetKey_
+    ) external view returns (uint256 supplyAPY_, uint256 borrowAPY_);
 
     /// @notice Returns current total user reward from the passed pool
-    /// @param _assetKey the key of the desired pool, which will be used to calculate the reward
-    /// @param _userAddr the address of the user for whom the reward will be counted
-    /// @param _liquidityPool required liquidity pool
-    /// @return _userReward current total user reward from the passed pool
+    /// @param assetKey_ the key of the desired pool, which will be used to calculate the reward
+    /// @param userAddr_ the address of the user for whom the reward will be counted
+    /// @param liquidityPool_ required liquidity pool
+    /// @return userReward_ current total user reward from the passed pool
     function getUserReward(
-        bytes32 _assetKey,
-        address _userAddr,
-        address _liquidityPool
-    ) external view returns (uint256 _userReward);
+        bytes32 assetKey_,
+        address userAddr_,
+        address liquidityPool_
+    ) external view returns (uint256 userReward_);
 }

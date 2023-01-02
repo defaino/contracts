@@ -588,9 +588,9 @@ describe("DefiCore", async () => {
       assert.equal(await defiCore.disabledCollateralAssets(USER1, daiKey), false);
 
       assert.equal(txReceipt.receipt.logs[0].event, "CollateralUpdated");
-      assert.equal(txReceipt.receipt.logs[0].args._userAddr, USER1);
-      assert.isTrue(compareKeys(txReceipt.receipt.logs[0].args._assetKey, daiKey));
-      assert.equal(txReceipt.receipt.logs[0].args._newValue, false);
+      assert.equal(txReceipt.receipt.logs[0].args.userAddr, USER1);
+      assert.isTrue(compareKeys(txReceipt.receipt.logs[0].args.assetKey, daiKey));
+      assert.equal(txReceipt.receipt.logs[0].args.newValue, false);
     });
 
     it("should correctly disable collateral", async () => {
@@ -642,9 +642,9 @@ describe("DefiCore", async () => {
       assert.equal(txReceipt.receipt.logs.length, 1);
 
       assert.equal(txReceipt.receipt.logs[0].event, "LiquidityAdded");
-      assert.equal(txReceipt.receipt.logs[0].args._userAddr, USER1);
-      assert.isTrue(compareKeys(txReceipt.receipt.logs[0].args._assetKey, daiKey));
-      assert.equal(toBN(txReceipt.receipt.logs[0].args._liquidityAmount).toString(), liquidityAmount.toString());
+      assert.equal(txReceipt.receipt.logs[0].args.userAddr, USER1);
+      assert.isTrue(compareKeys(txReceipt.receipt.logs[0].args.assetKey, daiKey));
+      assert.equal(toBN(txReceipt.receipt.logs[0].args.liquidityAmount).toString(), liquidityAmount.toString());
 
       assert.equal((await userInfoRegistry.getUserSupplyAssets(USER1)).length, 1);
       assert.isTrue(deepCompareKeys(await userInfoRegistry.getUserSupplyAssets(USER1), [daiKey]));
@@ -730,9 +730,9 @@ describe("DefiCore", async () => {
       assert.equal(txReceipt.receipt.logs.length, 1);
 
       assert.equal(txReceipt.receipt.logs[0].event, "LiquidityWithdrawn");
-      assert.equal(txReceipt.receipt.logs[0].args._userAddr, USER1);
-      assert.isTrue(compareKeys(txReceipt.receipt.logs[0].args._assetKey, daiKey));
-      assert.equal(toBN(txReceipt.receipt.logs[0].args._liquidityAmount).toString(), amountToWithdraw.toString());
+      assert.equal(txReceipt.receipt.logs[0].args.userAddr, USER1);
+      assert.isTrue(compareKeys(txReceipt.receipt.logs[0].args.assetKey, daiKey));
+      assert.equal(toBN(txReceipt.receipt.logs[0].args.liquidityAmount).toString(), amountToWithdraw.toString());
 
       assert.equal((await userInfoRegistry.getUserSupplyAssets(USER1)).length, 1);
 
@@ -766,9 +766,9 @@ describe("DefiCore", async () => {
       assert.equal(txReceipt.receipt.logs.length, 1);
 
       assert.equal(txReceipt.receipt.logs[0].event, "LiquidityWithdrawn");
-      assert.equal(txReceipt.receipt.logs[0].args._userAddr, USER1);
-      assert.isTrue(compareKeys(txReceipt.receipt.logs[0].args._assetKey, daiKey));
-      assert.equal(toBN(txReceipt.receipt.logs[0].args._liquidityAmount).toString(), liquidityAmount.toString());
+      assert.equal(txReceipt.receipt.logs[0].args.userAddr, USER1);
+      assert.isTrue(compareKeys(txReceipt.receipt.logs[0].args.assetKey, daiKey));
+      assert.equal(toBN(txReceipt.receipt.logs[0].args.liquidityAmount).toString(), liquidityAmount.toString());
     });
 
     it("should correctly withdraw with disabled collateral", async () => {
@@ -1029,9 +1029,9 @@ describe("DefiCore", async () => {
       assert.equal(txReceipt.receipt.logs.length, 1);
 
       assert.equal(txReceipt.receipt.logs[0].event, "Borrowed");
-      assert.equal(txReceipt.receipt.logs[0].args._borrower, USER1);
-      assert.isTrue(compareKeys(txReceipt.receipt.logs[0].args._assetKey, wEthKey));
-      assert.equal(toBN(txReceipt.receipt.logs[0].args._borrowedAmount).toString(), borrowAmount.toString());
+      assert.equal(txReceipt.receipt.logs[0].args.borrower, USER1);
+      assert.isTrue(compareKeys(txReceipt.receipt.logs[0].args.assetKey, wEthKey));
+      assert.equal(toBN(txReceipt.receipt.logs[0].args.borrowedAmount).toString(), borrowAmount.toString());
 
       const currentRate = await wEthPool.getCurrentRate();
       const expectedNormalizedAmount = getNormalizedAmount(toBN(0), borrowAmount, currentRate, true);
@@ -1110,9 +1110,9 @@ describe("DefiCore", async () => {
       assert.equal(txReceipt.receipt.logs.length, 1);
 
       assert.equal(txReceipt.receipt.logs[0].event, "BorrowRepaid");
-      assert.equal(txReceipt.receipt.logs[0].args._userAddr, USER1);
-      assert.isTrue(compareKeys(txReceipt.receipt.logs[0].args._assetKey, wEthKey));
-      assert.equal(toBN(txReceipt.receipt.logs[0].args._repaidAmount).toString(), repayBorrowAmount.toString());
+      assert.equal(txReceipt.receipt.logs[0].args.userAddr, USER1);
+      assert.isTrue(compareKeys(txReceipt.receipt.logs[0].args.assetKey, wEthKey));
+      assert.equal(toBN(txReceipt.receipt.logs[0].args.repaidAmount).toString(), repayBorrowAmount.toString());
 
       assert.equal(
         (await wEthPool.borrowInfos(USER1)).normalizedAmount.toString(),
@@ -1528,10 +1528,10 @@ describe("DefiCore", async () => {
       assert.equal(amountToBorrow.toString(), toBN(result).toString());
 
       assert.equal(txReceipt.receipt.logs[0].event, "DelegateBorrowApproved");
-      assert.equal(txReceipt.receipt.logs[0].args._userAddr, USER1);
-      assert.equal(txReceipt.receipt.logs[0].args._delegateeAddr, USER2);
-      assert.isTrue(compareKeys(txReceipt.receipt.logs[0].args._assetKey, wEthKey));
-      assert.equal(toBN(txReceipt.receipt.logs[0].args._newAmount).toString(), amountToBorrow.toString());
+      assert.equal(txReceipt.receipt.logs[0].args.userAddr, USER1);
+      assert.equal(txReceipt.receipt.logs[0].args.delegateeAddr, USER2);
+      assert.isTrue(compareKeys(txReceipt.receipt.logs[0].args.assetKey, wEthKey));
+      assert.equal(toBN(txReceipt.receipt.logs[0].args.newAmount).toString(), amountToBorrow.toString());
     });
 
     it("should get exception if expected allowance is not the same as current", async () => {
@@ -1572,9 +1572,9 @@ describe("DefiCore", async () => {
       assert.equal(txReceipt.receipt.logs.length, 1);
 
       assert.equal(txReceipt.receipt.logs[0].event, "Borrowed");
-      assert.equal(txReceipt.receipt.logs[0].args._borrower, USER1);
-      assert.isTrue(compareKeys(txReceipt.receipt.logs[0].args._assetKey, wEthKey));
-      assert.equal(toBN(txReceipt.receipt.logs[0].args._borrowedAmount).toString(), borrowAmount.toString());
+      assert.equal(txReceipt.receipt.logs[0].args.borrower, USER1);
+      assert.isTrue(compareKeys(txReceipt.receipt.logs[0].args.assetKey, wEthKey));
+      assert.equal(toBN(txReceipt.receipt.logs[0].args.borrowedAmount).toString(), borrowAmount.toString());
 
       const currentRate = toBN(await wEthPool.getCurrentRate());
       const expectedNormalizedAmount = getNormalizedAmount(toBN(0), borrowAmount, currentRate, true);
@@ -1670,9 +1670,9 @@ describe("DefiCore", async () => {
       assert.equal(txReceipt.receipt.logs.length, 1);
 
       assert.equal(txReceipt.receipt.logs[0].event, "BorrowRepaid");
-      assert.equal(txReceipt.receipt.logs[0].args._userAddr, USER1);
-      assert.isTrue(compareKeys(txReceipt.receipt.logs[0].args._assetKey, wEthKey));
-      assert.equal(toBN(txReceipt.receipt.logs[0].args._repaidAmount).toString(), repayBorrowAmount.toString());
+      assert.equal(txReceipt.receipt.logs[0].args.userAddr, USER1);
+      assert.isTrue(compareKeys(txReceipt.receipt.logs[0].args.assetKey, wEthKey));
+      assert.equal(toBN(txReceipt.receipt.logs[0].args.repaidAmount).toString(), repayBorrowAmount.toString());
 
       assert.equal(
         (await wEthPool.borrowInfos(USER1)).normalizedAmount.toString(),
@@ -1722,9 +1722,9 @@ describe("DefiCore", async () => {
       assert.equal(txReceipt.receipt.logs.length, 1);
 
       assert.equal(txReceipt.receipt.logs[0].event, "Borrowed");
-      assert.equal(txReceipt.receipt.logs[0].args._borrower, USER1);
-      assert.isTrue(compareKeys(txReceipt.receipt.logs[0].args._assetKey, wEthKey));
-      assert.equal(toBN(txReceipt.receipt.logs[0].args._borrowedAmount).toString(), borrowAmount.toString());
+      assert.equal(txReceipt.receipt.logs[0].args.borrower, USER1);
+      assert.isTrue(compareKeys(txReceipt.receipt.logs[0].args.assetKey, wEthKey));
+      assert.equal(toBN(txReceipt.receipt.logs[0].args.borrowedAmount).toString(), borrowAmount.toString());
 
       const currentRate = toBN(await wEthPool.getCurrentRate());
       const expectedNormalizedAmount = getNormalizedAmount(toBN(0), borrowAmount, currentRate, true);

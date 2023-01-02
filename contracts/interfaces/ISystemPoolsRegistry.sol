@@ -94,73 +94,73 @@ interface ISystemPoolsRegistry {
     }
 
     /// @notice This event is emitted when a new pool is added
-    /// @param _assetKey new pool identification key
-    /// @param _assetAddr the pool underlying asset address
-    /// @param _poolAddr the added pool address
-    /// @param _poolType the type of the added pool
-    event PoolAdded(bytes32 _assetKey, address _assetAddr, address _poolAddr, PoolType _poolType);
+    /// @param assetKey new pool identification key
+    /// @param assetAddr the pool underlying asset address
+    /// @param poolAddr the added pool address
+    /// @param poolType the type of the added pool
+    event PoolAdded(bytes32 assetKey, address assetAddr, address poolAddr, PoolType poolType);
 
     /// @notice Function to add a beacon contract for the desired type of pools
     /// @dev Only contract owner can call this function
-    /// @param _poolType the type of pool for which the beacon contract will be added
-    /// @param _poolImpl the implementation address for the desired pool type
-    function addPoolsBeacon(PoolType _poolType, address _poolImpl) external;
+    /// @param poolType_ the type of pool for which the beacon contract will be added
+    /// @param poolImpl_ the implementation address for the desired pool type
+    function addPoolsBeacon(PoolType poolType_, address poolImpl_) external;
 
     /// @notice The function is needed to add new liquidity pools
     /// @dev Only contract owner can call this function
-    /// @param _assetAddr address of the underlying liquidity pool asset
-    /// @param _assetKey pool key of the added liquidity pool
-    /// @param _chainlinkOracle the address of the chainlink oracle for the passed asset
-    /// @param _tokenSymbol symbol of the underlying liquidity pool asset
-    /// @param _isCollateral is it possible for the new liquidity pool to be a collateral
+    /// @param assetAddr_ address of the underlying liquidity pool asset
+    /// @param assetKey_ pool key of the added liquidity pool
+    /// @param chainlinkOracle_ the address of the chainlink oracle for the passed asset
+    /// @param tokenSymbol_ symbol of the underlying liquidity pool asset
+    /// @param isCollateral_ is it possible for the new liquidity pool to be a collateral
     function addLiquidityPool(
-        address _assetAddr,
-        bytes32 _assetKey,
-        address _chainlinkOracle,
-        string calldata _tokenSymbol,
-        bool _isCollateral
+        address assetAddr_,
+        bytes32 assetKey_,
+        address chainlinkOracle_,
+        string calldata tokenSymbol_,
+        bool isCollateral_
     ) external;
 
     /// @notice The function is needed to add new stable pools
     /// @dev Only contract owner can call this function
-    /// @param _assetAddr address of the underlying stable pool asset
-    /// @param _assetKey pool key of the added stable pool
-    /// @param _chainlinkOracle the address of the chainlink oracle for the passed asset
+    /// @param assetAddr_ address of the underlying stable pool asset
+    /// @param assetKey_ pool key of the added stable pool
+    /// @param chainlinkOracle_ the address of the chainlink oracle for the passed asset
     function addStablePool(
-        address _assetAddr,
-        bytes32 _assetKey,
-        address _chainlinkOracle
+        address assetAddr_,
+        bytes32 assetKey_,
+        address chainlinkOracle_
     ) external;
 
     /// @notice Withdraws a certain amount of reserve funds from a certain pool to a certain recipient
     /// @dev Only contract owner can call this function
-    /// @param _recipientAddr the address of the user to whom the withdrawal will be sent
-    /// @param _assetKey key of the required pool
-    /// @param _amountToWithdraw amount for withdrawal of reserve funds
-    /// @param _isAllFunds flag to withdraw all reserve funds
+    /// @param recipientAddr_ the address of the user to whom the withdrawal will be sent
+    /// @param assetKey_ key of the required pool
+    /// @param amountToWithdraw_ amount for withdrawal of reserve funds
+    /// @param isAllFunds_ flag to withdraw all reserve funds
     function withdrawReservedFunds(
-        address _recipientAddr,
-        bytes32 _assetKey,
-        uint256 _amountToWithdraw,
-        bool _isAllFunds
+        address recipientAddr_,
+        bytes32 assetKey_,
+        uint256 amountToWithdraw_,
+        bool isAllFunds_
     ) external;
 
     /// @notice Withdrawal of all reserve funds from pools with pagination
     /// @dev Only contract owner can call this function
-    /// @param _recipientAddr the address of the user to whom the withdrawal will be sent
-    /// @param _offset offset for pagination
-    /// @param _limit maximum number of elements for pagination
+    /// @param recipientAddr_ the address of the user to whom the withdrawal will be sent
+    /// @param offset_ offset for pagination
+    /// @param limit_ maximum number of elements for pagination
     function withdrawAllReservedFunds(
-        address _recipientAddr,
-        uint256 _offset,
-        uint256 _limit
+        address recipientAddr_,
+        uint256 offset_,
+        uint256 limit_
     ) external;
 
     /// @notice The function is needed to update the implementation of the pools
     /// @dev Only contract owner can call this function
-    /// @param _poolType needed pool type from PoolType enum
-    /// @param _newPoolsImpl address of the new pools implementation
-    function upgradePoolsImpl(PoolType _poolType, address _newPoolsImpl) external;
+    /// @param poolType_ needed pool type from PoolType enum
+    /// @param newPoolsImpl_ address of the new pools implementation
+    function upgradePoolsImpl(PoolType poolType_, address newPoolsImpl_) external;
 
     /// @notice The function inject dependencies to existing liquidity pools
     /// @dev Only contract owner can call this function
@@ -168,7 +168,7 @@ interface ISystemPoolsRegistry {
 
     /// @notice The function inject dependencies with pagination
     /// @dev Only contract owner can call this function
-    function injectDependencies(uint256 _offset, uint256 _limit) external;
+    function injectDependencies(uint256 offset_, uint256 limit_) external;
 
     /// @notice The function returns the native asset key
     /// @return a native asset key
@@ -179,37 +179,37 @@ interface ISystemPoolsRegistry {
     function rewardsAssetKey() external view returns (bytes32);
 
     /// @notice The function returns system information for the desired pool
-    /// @param _assetKey pool key for which you want to get information
-    /// @return poolAddr an address of the pool
-    /// @return poolType a pool type
+    /// @param assetKey_ pool key for which you want to get information
+    /// @return poolAddr_ an address of the pool
+    /// @return poolType_ a pool type
     function poolsInfo(
-        bytes32 _assetKey
-    ) external view returns (address poolAddr, PoolType poolType);
+        bytes32 assetKey_
+    ) external view returns (address poolAddr_, PoolType poolType_);
 
     /// @notice Indicates whether the address is a liquidity pool
-    /// @param _poolAddr address of the liquidity pool to check
+    /// @param poolAddr_ address of the liquidity pool to check
     /// @return true if the passed address is a liquidity pool, false otherwise
-    function existingLiquidityPools(address _poolAddr) external view returns (bool);
+    function existingLiquidityPools(address poolAddr_) external view returns (bool);
 
     /// @notice A function that returns an array of structures with liquidity pool information
-    /// @param _assetKeys an array of pool keys for which you want to get information
-    /// @return _poolsInfo an array of LiquidityPoolInfo structures
+    /// @param assetKeys_ an array of pool keys for which you want to get information
+    /// @return poolsInfo_ an array of LiquidityPoolInfo structures
     function getLiquidityPoolsInfo(
-        bytes32[] calldata _assetKeys
-    ) external view returns (LiquidityPoolInfo[] memory _poolsInfo);
+        bytes32[] calldata assetKeys_
+    ) external view returns (LiquidityPoolInfo[] memory poolsInfo_);
 
     /// @notice A function that returns an array of structures with stable pool information
-    /// @param _assetKeys an array of pool keys for which you want to get information
-    /// @return _poolsInfo an array of StablePoolInfo structures
+    /// @param assetKeys_ an array of pool keys for which you want to get information
+    /// @return poolsInfo_ an array of StablePoolInfo structures
     function getStablePoolsInfo(
-        bytes32[] calldata _assetKeys
-    ) external view returns (StablePoolInfo[] memory _poolsInfo);
+        bytes32[] calldata assetKeys_
+    ) external view returns (StablePoolInfo[] memory poolsInfo_);
 
     /// @notice A function that returns a structure with detailed pool information
-    /// @param _assetKey pool key for which you want to get information
+    /// @param assetKey_ pool key for which you want to get information
     /// @return a DetailedLiquidityPoolInfo structure
     function getDetailedLiquidityPoolInfo(
-        bytes32 _assetKey
+        bytes32 assetKey_
     ) external view returns (DetailedLiquidityPoolInfo memory);
 
     /// @notice Returns the address of the liquidity pool for the rewards token
@@ -217,58 +217,58 @@ interface ISystemPoolsRegistry {
     function getRewardsLiquidityPool() external view returns (address);
 
     /// @notice A system function that returns the address of liquidity pool beacon
-    /// @param _poolType needed pool type from PoolType enum
+    /// @param poolType_ needed pool type from PoolType enum
     /// @return a required pool beacon address
-    function getPoolsBeacon(PoolType _poolType) external view returns (address);
+    function getPoolsBeacon(PoolType poolType_) external view returns (address);
 
     /// @notice A function that returns the address of liquidity pools implementation
-    /// @param _poolType needed pool type from PoolType enum
+    /// @param poolType_ needed pool type from PoolType enum
     /// @return a required pools implementation address
-    function getPoolsImpl(PoolType _poolType) external view returns (address);
+    function getPoolsImpl(PoolType poolType_) external view returns (address);
 
     /// @notice Function to check if the pool exists by the passed pool key
-    /// @param _assetKey pool identification key
+    /// @param assetKey_ pool identification key
     /// @return true if the liquidity pool for the passed key exists, false otherwise
-    function onlyExistingPool(bytes32 _assetKey) external view returns (bool);
+    function onlyExistingPool(bytes32 assetKey_) external view returns (bool);
 
     /// @notice The function returns the number of all supported assets in the system
     /// @return an all supported assets count
     function getAllSupportedAssetKeysCount() external view returns (uint256);
 
     /// @notice The function returns the number of all supported assets in the system by types
-    /// @param _poolType type of pools, the number of which you want to get
+    /// @param poolType_ type of pools, the number of which you want to get
     /// @return an all supported assets count for passed pool type
-    function getSupportedAssetKeysCountByType(PoolType _poolType) external view returns (uint256);
+    function getSupportedAssetKeysCountByType(PoolType poolType_) external view returns (uint256);
 
     /// @notice The function returns the keys of all the system pools
     /// @return an array of all system pool keys
     function getAllSupportedAssetKeys() external view returns (bytes32[] memory);
 
     /// @notice The function returns the keys of all pools by type
-    /// @param _poolType the type of pool, the keys for which you want to get
+    /// @param poolType_ the type of pool, the keys for which you want to get
     /// @return an array of all pool keys by passed type
     function getAllSupportedAssetKeysByType(
-        PoolType _poolType
+        PoolType poolType_
     ) external view returns (bytes32[] memory);
 
     /// @notice The function returns keys of created pools with pagination
-    /// @param _offset offset for pagination
-    /// @param _limit maximum number of elements for pagination
+    /// @param offset_ offset for pagination
+    /// @param limit_ maximum number of elements for pagination
     /// @return an array of pool keys
     function getSupportedAssetKeys(
-        uint256 _offset,
-        uint256 _limit
+        uint256 offset_,
+        uint256 limit_
     ) external view returns (bytes32[] memory);
 
     /// @notice The function returns keys of created pools with pagination by pool type
-    /// @param _poolType the type of pool, the keys for which you want to get
-    /// @param _offset offset for pagination
-    /// @param _limit maximum number of elements for pagination
+    /// @param poolType_ the type of pool, the keys for which you want to get
+    /// @param offset_ offset for pagination
+    /// @param limit_ maximum number of elements for pagination
     /// @return an array of pool keys by passed type
     function getSupportedAssetKeysByType(
-        PoolType _poolType,
-        uint256 _offset,
-        uint256 _limit
+        PoolType poolType_,
+        uint256 offset_,
+        uint256 limit_
     ) external view returns (bytes32[] memory);
 
     /// @notice Returns an array of addresses of all created pools
@@ -276,24 +276,24 @@ interface ISystemPoolsRegistry {
     function getAllPools() external view returns (address[] memory);
 
     /// @notice The function returns an array of all pools of the desired type
-    /// @param _poolType the pool type for which you want to get an array of all pool addresses
+    /// @param poolType_ the pool type for which you want to get an array of all pool addresses
     /// @return an array of all pool addresses by passed type
-    function getAllPoolsByType(PoolType _poolType) external view returns (address[] memory);
+    function getAllPoolsByType(PoolType poolType_) external view returns (address[] memory);
 
     /// @notice Returns addresses of created pools with pagination
-    /// @param _offset offset for pagination
-    /// @param _limit maximum number of elements for pagination
+    /// @param offset_ offset for pagination
+    /// @param limit_ maximum number of elements for pagination
     /// @return an array of pool addresses
-    function getPools(uint256 _offset, uint256 _limit) external view returns (address[] memory);
+    function getPools(uint256 offset_, uint256 limit_) external view returns (address[] memory);
 
     /// @notice Returns addresses of created pools with pagination by type
-    /// @param _poolType the pool type for which you want to get an array of pool addresses
-    /// @param _offset offset for pagination
-    /// @param _limit maximum number of elements for pagination
+    /// @param poolType_ the pool type for which you want to get an array of pool addresses
+    /// @param offset_ offset for pagination
+    /// @param limit_ maximum number of elements for pagination
     /// @return an array of pool addresses by passed type
     function getPoolsByType(
-        PoolType _poolType,
-        uint256 _offset,
-        uint256 _limit
+        PoolType poolType_,
+        uint256 offset_,
+        uint256 limit_
     ) external view returns (address[] memory);
 }

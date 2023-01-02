@@ -16,7 +16,7 @@ interface IInterestRateLibrary {
 
     /// @notice The function returns the second rate for the passed annual rate
     /// @dev The passed annual rate must be with the precision of the library
-    /// @param _annualRate annual rate to be converted
+    /// @param annualRate_ annual rate to be converted
     /// @return a converted second rate
-    function getRatePerSecond(uint256 _annualRate) external view returns (uint256);
+    function getRatePerSecond(uint256 annualRate_) external view returns (uint256);
 }

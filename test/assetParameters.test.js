@@ -271,8 +271,8 @@ describe("AssetParameters", () => {
 
       assert.equal(result.logs[0].event, "FreezeParamUpdated");
 
-      assert.isTrue(compareKeys(result.logs[0].args._assetKey, daiKey));
-      assert.equal(result.logs[0].args._newValue, true);
+      assert.isTrue(compareKeys(result.logs[0].args.assetKey, daiKey));
+      assert.equal(result.logs[0].args.newValue, true);
     });
 
     it("should not access to freeze the pool by not core", async () => {
@@ -294,8 +294,8 @@ describe("AssetParameters", () => {
 
       assert.equal(result.receipt.logs[0].event, "CollateralParamUpdated");
 
-      assert.equal(fromBytes(result.receipt.logs[0].args._assetKey), "DAI");
-      assert.equal(result.receipt.logs[0].args._isCollateral, true);
+      assert.equal(fromBytes(result.receipt.logs[0].args.assetKey), "DAI");
+      assert.equal(result.receipt.logs[0].args.isCollateral, true);
     });
 
     it("should get exception if not owner try to change collateral status", async () => {

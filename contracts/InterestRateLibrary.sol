@@ -14,13 +14,13 @@ contract InterestRateLibrary is IInterestRateLibrary {
 
     uint256 public constant FIRST_RATE_BYTES = 528;
 
-    function getRatePerSecond(uint256 _annualRate) external pure override returns (uint256) {
+    function getRatePerSecond(uint256 annualRate_) external pure override returns (uint256) {
         require(
-            _annualRate <= MAX_SUPPORTED_PERCENTAGE,
+            annualRate_ <= MAX_SUPPORTED_PERCENTAGE,
             "InterestRateLibrary: Unsupported percentage."
         );
 
-        uint256 shift = _annualRate * 9;
+        uint256 shift = annualRate_ * 9;
         bytes9 value;
 
         assembly {

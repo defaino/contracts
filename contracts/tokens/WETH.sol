@@ -16,30 +16,30 @@ contract WETH is IWETH, ERC20Permit {
         _depositTo(msg.sender);
     }
 
-    function depositTo(address _recipient) external payable override {
-        _depositTo(_recipient);
+    function depositTo(address recipient_) external payable override {
+        _depositTo(recipient_);
     }
 
-    function withdraw(uint256 _amount) external override {
-        _withdrawTo(msg.sender, _amount);
+    function withdraw(uint256 amount_) external override {
+        _withdrawTo(msg.sender, amount_);
     }
 
-    function withdrawTo(address _recipient, uint256 _amount) external override {
-        _withdrawTo(_recipient, _amount);
+    function withdrawTo(address recipient_, uint256 amount_) external override {
+        _withdrawTo(recipient_, amount_);
     }
 
-    function _depositTo(address _recipient) internal {
+    function _depositTo(address recipient_) internal {
         require(msg.value != 0, "WETH: Zero deposit amount.");
 
-        _mint(_recipient, msg.value);
+        _mint(recipient_, msg.value);
     }
 
-    function _withdrawTo(address _recipient, uint256 _amount) internal {
-        require(_amount != 0, "WETH: Zero withdraw amount.");
+    function _withdrawTo(address recipient_, uint256 amount_) internal {
+        require(amount_ != 0, "WETH: Zero withdraw amount.");
 
-        _burn(msg.sender, _amount);
+        _burn(msg.sender, amount_);
 
-        (bool _success, ) = _recipient.call{value: _amount}("");
-        require(_success, "WETH: Failed to transfer AAA.");
+        (bool success_, ) = recipient_.call{value: amount_}("");
+        require(success_, "WETH: Failed to transfer AAA.");
     }
 }

@@ -6,45 +6,45 @@ import "../libraries/PureParameters.sol";
 contract PureParametersMock {
     using PureParameters for PureParameters.Param;
 
-    function makeUintParam(uint256 _num) external pure returns (PureParameters.Param memory) {
-        return PureParameters.makeUintParam(_num);
+    function makeUintParam(uint256 num_) external pure returns (PureParameters.Param memory) {
+        return PureParameters.makeUintParam(num_);
     }
 
-    function getUintFromParam(PureParameters.Param memory _param) external pure returns (uint256) {
-        return PureParameters.getUintFromParam(_param);
+    function getUintFromParam(PureParameters.Param memory param_) external pure returns (uint256) {
+        return PureParameters.getUintFromParam(param_);
     }
 
     function makeAddressParam(
-        address _address
+        address address_
     ) external pure returns (PureParameters.Param memory) {
-        return PureParameters.makeAddressParam(_address);
+        return PureParameters.makeAddressParam(address_);
     }
 
     function getAddressFromParam(
-        PureParameters.Param memory _param
+        PureParameters.Param memory param_
     ) external pure returns (address) {
-        return PureParameters.getAddressFromParam(_param);
+        return PureParameters.getAddressFromParam(param_);
     }
 
-    function makeBytes32Param(bytes32 _hash) external pure returns (PureParameters.Param memory) {
-        return PureParameters.makeBytes32Param(_hash);
+    function makeBytes32Param(bytes32 hash_) external pure returns (PureParameters.Param memory) {
+        return PureParameters.makeBytes32Param(hash_);
     }
 
     function getBytes32FromParam(
-        PureParameters.Param memory _param
+        PureParameters.Param memory param_
     ) external pure returns (bytes32) {
-        return PureParameters.getBytes32FromParam(_param);
+        return PureParameters.getBytes32FromParam(param_);
     }
 
-    function makeBoolParam(bool _bool) external pure returns (PureParameters.Param memory) {
-        return PureParameters.makeBoolParam(_bool);
+    function makeBoolParam(bool bool_) external pure returns (PureParameters.Param memory) {
+        return PureParameters.makeBoolParam(bool_);
     }
 
-    function getBoolParam(PureParameters.Param memory _param) external pure returns (bool) {
-        return PureParameters.getBoolFromParam(_param);
+    function getBoolParam(PureParameters.Param memory param_) external pure returns (bool) {
+        return PureParameters.getBoolFromParam(param_);
     }
 
-    function paramExists(PureParameters.Param memory _param) external pure returns (bool) {
-        return PureParameters.paramExists(_param);
+    function paramExists(PureParameters.Param memory param_) external pure returns (bool) {
+        return PureParameters.paramExists(param_);
     }
 }

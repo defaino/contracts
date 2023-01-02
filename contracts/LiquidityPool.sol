@@ -14,126 +14,126 @@ contract LiquidityPool is ILiquidityPool, AbstractPool, ERC20Upgradeable {
     using DecimalsConverter for uint256;
     using MathHelper for uint256;
 
-    IRewardsDistribution private rewardsDistribution;
-    IUserInfoRegistry private userInfoRegistry;
+    IRewardsDistribution internal _rewardsDistribution;
+    IUserInfoRegistry internal _userInfoRegistry;
 
     mapping(address => UserLastLiquidity) public override lastLiquidity;
 
     function liquidityPoolInitialize(
-        address _assetAddr,
-        bytes32 _assetKey,
-        string calldata _tokenSymbol
+        address assetAddr_,
+        bytes32 assetKey_,
+        string calldata tokenSymbol_
     ) external override initializer {
         __ERC20_init(
-            string(abi.encodePacked("DlDeFiCore ", _tokenSymbol)),
-            string(abi.encodePacked("lp", _tokenSymbol))
+            string(abi.encodePacked("DlDeFiCore ", tokenSymbol_)),
+            string(abi.encodePacked("lp", tokenSymbol_))
         );
-        _abstractPoolInitialize(_assetAddr, _assetKey);
+        _abstractPoolInitialize(assetAddr_, assetKey_);
     }
 
-    function setDependencies(address _contractsRegistry) public virtual override dependant {
-        super.setDependencies(_contractsRegistry);
+    function setDependencies(address contractsRegistry_) public virtual override dependant {
+        super.setDependencies(contractsRegistry_);
 
-        rewardsDistribution = IRewardsDistribution(
-            IRegistry(_contractsRegistry).getRewardsDistributionContract()
+        _rewardsDistribution = IRewardsDistribution(
+            IRegistry(contractsRegistry_).getRewardsDistributionContract()
         );
-        userInfoRegistry = IUserInfoRegistry(
-            IRegistry(_contractsRegistry).getUserInfoRegistryContract()
+        _userInfoRegistry = IUserInfoRegistry(
+            IRegistry(contractsRegistry_).getUserInfoRegistryContract()
         );
     }
 
     receive() external payable {}
 
     function addLiquidity(
-        address _userAddr,
-        uint256 _liquidityAmount
+        address userAddr_,
+        uint256 liquidityAmount_
     ) external payable override onlyDefiCore {
-        _ifNativePoolCheck(_userAddr, _liquidityAmount);
+        _ifNativePoolCheck(userAddr_, liquidityAmount_);
 
-        uint256 _assetAmount = _convertToUnderlyingAsset(_liquidityAmount);
+        uint256 assetAmount_ = _convertToUnderlyingAsset(liquidityAmount_);
 
         require(
-            IERC20(assetAddr).balanceOf(_userAddr) >= _assetAmount,
+            IERC20(assetAddr).balanceOf(userAddr_) >= assetAmount_,
             "LiquidityPool: Not enough tokens on account."
         );
 
         updateCompoundRate(true);
 
-        uint256 _mintAmount = convertAssetToLPTokens(_liquidityAmount);
+        uint256 mintAmount_ = convertAssetToLPTokens(liquidityAmount_);
 
-        _updateUserLastLiquidity(_userAddr, _mintAmount, true);
+        _updateUserLastLiquidity(userAddr_, mintAmount_, true);
 
-        _mint(_userAddr, _mintAmount);
+        _mint(userAddr_, mintAmount_);
 
-        IERC20(assetAddr).safeTransferFrom(_userAddr, address(this), _assetAmount);
+        IERC20(assetAddr).safeTransferFrom(userAddr_, address(this), assetAmount_);
     }
 
     function withdrawLiquidity(
-        address _userAddr,
-        uint256 _liquidityAmount,
-        bool _isMaxWithdraw
+        address userAddr_,
+        uint256 liquidityAmount_,
+        bool isMaxWithdraw_
     ) external override onlyDefiCore {
-        if (!_isMaxWithdraw) {
+        if (!isMaxWithdraw_) {
             require(
-                getAggregatedLiquidityAmount() >= _liquidityAmount,
+                getAggregatedLiquidityAmount() >= liquidityAmount_,
                 "LiquidityPool: Not enough liquidity available on the contract."
             );
         }
 
-        uint256 _toBurnLP = convertAssetToLPTokens(_liquidityAmount);
+        uint256 toBurnLP_ = convertAssetToLPTokens(liquidityAmount_);
 
-        if (_isMaxWithdraw) {
-            uint256 _userLPBalance = balanceOf(_userAddr);
+        if (isMaxWithdraw_) {
+            uint256 userLPBalance_ = balanceOf(userAddr_);
 
             /// @dev Needed to withdraw all funds without a balance
-            if (convertLPTokensToAsset(_userLPBalance) <= _liquidityAmount) {
-                _toBurnLP = _userLPBalance;
+            if (convertLPTokensToAsset(userLPBalance_) <= liquidityAmount_) {
+                toBurnLP_ = userLPBalance_;
             }
         } else {
             require(
-                balanceOf(_userAddr) - getCurrentLastLiquidity(_userAddr) >= _toBurnLP,
+                balanceOf(userAddr_) - getCurrentLastLiquidity(userAddr_) >= toBurnLP_,
                 "LiquidityPool: Not enough lpTokens to withdraw liquidity."
             );
         }
 
-        _burn(_userAddr, _toBurnLP);
+        _burn(userAddr_, toBurnLP_);
 
-        _sendAssetTokens(_userAddr, _liquidityAmount);
+        _sendAssetTokens(userAddr_, liquidityAmount_);
 
-        if (!_isMaxWithdraw) {
+        if (!isMaxWithdraw_) {
             require(
-                getBorrowPercentage() <= assetParameters.getMaxUtilizationRatio(assetKey),
+                getBorrowPercentage() <= _assetParameters.getMaxUtilizationRatio(assetKey),
                 "LiquidityPool: Utilization ratio after withdraw cannot be greater than the maximum."
             );
         }
     }
 
     function liquidate(
-        address _userAddr,
-        address _liquidatorAddr,
-        uint256 _liquidityAmount
+        address userAddr_,
+        address liquidatorAddr_,
+        uint256 liquidityAmount_
     ) external override onlyDefiCore {
         updateCompoundRate(true);
 
-        _burn(_userAddr, convertAssetToLPTokens(_liquidityAmount));
+        _burn(userAddr_, convertAssetToLPTokens(liquidityAmount_));
 
-        _sendAssetTokens(_liquidatorAddr, _liquidityAmount);
+        _sendAssetTokens(liquidatorAddr_, liquidityAmount_);
     }
 
     function getAPY() external view override returns (uint256) {
-        uint256 _totalBorrowedAmount = aggregatedBorrowedAmount;
+        uint256 totalBorrowedAmount_ = aggregatedBorrowedAmount;
 
         if (totalSupply() == 0) {
             return 0;
         }
 
-        uint256 _currentInterest = _totalBorrowedAmount.mulWithPrecision(
+        uint256 currentInterest_ = totalBorrowedAmount_.mulWithPrecision(
             PERCENTAGE_100 + getAnnualBorrowRate()
-        ) - _totalBorrowedAmount;
+        ) - totalBorrowedAmount_;
 
         return
-            _currentInterest.mulDiv(
-                PERCENTAGE_100 - assetParameters.getReserveFactor(assetKey),
+            currentInterest_.mulDiv(
+                PERCENTAGE_100 - _assetParameters.getReserveFactor(assetKey),
                 getTotalLiquidity()
             );
     }
@@ -153,13 +153,13 @@ contract LiquidityPool is ILiquidityPool, AbstractPool, ERC20Upgradeable {
     }
 
     function getAvailableToBorrowLiquidity() public view override returns (uint256) {
-        uint256 _absoluteBorrowAmount = aggregatedBorrowedAmount;
-        uint256 _maxAvailableLiquidity = (_absoluteBorrowAmount + getAggregatedLiquidityAmount())
-            .mulWithPrecision(assetParameters.getMaxUtilizationRatio(assetKey));
+        uint256 absoluteBorrowAmount_ = aggregatedBorrowedAmount;
+        uint256 maxAvailableLiquidity_ = (absoluteBorrowAmount_ + getAggregatedLiquidityAmount())
+            .mulWithPrecision(_assetParameters.getMaxUtilizationRatio(assetKey));
 
-        if (_maxAvailableLiquidity <= _absoluteBorrowAmount) return 0;
+        if (maxAvailableLiquidity_ <= absoluteBorrowAmount_) return 0;
 
-        return _maxAvailableLiquidity - _absoluteBorrowAmount;
+        return maxAvailableLiquidity_ - absoluteBorrowAmount_;
     }
 
     function getAnnualBorrowRate()
@@ -168,68 +168,67 @@ contract LiquidityPool is ILiquidityPool, AbstractPool, ERC20Upgradeable {
         override(IBasicPool, AbstractPool)
         returns (uint256)
     {
-        uint256 _utilizationRatio = getBorrowPercentage();
+        uint256 utilizationRatio_ = getBorrowPercentage();
 
-        if (_utilizationRatio == 0) {
+        if (utilizationRatio_ == 0) {
             return 0;
         }
 
-        IAssetParameters.InterestRateParams memory _params = assetParameters.getInterestRateParams(
-            assetKey
-        );
-        uint256 _utilizationBreakingPoint = _params.utilizationBreakingPoint;
+        IAssetParameters.InterestRateParams memory params_ = _assetParameters
+            .getInterestRateParams(assetKey);
+        uint256 utilizationBreakingPoint_ = params_.utilizationBreakingPoint;
 
-        if (_utilizationRatio < _utilizationBreakingPoint) {
+        if (utilizationRatio_ < utilizationBreakingPoint_) {
             return
                 AnnualRatesConverter.getAnnualRate(
                     0,
-                    _params.firstSlope,
-                    _utilizationRatio,
+                    params_.firstSlope,
+                    utilizationRatio_,
                     0,
-                    _utilizationBreakingPoint,
+                    utilizationBreakingPoint_,
                     PERCENTAGE_100
                 );
         } else {
             return
                 AnnualRatesConverter.getAnnualRate(
-                    _params.firstSlope,
-                    _params.secondSlope,
-                    _utilizationRatio,
-                    _utilizationBreakingPoint,
+                    params_.firstSlope,
+                    params_.secondSlope,
+                    utilizationRatio_,
+                    utilizationBreakingPoint_,
                     PERCENTAGE_100,
                     PERCENTAGE_100
                 );
         }
     }
 
-    function convertAssetToLPTokens(uint256 _assetAmount) public view override returns (uint256) {
-        return _assetAmount.divWithPrecision(exchangeRate());
+    function convertAssetToLPTokens(uint256 assetAmount_) public view override returns (uint256) {
+        return assetAmount_.divWithPrecision(exchangeRate());
     }
 
     function convertLPTokensToAsset(
-        uint256 _lpTokensAmount
+        uint256 lpTokensAmount_
     ) public view override returns (uint256) {
-        return _lpTokensAmount.mulWithPrecision(exchangeRate());
+        return lpTokensAmount_.mulWithPrecision(exchangeRate());
     }
 
     function exchangeRate() public view override returns (uint256) {
-        uint256 _totalSupply = totalSupply();
+        uint256 totalSupply_ = totalSupply();
 
-        if (_totalSupply == 0) {
+        if (totalSupply_ == 0) {
             return PERCENTAGE_100;
         }
 
-        uint256 _aggregatedBorrowedAmount = aggregatedBorrowedAmount;
-        uint256 _totalBorrowedAmount = getTotalBorrowedAmount();
-        uint256 _currentBorrowInterest = _totalBorrowedAmount > _aggregatedBorrowedAmount
-            ? (_totalBorrowedAmount - _aggregatedBorrowedAmount).mulWithPrecision(
-                PERCENTAGE_100 - assetParameters.getReserveFactor(assetKey)
+        uint256 aggregatedBorrowedAmount_ = aggregatedBorrowedAmount;
+        uint256 totalBorrowedAmount_ = getTotalBorrowedAmount();
+        uint256 currentBorrowInterest_ = totalBorrowedAmount_ > aggregatedBorrowedAmount_
+            ? (totalBorrowedAmount_ - aggregatedBorrowedAmount_).mulWithPrecision(
+                PERCENTAGE_100 - _assetParameters.getReserveFactor(assetKey)
             )
             : 0;
 
         return
-            (_currentBorrowInterest + _aggregatedBorrowedAmount + getAggregatedLiquidityAmount())
-                .divWithPrecision(_totalSupply);
+            (currentBorrowInterest_ + aggregatedBorrowedAmount_ + getAggregatedLiquidityAmount())
+                .divWithPrecision(totalSupply_);
     }
 
     function getCurrentLastLiquidity(address _userAddr) public view override returns (uint256) {
@@ -238,90 +237,90 @@ contract LiquidityPool is ILiquidityPool, AbstractPool, ERC20Upgradeable {
         return userLastLiquidity.blockNumber == block.number ? userLastLiquidity.liquidity : 0;
     }
 
-    function _beforeTokenTransfer(address from, address to, uint256 amount) internal override {
-        if (from != address(0) && to != address(0)) {
-            IDefiCore _defiCore = defiCore;
-            IRewardsDistribution _rewardsDistribution = rewardsDistribution;
+    function _beforeTokenTransfer(address from_, address to_, uint256 amount_) internal override {
+        if (from_ != address(0) && to_ != address(0)) {
+            IDefiCore defiCore_ = _defiCore;
+            IRewardsDistribution rewardsDistribution_ = _rewardsDistribution;
 
-            if (_defiCore.isCollateralAssetEnabled(from, assetKey)) {
-                uint256 _newBorrowLimit = _defiCore.getNewBorrowLimitInUSD(
-                    from,
+            if (defiCore_.isCollateralAssetEnabled(from_, assetKey)) {
+                uint256 newBorrowLimit_ = defiCore_.getNewBorrowLimitInUSD(
+                    from_,
                     assetKey,
-                    amount,
+                    amount_,
                     false
                 );
                 require(
-                    _newBorrowLimit >= _defiCore.getTotalBorrowBalanceInUSD(from),
+                    newBorrowLimit_ >= defiCore_.getTotalBorrowBalanceInUSD(from_),
                     "LiquidityPool: Borrow limit used after transfer greater than 100%."
                 );
             }
 
-            uint256 _freeLiquidity = balanceOf(from) - getCurrentLastLiquidity(from);
+            uint256 freeLiquidity_ = balanceOf(from_) - getCurrentLastLiquidity(from_);
 
-            if (amount > _freeLiquidity) {
-                uint256 _lastLiquidityNeeded = amount - _freeLiquidity;
+            if (amount_ > freeLiquidity_) {
+                uint256 _lastLiquidityNeeded = amount_ - freeLiquidity_;
 
-                _updateUserLastLiquidity(to, _lastLiquidityNeeded, true);
-                _updateUserLastLiquidity(from, _lastLiquidityNeeded, false);
+                _updateUserLastLiquidity(to_, _lastLiquidityNeeded, true);
+                _updateUserLastLiquidity(from_, _lastLiquidityNeeded, false);
             }
 
-            userInfoRegistry.updateAssetsAfterTransfer(assetKey, from, to, amount);
+            _userInfoRegistry.updateAssetsAfterTransfer(assetKey, from_, to_, amount_);
 
-            _rewardsDistribution.updateCumulativeSums(from, address(this));
-            _rewardsDistribution.updateCumulativeSums(to, address(this));
+            rewardsDistribution_.updateCumulativeSums(from_, address(this));
+            rewardsDistribution_.updateCumulativeSums(to_, address(this));
         }
     }
 
-    function _borrowAssetTokens(uint256 _amountToBorrow, address _recipient) internal override {
-        _sendAssetTokens(_recipient, _amountToBorrow);
+    function _borrowAssetTokens(uint256 amountToBorrow_, address recipient_) internal override {
+        _sendAssetTokens(recipient_, amountToBorrow_);
     }
 
-    function _repayAssetTokens(uint256 _repayAmount, address _payerAddr) internal override {
+    function _repayAssetTokens(uint256 repayAmount_, address payerAddr_) internal override {
         IERC20(assetAddr).safeTransferFrom(
-            _payerAddr,
+            payerAddr_,
             address(this),
-            _convertToUnderlyingAsset(_repayAmount)
+            _convertToUnderlyingAsset(repayAmount_)
         );
     }
 
-    function _beforeBorrowCheck(uint256 _amountToBorrow, address _borrowerAddr) internal override {
+    function _beforeBorrowCheck(uint256 amountToBorrow_, address) internal override {
         require(
-            getAggregatedLiquidityAmount() >= _amountToBorrow,
+            getAggregatedLiquidityAmount() >= amountToBorrow_,
             "LiquidityPool: Not enough available to borrow amount."
         );
 
         require(
-            _getBorrowPercentage(_amountToBorrow) <=
-                assetParameters.getMaxUtilizationRatio(assetKey),
+            _getBorrowPercentage(amountToBorrow_) <=
+                _assetParameters.getMaxUtilizationRatio(assetKey),
             "LiquidityPool: Utilization ratio after borrow cannot be greater than the maximum."
         );
     }
 
-    function _beforeRepayCheck(uint256 _repayAmount, address _payerAddr) internal override {
-        _ifNativePoolCheck(_payerAddr, _repayAmount);
+    function _beforeRepayCheck(uint256 repayAmount_, address payerAddr_) internal override {
+        _ifNativePoolCheck(payerAddr_, repayAmount_);
     }
 
-    function _ifNativePoolCheck(address _userAddr, uint256 _neededAmount) internal {
-        if (assetKey == systemPoolsRegistry.nativeAssetKey()) {
-            IWETH _nativeToken = IWETH(assetAddr);
-            uint256 _userTokenBalance = _nativeToken.balanceOf(_userAddr).to18(
-                _nativeToken.decimals()
+    function _ifNativePoolCheck(address userAddr_, uint256 neededAmount_) internal {
+        if (assetKey == _systemPoolsRegistry.nativeAssetKey()) {
+            IWETH nativeToken_ = IWETH(assetAddr);
+            uint256 userTokenBalance_ = nativeToken_.balanceOf(userAddr_).to18(
+                nativeToken_.decimals()
             );
 
-            if (_neededAmount > _userTokenBalance) {
-                uint256 _toDepositAmount = _neededAmount - _userTokenBalance;
+            if (neededAmount_ > userTokenBalance_) {
+                uint256 toDepositAmount_ = neededAmount_ - userTokenBalance_;
                 require(
-                    msg.value >= _toDepositAmount,
+                    msg.value >= toDepositAmount_,
                     "LiquidityPool: Wrong native currency amount."
                 );
 
-                _nativeToken.depositTo{value: _toDepositAmount}(_userAddr);
+                nativeToken_.depositTo{value: toDepositAmount_}(userAddr_);
 
-                uint256 _extraCurrency = msg.value - _toDepositAmount;
+                uint256 extraCurrency_ = msg.value - toDepositAmount_;
 
-                if (_extraCurrency > 0) {
-                    (bool _success, ) = _userAddr.call{value: _extraCurrency}("");
-                    require(_success, "LiquidityPool: Failed to return extra currency.");
+                if (extraCurrency_ > 0) {
+                    (bool success_, ) = userAddr_.call{value: extraCurrency_}("");
+                    require(success_, "LiquidityPool: Failed to return extra currency.");
                 }
             } else {
                 require(
@@ -334,44 +333,44 @@ contract LiquidityPool is ILiquidityPool, AbstractPool, ERC20Upgradeable {
         }
     }
 
-    function _sendAssetTokens(address _recipient, uint256 _amountToSend) internal {
-        if (assetKey != systemPoolsRegistry.nativeAssetKey()) {
-            IERC20(assetAddr).safeTransfer(_recipient, _convertToUnderlyingAsset(_amountToSend));
+    function _sendAssetTokens(address recipient_, uint256 amountToSend_) internal {
+        if (assetKey != _systemPoolsRegistry.nativeAssetKey()) {
+            IERC20(assetAddr).safeTransfer(recipient_, _convertToUnderlyingAsset(amountToSend_));
         } else {
-            IWETH(assetAddr).withdrawTo(_recipient, _convertToUnderlyingAsset(_amountToSend));
+            IWETH(assetAddr).withdrawTo(recipient_, _convertToUnderlyingAsset(amountToSend_));
         }
     }
 
     function _updateUserLastLiquidity(
-        address _userAddr,
-        uint256 _liquidityAmount,
-        bool _isAdding
+        address userAddr_,
+        uint256 liquidityAmount_,
+        bool isAdding_
     ) internal {
-        UserLastLiquidity storage userLastLiquidity = lastLiquidity[_userAddr];
+        UserLastLiquidity storage userLastLiquidity = lastLiquidity[userAddr_];
 
-        if (_isAdding) {
-            userLastLiquidity.liquidity = getCurrentLastLiquidity(_userAddr) + _liquidityAmount;
+        if (isAdding_) {
+            userLastLiquidity.liquidity = getCurrentLastLiquidity(userAddr_) + liquidityAmount_;
         } else {
-            userLastLiquidity.liquidity -= _liquidityAmount;
+            userLastLiquidity.liquidity -= liquidityAmount_;
         }
 
         userLastLiquidity.blockNumber = block.number;
     }
 
     function _getBorrowPercentage(
-        uint256 _additionalBorrowAmount
+        uint256 additionalBorrowAmount_
     ) internal view returns (uint256) {
-        uint256 _absoluteBorrowAmount = aggregatedBorrowedAmount + _additionalBorrowAmount;
-        uint256 _aggregatedLiquidityAmount = getAggregatedLiquidityAmount() -
-            _additionalBorrowAmount;
+        uint256 absoluteBorrowAmount_ = aggregatedBorrowedAmount + additionalBorrowAmount_;
+        uint256 aggregatedLiquidityAmount_ = getAggregatedLiquidityAmount() -
+            additionalBorrowAmount_;
 
-        if (_aggregatedLiquidityAmount == 0 && _absoluteBorrowAmount == 0) {
+        if (aggregatedLiquidityAmount_ == 0 && absoluteBorrowAmount_ == 0) {
             return 0;
         }
 
         return
-            _absoluteBorrowAmount.divWithPrecision(
-                _absoluteBorrowAmount + _aggregatedLiquidityAmount
+            absoluteBorrowAmount_.divWithPrecision(
+                absoluteBorrowAmount_ + aggregatedLiquidityAmount_
             );
     }
 }

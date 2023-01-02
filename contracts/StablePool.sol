@@ -9,10 +9,10 @@ import "./common/Globals.sol";
 
 contract StablePool is IStablePool, AbstractPool {
     function stablePoolInitialize(
-        address _assetAddr,
-        bytes32 _assetKey
+        address assetAddr_,
+        bytes32 assetKey_
     ) external override initializer {
-        _abstractPoolInitialize(_assetAddr, _assetKey);
+        _abstractPoolInitialize(assetAddr_, assetKey_);
     }
 
     function getAnnualBorrowRate()
@@ -21,14 +21,14 @@ contract StablePool is IStablePool, AbstractPool {
         override(IBasicPool, AbstractPool)
         returns (uint256)
     {
-        return assetParameters.getAnnualBorrowRate(assetKey);
+        return _assetParameters.getAnnualBorrowRate(assetKey);
     }
 
-    function _borrowAssetTokens(uint256 _amountToBorrow, address _recipient) internal override {
-        IStablePermitToken(assetAddr).mint(_recipient, _convertToUnderlyingAsset(_amountToBorrow));
+    function _borrowAssetTokens(uint256 amountToBorrow_, address recipient_) internal override {
+        IStablePermitToken(assetAddr).mint(recipient_, _convertToUnderlyingAsset(amountToBorrow_));
     }
 
-    function _repayAssetTokens(uint256 _repayAmount, address _payerAddr) internal override {
-        IStablePermitToken(assetAddr).burn(_payerAddr, _convertToUnderlyingAsset(_repayAmount));
+    function _repayAssetTokens(uint256 repayAmount_, address payerAddr_) internal override {
+        IStablePermitToken(assetAddr).burn(payerAddr_, _convertToUnderlyingAsset(repayAmount_));
     }
 }
