@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: GPL-3.0
-pragma solidity 0.8.3;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.17;
 
 import "../interfaces/IInterestRateLibrary.sol";
 
@@ -8,73 +8,63 @@ import "../interfaces/IInterestRateLibrary.sol";
  */
 library AnnualRatesConverter {
     /// @notice Function to get the annual percentage
-    /// @param _lowInterestPercentage lower boundary of annual interest
-    /// @param _highInterestPercentage upper boundary of annual interest
-    /// @param _currentUR current utilization ratio
-    /// @param _lowURPercentage lower boundary of utilization ratio
-    /// @param _highURPercentage upper boundary of utilization ratio
-    /// @param _decimal current decimal
+    /// @param lowInterestPercentage_ lower boundary of annual interest
+    /// @param highInterestPercentage_ upper boundary of annual interest
+    /// @param currentUR_ current utilization ratio
+    /// @param lowURPercentage_ lower boundary of utilization ratio
+    /// @param highURPercentage_ upper boundary of utilization ratio
+    /// @param decimal_ current decimal
     /// @return a calculated annual percentage
     function getAnnualRate(
-        uint256 _lowInterestPercentage,
-        uint256 _highInterestPercentage,
-        uint256 _currentUR,
-        uint256 _lowURPercentage,
-        uint256 _highURPercentage,
-        uint256 _decimal
+        uint256 lowInterestPercentage_,
+        uint256 highInterestPercentage_,
+        uint256 currentUR_,
+        uint256 lowURPercentage_,
+        uint256 highURPercentage_,
+        uint256 decimal_
     ) internal pure returns (uint256) {
-        uint256 _interestPerPercent = ((_highInterestPercentage - _lowInterestPercentage) *
-            _decimal) / (_highURPercentage - _lowURPercentage);
+        uint256 interestPerPercent_ = ((highInterestPercentage_ - lowInterestPercentage_) *
+            decimal_) / (highURPercentage_ - lowURPercentage_);
 
         return
-            (_interestPerPercent * (_currentUR - _lowURPercentage)) /
-            _decimal +
-            _lowInterestPercentage;
+            (interestPerPercent_ * (currentUR_ - lowURPercentage_)) /
+            decimal_ +
+            lowInterestPercentage_;
     }
 
     /// @notice Function to convert annual rate to second rate
-    /// @param _library address of the InterestRateLibrary
-    /// @param _interestRatePerYear annual rate to be converted to a second rate
-    /// @param _onePercent current one percentage value
+    /// @param library_ address of the InterestRateLibrary
+    /// @param interestRatePerYear_ annual rate to be converted to a second rate
+    /// @param onePercent_ current one percentage value
     /// @return a calculated second rate
     function convertToRatePerSecond(
-        IInterestRateLibrary _library,
-        uint256 _interestRatePerYear,
-        uint256 _onePercent
+        IInterestRateLibrary library_,
+        uint256 interestRatePerYear_,
+        uint256 onePercent_
     ) internal view returns (uint256) {
-        uint256 _libraryPrecision = _library.getLibraryPrecision();
+        uint256 libraryPrecision_ = library_.LIBRARY_PRECISION();
+
+        interestRatePerYear_ *= libraryPrecision_;
 
         require(
-            _interestRatePerYear * _libraryPrecision <=
-                _library.maxSupportedPercentage() * _onePercent,
+            interestRatePerYear_ <= library_.MAX_SUPPORTED_PERCENTAGE() * onePercent_,
             "AnnualRatesConverter: Interest rate is not supported."
         );
 
-        uint256 _precisionFactor = _libraryPrecision;
+        uint256 leftBorder_ = interestRatePerYear_ / onePercent_;
+        uint256 rightBorder_ = leftBorder_ + 1;
 
-        if (
-            _interestRatePerYear * _libraryPrecision <
-            _library.getLimitOfExactValues() * _onePercent
-        ) {
-            _interestRatePerYear *= _libraryPrecision;
-
-            _precisionFactor = 1;
+        if (interestRatePerYear_ % onePercent_ == 0) {
+            return library_.getRatePerSecond(leftBorder_);
         }
 
-        uint256 _leftBorder = (_interestRatePerYear / _onePercent) * _precisionFactor;
-        uint256 _rightBorder = _leftBorder + _precisionFactor;
-
-        if (_interestRatePerYear % _onePercent == 0) {
-            return _library.ratesPerSecond(_leftBorder);
-        }
-
-        uint256 _firstRatePerSecond = _library.ratesPerSecond(_leftBorder);
-        uint256 _secondRatePerSecond = _library.ratesPerSecond(_rightBorder);
+        uint256 firstRatePerSecond_ = library_.getRatePerSecond(leftBorder_);
+        uint256 secondRatePerSecond_ = library_.getRatePerSecond(rightBorder_);
 
         return
-            ((_secondRatePerSecond - _firstRatePerSecond) *
-                (_interestRatePerYear - (_leftBorder * _onePercent) / _precisionFactor)) /
-            _onePercent +
-            _firstRatePerSecond;
+            ((secondRatePerSecond_ - firstRatePerSecond_) *
+                (interestRatePerYear_ - (leftBorder_ * onePercent_))) /
+            onePercent_ +
+            firstRatePerSecond_;
     }
 }

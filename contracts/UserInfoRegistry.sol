@@ -1,24 +1,24 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity 0.8.3;
+pragma solidity 0.8.17;
 
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 
+import "@dlsl/dev-modules/contracts-registry/AbstractDependant.sol";
+import "@dlsl/dev-modules/libs/decimals/DecimalsConverter.sol";
+
+import "./interfaces/IRegistry.sol";
 import "./interfaces/IDefiCore.sol";
 import "./interfaces/IAssetParameters.sol";
 import "./interfaces/ISystemParameters.sol";
 import "./interfaces/IRewardsDistribution.sol";
-import "./interfaces/ILiquidityPoolRegistry.sol";
-import "./interfaces/ILiquidityPool.sol";
+import "./interfaces/ISystemPoolsRegistry.sol";
+import "./interfaces/IBasicPool.sol";
 import "./interfaces/IUserInfoRegistry.sol";
 
-import "./libraries/DecimalsConverter.sol";
 import "./libraries/AssetsHelperLibrary.sol";
 import "./libraries/MathHelper.sol";
-
-import "./Registry.sol";
-import "./abstract/AbstractDependant.sol";
 
 contract UserInfoRegistry is IUserInfoRegistry, AbstractDependant {
     using EnumerableSet for EnumerableSet.Bytes32Set;
@@ -26,374 +26,404 @@ contract UserInfoRegistry is IUserInfoRegistry, AbstractDependant {
     using DecimalsConverter for uint256;
     using MathHelper for uint256;
 
+    IDefiCore internal _defiCore;
+    ISystemParameters internal _systemParameters;
+    IAssetParameters internal _assetParameters;
+    IRewardsDistribution internal _rewardsDistribution;
+    ISystemPoolsRegistry internal _systemPoolsRegistry;
+
     mapping(address => EnumerableSet.Bytes32Set) internal _supplyAssets;
     mapping(address => EnumerableSet.Bytes32Set) internal _borrowAssets;
 
-    IERC20Metadata internal governanceToken;
-    IDefiCore internal defiCore;
-    ISystemParameters internal systemParameters;
-    IAssetParameters internal assetParameters;
-    IRewardsDistribution internal rewardsDistribution;
-    ILiquidityPoolRegistry internal liquidityPoolRegistry;
-
     modifier onlyDefiCore() {
-        require(address(defiCore) == msg.sender, "UserInfoRegistry: Caller not a DefiCore.");
+        require(address(_defiCore) == msg.sender, "UserInfoRegistry: Caller not a DefiCore.");
         _;
     }
 
     modifier onlyLiquidityPools() {
         require(
-            liquidityPoolRegistry.existingLiquidityPools(msg.sender),
+            _systemPoolsRegistry.existingLiquidityPools(msg.sender),
             "UserInfoRegistry: Caller not a LiquidityPool."
         );
         _;
     }
 
-    function setDependencies(Registry _registry) external override onlyInjectorOrZero {
-        defiCore = IDefiCore(_registry.getDefiCoreContract());
-        assetParameters = IAssetParameters(_registry.getAssetParametersContract());
-        systemParameters = ISystemParameters(_registry.getSystemParametersContract());
-        rewardsDistribution = IRewardsDistribution(_registry.getRewardsDistributionContract());
-        liquidityPoolRegistry = ILiquidityPoolRegistry(
-            _registry.getLiquidityPoolRegistryContract()
-        );
-        governanceToken = IERC20Metadata(_registry.getGovernanceTokenContract());
+    function setDependencies(address contractsRegistry_) external override dependant {
+        IRegistry registry_ = IRegistry(contractsRegistry_);
+
+        _defiCore = IDefiCore(registry_.getDefiCoreContract());
+        _assetParameters = IAssetParameters(registry_.getAssetParametersContract());
+        _systemParameters = ISystemParameters(registry_.getSystemParametersContract());
+        _rewardsDistribution = IRewardsDistribution(registry_.getRewardsDistributionContract());
+        _systemPoolsRegistry = ISystemPoolsRegistry(registry_.getSystemPoolsRegistryContract());
     }
 
     function updateAssetsAfterTransfer(
-        bytes32 _assetKey,
-        address _from,
-        address _to,
-        uint256 _amount
+        bytes32 assetKey_,
+        address from_,
+        address to_,
+        uint256 amount_
     ) external override onlyLiquidityPools {
-        if (IERC20(msg.sender).balanceOf(_from) - _amount == 0) {
-            _supplyAssets[_from].remove(_assetKey);
+        if (IERC20(msg.sender).balanceOf(from_) - amount_ == 0) {
+            _supplyAssets[from_].remove(assetKey_);
         }
 
-        _supplyAssets[_to].add(_assetKey);
+        _supplyAssets[to_].add(assetKey_);
     }
 
-    function updateUserSupplyAssets(address _userAddr, bytes32 _assetKey)
-        external
-        override
-        onlyDefiCore
-    {
-        if (IDefiCore(msg.sender).getUserLiquidityAmount(_userAddr, _assetKey) == 0) {
-            _supplyAssets[_userAddr].remove(_assetKey);
-        } else {
-            _supplyAssets[_userAddr].add(_assetKey);
-        }
+    function updateUserSupplyAssets(
+        address userAddr_,
+        bytes32 assetKey_
+    ) external override onlyDefiCore {
+        _updateUserAssets(
+            userAddr_,
+            assetKey_,
+            _supplyAssets[userAddr_],
+            IDefiCore(msg.sender).getUserLiquidityAmount
+        );
     }
 
-    function updateUserBorrowAssets(address _userAddr, bytes32 _assetKey)
-        external
-        override
-        onlyDefiCore
-    {
-        if (IDefiCore(msg.sender).getUserBorrowedAmount(_userAddr, _assetKey) == 0) {
-            _borrowAssets[_userAddr].remove(_assetKey);
-        } else {
-            _borrowAssets[_userAddr].add(_assetKey);
-        }
+    function updateUserBorrowAssets(
+        address userAddr_,
+        bytes32 assetKey_
+    ) external override onlyDefiCore {
+        _updateUserAssets(
+            userAddr_,
+            assetKey_,
+            _borrowAssets[userAddr_],
+            IDefiCore(msg.sender).getUserBorrowedAmount
+        );
     }
 
-    function getUserSupplyAssets(address _userAddr)
-        external
-        view
-        override
-        returns (bytes32[] memory)
-    {
-        return _getUserAssets(_supplyAssets[_userAddr]);
+    function getUserSupplyAssets(
+        address userAddr_
+    ) external view override returns (bytes32[] memory) {
+        return _supplyAssets[userAddr_].values();
     }
 
-    function getUserBorrowAssets(address _userAddr)
-        external
-        view
-        override
-        returns (bytes32[] memory)
-    {
-        return _getUserAssets(_borrowAssets[_userAddr]);
+    function getUserBorrowAssets(
+        address userAddr_
+    ) external view override returns (bytes32[] memory) {
+        return _borrowAssets[userAddr_].values();
     }
 
-    function getUserMainInfo(address _userAddr)
-        external
-        view
-        override
-        returns (UserMainInfo memory)
-    {
-        uint256 _totalBorrowBalance = defiCore.getTotalBorrowBalanceInUSD(_userAddr);
-        uint256 _borrowLimit = defiCore.getCurrentBorrowLimitInUSD(_userAddr);
+    function getUserMainInfo(
+        address userAddr_
+    ) external view override returns (UserMainInfo memory) {
+        uint256 totalBorrowBalance_ = _defiCore.getTotalBorrowBalanceInUSD(userAddr_);
+        uint256 borrowLimit_ = _defiCore.getCurrentBorrowLimitInUSD(userAddr_);
+        uint256 borrowLimitUsed_ = borrowLimit_ > 0
+            ? totalBorrowBalance_.divWithPrecision(borrowLimit_)
+            : 0;
 
         return
             UserMainInfo(
-                defiCore.getTotalSupplyBalanceInUSD(_userAddr),
-                _totalBorrowBalance,
-                _borrowLimit,
-                _totalBorrowBalance.divWithPrecision(_borrowLimit)
+                userAddr_.balance,
+                _defiCore.getTotalSupplyBalanceInUSD(userAddr_),
+                totalBorrowBalance_,
+                borrowLimit_,
+                borrowLimitUsed_
             );
     }
 
-    function getUserDistributionRewards(address _userAddr)
-        external
-        view
-        override
-        returns (RewardsDistributionInfo memory)
-    {
-        ILiquidityPoolRegistry _poolRegistry = liquidityPoolRegistry;
-        IRewardsDistribution _rewardsDistribution = rewardsDistribution;
+    function getUserDistributionRewards(
+        address _userAddr
+    ) external view override returns (RewardsDistributionInfo memory) {
+        ISystemPoolsRegistry poolsRegistry_ = _systemPoolsRegistry;
+        IRewardsDistribution rewardsDistribution_ = _rewardsDistribution;
 
-        bytes32[] memory _allAssets = _poolRegistry.getAllSupportedAssets();
+        IERC20Metadata rewardsToken_ = IERC20Metadata(_systemParameters.getRewardsTokenAddress());
+        ILiquidityPool rewardsPool_ = ILiquidityPool(poolsRegistry_.getRewardsLiquidityPool());
 
-        uint256 _totalReward;
+        if (address(rewardsToken_) == address(0) || address(rewardsPool_) == address(0)) {
+            return RewardsDistributionInfo(address(0), 0, 0, 0, 0);
+        }
 
-        for (uint256 i = 0; i < _allAssets.length; i++) {
-            _totalReward += _rewardsDistribution.getUserReward(
-                _allAssets[i],
+        bytes32[] memory allAssets_ = poolsRegistry_.getAllSupportedAssetKeys();
+
+        uint256 totalReward_;
+
+        for (uint256 i = 0; i < allAssets_.length; i++) {
+            totalReward_ += rewardsDistribution_.getUserReward(
+                allAssets_[i],
                 _userAddr,
-                _allAssets[i].getAssetLiquidityPool(_poolRegistry)
+                address(allAssets_[i].getAssetLiquidityPool(poolsRegistry_))
             );
         }
 
-        ILiquidityPool _governancePool = ILiquidityPool(
-            _poolRegistry.getGovernanceLiquidityPool()
-        );
-        IERC20Metadata _governanceToken = governanceToken;
-
-        uint256 _userBalance = _governanceToken.balanceOf(_userAddr).convertTo18(
-            _governanceToken.decimals()
-        );
+        uint256 userBalance_ = rewardsToken_.balanceOf(_userAddr).to18(rewardsToken_.decimals());
 
         return
             RewardsDistributionInfo(
-                address(_governanceToken),
-                _totalReward,
-                _governancePool.getAmountInUSD(_totalReward),
-                _userBalance,
-                _governancePool.getAmountInUSD(_userBalance)
+                address(rewardsToken_),
+                totalReward_,
+                rewardsPool_.getAmountInUSD(totalReward_),
+                userBalance_,
+                rewardsPool_.getAmountInUSD(userBalance_)
             );
     }
 
-    function getUserSupplyPoolsInfo(address _userAddr, bytes32[] calldata _assetKeys)
-        external
-        view
-        override
-        returns (UserSupplyPoolInfo[] memory _supplyPoolsInfo)
-    {
-        IDefiCore _defiCore = defiCore;
-        ILiquidityPoolRegistry _liquidityPoolRegistry = liquidityPoolRegistry;
+    function getUserSupplyPoolsInfo(
+        address userAddr_,
+        bytes32[] calldata assetKeys_
+    ) external view override returns (UserSupplyPoolInfo[] memory supplyPoolsInfo_) {
+        IDefiCore defiCore_ = _defiCore;
+        ISystemPoolsRegistry poolsRegistry_ = _systemPoolsRegistry;
 
-        _supplyPoolsInfo = new UserSupplyPoolInfo[](_assetKeys.length);
+        supplyPoolsInfo_ = new UserSupplyPoolInfo[](assetKeys_.length);
 
-        for (uint256 i = 0; i < _assetKeys.length; i++) {
-            ILiquidityPool _currentLiquidityPool = _assetKeys[i].getAssetLiquidityPool(
-                _liquidityPoolRegistry
+        for (uint256 i = 0; i < assetKeys_.length; i++) {
+            ILiquidityPool currentLiquidityPool_ = assetKeys_[i].getAssetLiquidityPool(
+                poolsRegistry_
             );
 
-            uint256 _marketSize = _currentLiquidityPool.getTotalLiquidity();
-            uint256 _userDepositAmount = _defiCore.getUserLiquidityAmount(
-                _userAddr,
-                _assetKeys[i]
+            uint256 marketSize_ = currentLiquidityPool_.getTotalLiquidity();
+            uint256 userDepositAmount_ = defiCore_.getUserLiquidityAmount(
+                userAddr_,
+                assetKeys_[i]
             );
+            (uint256 distrSupplyAPY_, ) = _rewardsDistribution.getAPY(assetKeys_[i]);
 
-            _supplyPoolsInfo[i] = UserSupplyPoolInfo(
-                _getBasePoolInfo(_userAddr, _assetKeys[i], _currentLiquidityPool, _defiCore),
-                _marketSize,
-                _currentLiquidityPool.getAmountInUSD(_marketSize),
-                _userDepositAmount,
-                _currentLiquidityPool.getAmountInUSD(_userDepositAmount),
-                _currentLiquidityPool.getAPY()
+            supplyPoolsInfo_[i] = UserSupplyPoolInfo(
+                _getBasePoolInfo(userAddr_, assetKeys_[i], currentLiquidityPool_, defiCore_),
+                marketSize_,
+                currentLiquidityPool_.getAmountInUSD(marketSize_),
+                userDepositAmount_,
+                currentLiquidityPool_.getAmountInUSD(userDepositAmount_),
+                currentLiquidityPool_.getAPY(),
+                distrSupplyAPY_
             );
         }
     }
 
-    function getUserBorrowPoolsInfo(address _userAddr, bytes32[] calldata _assetKeys)
-        external
-        view
-        override
-        returns (UserBorrowPoolInfo[] memory _borrowPoolsInfo)
-    {
-        IDefiCore _defiCore = defiCore;
-        ILiquidityPoolRegistry _liquidityPoolRegistry = liquidityPoolRegistry;
+    function getUserBorrowPoolsInfo(
+        address userAddr_,
+        bytes32[] calldata assetKeys_
+    ) external view override returns (UserBorrowPoolInfo[] memory borrowPoolsInfo_) {
+        IDefiCore defiCore_ = _defiCore;
+        ISystemPoolsRegistry poolsRegistry_ = _systemPoolsRegistry;
 
-        _borrowPoolsInfo = new UserBorrowPoolInfo[](_assetKeys.length);
+        borrowPoolsInfo_ = new UserBorrowPoolInfo[](assetKeys_.length);
 
-        for (uint256 i = 0; i < _assetKeys.length; i++) {
-            ILiquidityPool _currentLiquidityPool = _assetKeys[i].getAssetLiquidityPool(
-                _liquidityPoolRegistry
+        for (uint256 i = 0; i < assetKeys_.length; i++) {
+            ILiquidityPool currentLiquidityPool_ = assetKeys_[i].getAssetLiquidityPool(
+                poolsRegistry_
             );
 
-            uint256 _availableToBorrow = _currentLiquidityPool.getAvailableToBorrowLiquidity();
-            uint256 _userBorrowAmount = _defiCore.getUserBorrowedAmount(_userAddr, _assetKeys[i]);
+            uint256 availableToBorrow_ = currentLiquidityPool_.getAvailableToBorrowLiquidity();
+            uint256 userBorrowAmount_ = defiCore_.getUserBorrowedAmount(userAddr_, assetKeys_[i]);
+            (, uint256 distrBorrowAPY_) = _rewardsDistribution.getAPY(assetKeys_[i]);
 
-            _borrowPoolsInfo[i] = UserBorrowPoolInfo(
-                _getBasePoolInfo(_userAddr, _assetKeys[i], _currentLiquidityPool, _defiCore),
-                _availableToBorrow,
-                _currentLiquidityPool.getAmountInUSD(_availableToBorrow),
-                _userBorrowAmount,
-                _currentLiquidityPool.getAmountInUSD(_userBorrowAmount),
-                _currentLiquidityPool.getAnnualBorrowRate()
+            borrowPoolsInfo_[i] = UserBorrowPoolInfo(
+                _getBasePoolInfo(userAddr_, assetKeys_[i], currentLiquidityPool_, defiCore_),
+                availableToBorrow_,
+                currentLiquidityPool_.getAmountInUSD(availableToBorrow_),
+                userBorrowAmount_,
+                currentLiquidityPool_.getAmountInUSD(userBorrowAmount_),
+                currentLiquidityPool_.getAnnualBorrowRate(),
+                distrBorrowAPY_
             );
         }
     }
 
-    function getUserPoolInfo(address _userAddr, bytes32 _assetKey)
-        external
-        view
-        override
-        returns (UserPoolInfo memory)
-    {
-        IDefiCore _defiCore = defiCore;
-        ILiquidityPool _liquidityPool = _assetKey.getAssetLiquidityPool(liquidityPoolRegistry);
-        IERC20Metadata _asset = IERC20Metadata(_liquidityPool.assetAddr());
+    function getUserPoolInfo(
+        address userAddr_,
+        bytes32 assetKey_
+    ) external view override returns (UserPoolInfo memory) {
+        IDefiCore defiCore_ = _defiCore;
+        IBasicPool basicPool_ = assetKey_.getAssetLiquidityPool(_systemPoolsRegistry);
+        IERC20Metadata asset_ = IERC20Metadata(basicPool_.assetAddr());
 
-        uint256 _walletBalance = _asset.balanceOf(_userAddr).convertTo18(_asset.decimals());
-        uint256 _userSupplyBalance = _defiCore.getUserLiquidityAmount(_userAddr, _assetKey);
-        uint256 _userBorrowedAmount = _defiCore.getUserBorrowedAmount(_userAddr, _assetKey);
+        uint256 userSupplyBalance_;
+        bool isCollateralEnabled_;
+
+        uint256 walletBalance_ = asset_.balanceOf(userAddr_).to18(asset_.decimals());
+        uint256 userBorrowedAmount_ = defiCore_.getUserBorrowedAmount(userAddr_, assetKey_);
+
+        if (assetKey_ == _systemPoolsRegistry.nativeAssetKey()) {
+            walletBalance_ += userAddr_.balance;
+        }
+
+        (, ISystemPoolsRegistry.PoolType poolType_) = _systemPoolsRegistry.poolsInfo(assetKey_);
+
+        if (poolType_ == ISystemPoolsRegistry.PoolType.LIQUIDITY_POOL) {
+            userSupplyBalance_ = defiCore_.getUserLiquidityAmount(userAddr_, assetKey_);
+            isCollateralEnabled_ = defiCore_.isCollateralAssetEnabled(userAddr_, assetKey_);
+        }
 
         return
             UserPoolInfo(
-                _walletBalance,
-                _liquidityPool.getAmountInUSD(_walletBalance),
-                _userSupplyBalance,
-                _liquidityPool.getAmountInUSD(_userSupplyBalance),
-                _userBorrowedAmount,
-                _liquidityPool.getAmountInUSD(_userBorrowedAmount),
-                _defiCore.isCollateralAssetEnabled(_userAddr, _assetKey)
+                walletBalance_,
+                basicPool_.getAmountInUSD(walletBalance_),
+                userSupplyBalance_,
+                basicPool_.getAmountInUSD(userSupplyBalance_),
+                userBorrowedAmount_,
+                basicPool_.getAmountInUSD(userBorrowedAmount_),
+                isCollateralEnabled_
             );
     }
 
-    function getUserMaxValues(address _userAddr, bytes32 _assetKey)
-        external
-        view
-        override
-        returns (UserMaxValues memory)
-    {
-        IDefiCore _defiCore = defiCore;
+    function getUserMaxValues(
+        address userAddr_,
+        bytes32 assetKey_
+    ) external view override returns (UserMaxValues memory) {
+        IDefiCore defiCore_ = _defiCore;
+
+        uint256 maxToSupply_;
+        uint256 maxToWithdraw_;
+
+        (, ISystemPoolsRegistry.PoolType poolType_) = _systemPoolsRegistry.poolsInfo(assetKey_);
+
+        if (poolType_ == ISystemPoolsRegistry.PoolType.LIQUIDITY_POOL) {
+            maxToSupply_ = defiCore_.getMaxToSupply(userAddr_, assetKey_);
+            maxToWithdraw_ = defiCore_.getMaxToWithdraw(userAddr_, assetKey_);
+        }
 
         return
             UserMaxValues(
-                _defiCore.getMaxToSupply(_userAddr, _assetKey),
-                _defiCore.getMaxToWithdraw(_userAddr, _assetKey),
-                _defiCore.getMaxToBorrow(_userAddr, _assetKey),
-                _defiCore.getMaxToRepay(_userAddr, _assetKey)
+                maxToSupply_,
+                maxToWithdraw_,
+                defiCore_.getMaxToBorrow(userAddr_, assetKey_),
+                defiCore_.getMaxToRepay(userAddr_, assetKey_)
             );
     }
 
-    function getUsersLiquidiationInfo(address[] calldata _accounts)
-        external
-        view
-        override
-        returns (UserLiquidationInfo[] memory _resultArr)
-    {
-        IDefiCore _defiCore = defiCore;
+    function getUsersLiquidiationInfo(
+        address[] calldata accounts_
+    ) external view override returns (UserLiquidationInfo[] memory resultArr_) {
+        IDefiCore defiCore_ = _defiCore;
 
-        _resultArr = new UserLiquidationInfo[](_accounts.length);
+        resultArr_ = new UserLiquidationInfo[](accounts_.length);
 
-        for (uint256 i = 0; i < _accounts.length; i++) {
-            bytes32[] memory _allUserSupplyAssets = _getUserAssets(_supplyAssets[_accounts[i]]);
+        for (uint256 i = 0; i < accounts_.length; i++) {
+            bytes32[] memory allUserSupplyAssets_ = _supplyAssets[accounts_[i]].values();
 
-            bytes32[] memory _userSupplyAssets = new bytes32[](_allUserSupplyAssets.length);
-            uint256 _arrIndex;
+            bytes32[] memory userSupplyAssets_ = new bytes32[](allUserSupplyAssets_.length);
+            uint256 arrIndex_;
 
-            for (uint256 j = 0; j < _allUserSupplyAssets.length; j++) {
-                if (_defiCore.isCollateralAssetEnabled(_accounts[i], _allUserSupplyAssets[j])) {
-                    _userSupplyAssets[_arrIndex++] = _allUserSupplyAssets[j];
+            for (uint256 j = 0; j < allUserSupplyAssets_.length; j++) {
+                if (defiCore_.isCollateralAssetEnabled(accounts_[i], allUserSupplyAssets_[j])) {
+                    userSupplyAssets_[arrIndex_++] = allUserSupplyAssets_[j];
                 }
             }
 
-            _resultArr[i] = UserLiquidationInfo(
-                _getUserAssets(_borrowAssets[_accounts[i]]),
-                _userSupplyAssets,
-                _defiCore.getTotalBorrowBalanceInUSD(_accounts[i])
+            resultArr_[i] = UserLiquidationInfo(
+                accounts_[i],
+                _getMainPoolsInfo(_borrowAssets[accounts_[i]].values()),
+                _getMainPoolsInfo(userSupplyAssets_),
+                defiCore_.getTotalBorrowBalanceInUSD(accounts_[i])
             );
         }
     }
 
     function getUserLiquidationData(
-        address _userAddr,
-        bytes32 _borrowAssetKey,
-        bytes32 _receiveAssetKey
+        address userAddr_,
+        bytes32 borrowAssetKey_,
+        bytes32 receiveAssetKey_
     ) external view override returns (UserLiquidationData memory) {
-        IDefiCore _defiCore = defiCore;
-        ILiquidityPoolRegistry _poolRegistry = liquidityPoolRegistry;
-        ILiquidityPool _borrowLiquidityPool = _borrowAssetKey.getAssetLiquidityPool(_poolRegistry);
+        IDefiCore defiCore_ = _defiCore;
+        ISystemPoolsRegistry poolsRegistry_ = _systemPoolsRegistry;
+        ILiquidityPool borrowLiquidityPool_ = borrowAssetKey_.getAssetLiquidityPool(
+            poolsRegistry_
+        );
 
-        uint256 _receiveAssetPrice = _receiveAssetKey
-            .getAssetLiquidityPool(_poolRegistry)
+        uint256 receiveAssetPrice_ = receiveAssetKey_
+            .getAssetLiquidityPool(poolsRegistry_)
             .getAssetPrice();
 
         return
             UserLiquidationData(
-                _borrowLiquidityPool.getAssetPrice(),
-                _receiveAssetPrice,
-                _receiveAssetPrice.mulWithPrecision(
-                    DECIMAL - assetParameters.getLiquidationDiscount(_receiveAssetKey)
+                borrowLiquidityPool_.getAssetPrice(),
+                receiveAssetPrice_,
+                receiveAssetPrice_.mulWithPrecision(
+                    PERCENTAGE_100 - _assetParameters.getLiquidationDiscount(receiveAssetKey_)
                 ),
-                _defiCore.getUserBorrowedAmount(_userAddr, _borrowAssetKey),
-                _defiCore.getUserLiquidityAmount(_userAddr, _receiveAssetKey),
-                _borrowLiquidityPool.getAmountFromUSD(
-                    getMaxLiquidationQuantity(_userAddr, _receiveAssetKey, _borrowAssetKey)
+                defiCore_.getUserBorrowedAmount(userAddr_, borrowAssetKey_),
+                defiCore_.getUserLiquidityAmount(userAddr_, receiveAssetKey_),
+                borrowLiquidityPool_.getAmountFromUSD(
+                    getMaxLiquidationQuantity(userAddr_, receiveAssetKey_, borrowAssetKey_)
                 )
             );
     }
 
     function getMaxLiquidationQuantity(
-        address _userAddr,
-        bytes32 _supplyAssetKey,
-        bytes32 _borrowAssetKey
-    ) public view override returns (uint256 _maxQuantityInUSD) {
-        IDefiCore _defiCore = defiCore;
-        ILiquidityPoolRegistry _poolRegistry = liquidityPoolRegistry;
+        address userAddr_,
+        bytes32 supplyAssetKey_,
+        bytes32 borrowAssetKey_
+    ) public view override returns (uint256 maxQuantityInUSD_) {
+        IDefiCore defiCore_ = _defiCore;
+        ISystemPoolsRegistry poolsRegistry_ = _systemPoolsRegistry;
 
-        uint256 _liquidateLimitBySupply = (_defiCore.getUserLiquidityAmount(
-            _userAddr,
-            _supplyAssetKey
-        ) * (DECIMAL - assetParameters.getLiquidationDiscount(_supplyAssetKey))) / DECIMAL;
+        uint256 liquidateLimitBySupply_ = defiCore_
+            .getUserLiquidityAmount(userAddr_, supplyAssetKey_)
+            .mulWithPrecision(
+                PERCENTAGE_100 - _assetParameters.getLiquidationDiscount(supplyAssetKey_)
+            );
 
-        uint256 _userBorrowAmountInUSD = _borrowAssetKey
-            .getAssetLiquidityPool(_poolRegistry)
-            .getAmountInUSD(_defiCore.getUserBorrowedAmount(_userAddr, _borrowAssetKey));
+        uint256 userBorrowAmountInUSD_ = borrowAssetKey_
+            .getAssetLiquidityPool(poolsRegistry_)
+            .getAmountInUSD(defiCore_.getUserBorrowedAmount(userAddr_, borrowAssetKey_));
 
-        _maxQuantityInUSD = Math.min(
-            _supplyAssetKey.getAssetLiquidityPool(_poolRegistry).getAmountInUSD(
-                _liquidateLimitBySupply
+        maxQuantityInUSD_ = Math.min(
+            supplyAssetKey_.getAssetLiquidityPool(poolsRegistry_).getAmountInUSD(
+                liquidateLimitBySupply_
             ),
-            _userBorrowAmountInUSD
+            userBorrowAmountInUSD_
         );
 
-        uint256 _maxLiquidatePart = _defiCore
-            .getTotalBorrowBalanceInUSD(_userAddr)
-            .mulWithPrecision(systemParameters.getLiquidationBoundaryParam());
+        uint256 maxLiquidatePart_ = defiCore_
+            .getTotalBorrowBalanceInUSD(userAddr_)
+            .mulWithPrecision(_systemParameters.getLiquidationBoundary());
 
-        _maxQuantityInUSD = Math.min(_maxQuantityInUSD, _maxLiquidatePart);
+        maxQuantityInUSD_ = Math.min(maxQuantityInUSD_, maxLiquidatePart_);
+    }
+
+    function _updateUserAssets(
+        address userAddr_,
+        bytes32 assetKey_,
+        EnumerableSet.Bytes32Set storage userAssets_,
+        function(address, bytes32) external view returns (uint256) getAmount_
+    ) internal {
+        if (getAmount_(userAddr_, assetKey_) == 0) {
+            userAssets_.remove(assetKey_);
+        } else {
+            userAssets_.add(assetKey_);
+        }
     }
 
     function _getBasePoolInfo(
-        address _userAddr,
-        bytes32 _assetKey,
-        ILiquidityPool _liquidityPool,
-        IDefiCore _defiCore
+        address userAddr_,
+        bytes32 assetKey_,
+        ILiquidityPool liquidityPool_,
+        IDefiCore defiCore_
     ) internal view returns (BasePoolInfo memory) {
         return
             BasePoolInfo(
-                _assetKey,
-                _liquidityPool.assetAddr(),
-                _liquidityPool.getBorrowPercentage(),
-                _defiCore.isCollateralAssetEnabled(_userAddr, _assetKey)
+                MainPoolInfo(assetKey_, liquidityPool_.assetAddr()),
+                liquidityPool_.getBorrowPercentage(),
+                defiCore_.isCollateralAssetEnabled(userAddr_, assetKey_)
             );
     }
 
-    function _getUserAssets(EnumerableSet.Bytes32Set storage _userAssets)
-        internal
-        view
-        returns (bytes32[] memory _userAssetsArr)
-    {
-        uint256 _assetsCount = _userAssets.length();
+    function _getMainPoolsInfo(
+        bytes32[] memory assetKeys_
+    ) internal view returns (MainPoolInfo[] memory mainPoolsInfo_) {
+        ISystemPoolsRegistry poolsRegistry_ = _systemPoolsRegistry;
 
-        _userAssetsArr = new bytes32[](_assetsCount);
+        mainPoolsInfo_ = new MainPoolInfo[](assetKeys_.length);
 
-        for (uint256 i = 0; i < _assetsCount; i++) {
-            _userAssetsArr[i] = _userAssets.at(i);
+        for (uint256 i; i < assetKeys_.length; i++) {
+            if (assetKeys_[i] == bytes32(0)) {
+                mainPoolsInfo_[i] = MainPoolInfo(assetKeys_[i], address(0));
+
+                continue;
+            }
+
+            ILiquidityPool currentLiquidityPool_ = assetKeys_[i].getAssetLiquidityPool(
+                poolsRegistry_
+            );
+
+            mainPoolsInfo_[i] = MainPoolInfo(assetKeys_[i], currentLiquidityPool_.assetAddr());
         }
     }
 }

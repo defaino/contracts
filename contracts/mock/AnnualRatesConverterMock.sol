@@ -1,38 +1,33 @@
-// SPDX-License-Identifier: LGPL-3.0-or-later
-pragma solidity 0.8.3;
+// SPDX-License-Identifier: GPL-3.0
+pragma solidity 0.8.17;
 
 import "../libraries/AnnualRatesConverter.sol";
 import "../common/Globals.sol";
 
 contract AnnualRatesConverterMock {
     function getAnnualRate(
-        uint256 _lowInterestPercentage,
-        uint256 _highInterestPercentage,
-        uint256 _currentUR,
-        uint256 _lowURPercentage,
-        uint256 _highURPercentage
+        uint256 lowInterestPercentage_,
+        uint256 highInterestPercentage_,
+        uint256 currentUR_,
+        uint256 lowURPercentage_,
+        uint256 highURPercentage_
     ) external pure returns (uint256) {
         return
             AnnualRatesConverter.getAnnualRate(
-                _lowInterestPercentage,
-                _highInterestPercentage,
-                _currentUR,
-                _lowURPercentage,
-                _highURPercentage,
-                DECIMAL
+                lowInterestPercentage_,
+                highInterestPercentage_,
+                currentUR_,
+                lowURPercentage_,
+                highURPercentage_,
+                PERCENTAGE_100
             );
     }
 
-    function convertToRatePerSecond(IInterestRateLibrary _library, uint256 _interestRatePerYear)
-        external
-        view
-        returns (uint256)
-    {
+    function convertToRatePerSecond(
+        IInterestRateLibrary library_,
+        uint256 interestRatePerYear_
+    ) external view returns (uint256) {
         return
-            AnnualRatesConverter.convertToRatePerSecond(
-                _library,
-                _interestRatePerYear,
-                ONE_PERCENT
-            );
+            AnnualRatesConverter.convertToRatePerSecond(library_, interestRatePerYear_, PRECISION);
     }
 }

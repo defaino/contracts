@@ -1,10 +1,11 @@
-const { mine } = require("./helpers/hardhatTimeTraveller");
+const { mine } = require("./helpers/block-helper");
 const { toBytes, compareKeys, deepCompareKeys } = require("./helpers/bytesCompareLibrary");
-const { getInterestRateLibraryData } = require("../deploy/helpers/deployHelper");
-const { toBN, accounts, getOnePercent, getDecimal, wei } = require("../scripts/utils");
+const { getInterestRateLibraryAddr } = require("./helpers/coverage-helper");
+const { toBN, accounts, getPrecision, getPercentage100, wei } = require("../scripts/utils/utils");
+const { ZERO_ADDR } = require("../scripts/utils/constants");
 
+const truffleAssert = require("truffle-assertions");
 const Reverter = require("./helpers/reverter");
-const { assert } = require("chai");
 
 const Registry = artifacts.require("Registry");
 const DefiCore = artifacts.require("DefiCore");
@@ -12,12 +13,14 @@ const SystemParameters = artifacts.require("SystemParameters");
 const AssetParameters = artifacts.require("AssetParameters");
 const RewardsDistribution = artifacts.require("RewardsDistributionMock");
 const UserInfoRegistry = artifacts.require("UserInfoRegistry");
-const LiquidityPoolRegistry = artifacts.require("LiquidityPoolRegistry");
-const LiquidityPoolFactory = artifacts.require("LiquidityPoolFactory");
+const SystemPoolsRegistry = artifacts.require("SystemPoolsRegistry");
+const SystemPoolsFactory = artifacts.require("SystemPoolsFactory");
 const LiquidityPool = artifacts.require("LiquidityPool");
-const PriceManager = artifacts.require("PriceManagerMock");
+const StablePool = artifacts.require("StablePool");
+const PriceManager = artifacts.require("PriceManager");
 const InterestRateLibrary = artifacts.require("InterestRateLibrary");
-const GovernanceToken = artifacts.require("GovernanceToken");
+const WETH = artifacts.require("WETH");
+const StablePermitToken = artifacts.require("StablePermitTokenMock");
 
 const MockERC20 = artifacts.require("MockERC20");
 const ChainlinkOracleMock = artifacts.require("ChainlinkOracleMock");
@@ -26,26 +29,24 @@ MockERC20.numberFormat = "BigNumber";
 DefiCore.numberFormat = "BigNumber";
 LiquidityPool.numberFormat = "BigNumber";
 UserInfoRegistry.numberFormat = "BigNumber";
-GovernanceToken.numberFormat = "BigNumber";
+WETH.numberFormat = "BigNumber";
 
 describe("UserInfoRegistry", () => {
   const reverter = new Reverter();
 
-  const ADDRESS_NULL = "0x0000000000000000000000000000000000000000";
-
   let OWNER;
   let USER1;
   let USER2;
-  let NOTHING;
 
   let registry;
   let defiCore;
   let assetParameters;
-  let rewardsDistribution;
+  let systemParameters;
   let userInfoRegistry;
-  let liquidityPoolRegistry;
-  let priceManager;
+  let systemPoolsRegistry;
+  let rewardsDistribution;
 
+  let nativePool;
   let daiPool;
 
   const tokens = [];
@@ -53,30 +54,39 @@ describe("UserInfoRegistry", () => {
   let daiChainlinkOracle;
   let wEthChainlinkOracle;
 
-  let governanceToken;
+  let rewardsToken;
+  let nativeToken;
 
   const oneToken = wei(1);
-  const tokensAmount = wei(100000);
-  const colRatio = getDecimal().times("1.25");
-  const reserveFactor = getOnePercent().times("15");
+  const tokensAmount = wei(1000);
+  const colRatio = getPercentage100().times("1.25");
+  const reserveFactor = getPrecision().times("15");
 
-  const firstSlope = getOnePercent().times(4);
-  const secondSlope = getDecimal();
-  const utilizationBreakingPoint = getOnePercent().times(80);
-  const maxUR = getOnePercent().times(95);
-  const liquidationDiscount = getOnePercent().times(8);
-  const liquidationBoundary = getOnePercent().times(50);
+  const annualBorrowRate = getPrecision().times(3);
+  const firstSlope = getPrecision().times(4);
+  const secondSlope = getPercentage100();
+  const utilizationBreakingPoint = getPrecision().times(80);
+  const maxUR = getPrecision().times(95);
+  const liquidationDiscount = getPrecision().times(8);
+  const liquidationBoundary = getPrecision().times(50);
 
   const priceDecimals = wei(1, 8);
   const chainlinkPriceDecimals = toBN(8);
 
-  const minSupplyDistributionPart = getOnePercent().times(10);
-  const minBorrowDistributionPart = getOnePercent().times(10);
+  const minSupplyDistributionPart = getPrecision().times(10);
+  const minBorrowDistributionPart = getPrecision().times(10);
 
+  const zeroKey = toBytes("");
   const daiKey = toBytes("DAI");
   const wEthKey = toBytes("WETH");
   const usdtKey = toBytes("USDT");
-  const governanceTokenKey = toBytes("GTK");
+  const rewardsTokenKey = toBytes("RTK");
+  const nativeTokenKey = toBytes("BNB");
+  const stableKey = toBytes("ST");
+
+  async function getLiquidityPoolAddr(assetKey) {
+    return (await systemPoolsRegistry.poolsInfo(assetKey))[0];
+  }
 
   async function deployTokens(symbols) {
     for (let i = 0; i < symbols.length; i++) {
@@ -87,26 +97,14 @@ describe("UserInfoRegistry", () => {
     }
   }
 
-  async function createLiquidityPool(assetKey, asset, symbol, isCollateral, isGovernancePool) {
-    let chainlinkOracleAddr = ADDRESS_NULL;
+  async function createLiquidityPool(assetKey, asset, symbol, isCollateral, isRewardsPool) {
+    const chainlinkOracle = await ChainlinkOracleMock.new(wei(100, chainlinkPriceDecimals), chainlinkPriceDecimals);
 
-    if (!isGovernancePool) {
-      chainlinkOracleAddr = (await ChainlinkOracleMock.new(wei(100, chainlinkPriceDecimals), chainlinkPriceDecimals))
-        .address;
-    }
+    await systemPoolsRegistry.addLiquidityPool(asset.address, assetKey, chainlinkOracle.address, symbol, isCollateral);
 
-    await liquidityPoolRegistry.addLiquidityPool(
-      asset.address,
-      assetKey,
-      chainlinkOracleAddr,
-      NOTHING,
-      symbol,
-      isCollateral
-    );
-
-    if (!isGovernancePool) {
+    if (!isRewardsPool && assetKey != nativeTokenKey) {
       await asset.approveArbitraryBacth(
-        await liquidityPoolRegistry.liquidityPools(assetKey),
+        await getLiquidityPoolAddr(assetKey),
         [OWNER, USER1, USER2],
         [tokensAmount, tokensAmount, tokensAmount]
       );
@@ -118,21 +116,30 @@ describe("UserInfoRegistry", () => {
       [minSupplyDistributionPart, minBorrowDistributionPart],
     ]);
 
-    await priceManager.setPrice(assetKey, 100);
+    return chainlinkOracle;
+  }
 
-    return chainlinkOracleAddr;
+  async function createStablePool(assetKey, assetAddr) {
+    await systemPoolsRegistry.addStablePool(assetAddr, assetKey, ZERO_ADDR);
+
+    await assetParameters.setupAnnualBorrowRate(assetKey, annualBorrowRate);
+    await assetParameters.setupMainParameters(assetKey, [colRatio, reserveFactor, liquidationDiscount, maxUR]);
   }
 
   function convertToUSD(amountToConvert, price = toBN(100)) {
     return amountToConvert.times(price).times(priceDecimals).idiv(oneToken);
   }
 
+  function convertFromUSD(amountToConvert, price = toBN(100)) {
+    return amountToConvert.times(oneToken).idiv(priceDecimals.times(price));
+  }
+
   function convertToBorrowLimit(amountToConvert, convertColRatio = colRatio, isConvertToUSD = true) {
     if (isConvertToUSD) {
-      return convertToUSD(amountToConvert.times(getDecimal()).idiv(convertColRatio));
+      return convertToUSD(amountToConvert.times(getPercentage100()).idiv(convertColRatio));
     }
 
-    return amountToConvert.times(getDecimal()).idiv(convertColRatio);
+    return amountToConvert.times(getPercentage100()).idiv(convertColRatio);
   }
 
   before("setup", async () => {
@@ -141,10 +148,9 @@ describe("UserInfoRegistry", () => {
     USER2 = await accounts(2);
     NOTHING = await accounts(9);
 
-    governanceToken = await GovernanceToken.new(OWNER);
-    const interestRateLibrary = await InterestRateLibrary.new(
-      getInterestRateLibraryData("deploy/data/InterestRatesExactData.txt")
-    );
+    rewardsToken = await MockERC20.new("MockRTK", "RTK");
+    nativeToken = await WETH.new();
+    const interestRateLibrary = await InterestRateLibrary.at(await getInterestRateLibraryAddr());
 
     registry = await Registry.new();
     const _defiCore = await DefiCore.new();
@@ -152,76 +158,94 @@ describe("UserInfoRegistry", () => {
     const _assetParameters = await AssetParameters.new();
     const _rewardsDistribution = await RewardsDistribution.new();
     const _userInfoRegistry = await UserInfoRegistry.new();
-    const _liquidityPoolRegistry = await LiquidityPoolRegistry.new();
-    const _liquidityPoolFactory = await LiquidityPoolFactory.new();
+    const _systemPoolsRegistry = await SystemPoolsRegistry.new();
+    const _liquidityPoolFactory = await SystemPoolsFactory.new();
     const _liquidityPoolImpl = await LiquidityPool.new();
+    const _stablePoolImpl = await StablePool.new();
     const _priceManager = await PriceManager.new();
+
+    await registry.__OwnableContractsRegistry_init();
+
+    const stableToken = await StablePermitToken.new("Stable Token", "ST", registry.address);
 
     await registry.addProxyContract(await registry.DEFI_CORE_NAME(), _defiCore.address);
     await registry.addProxyContract(await registry.SYSTEM_PARAMETERS_NAME(), _systemParameters.address);
     await registry.addProxyContract(await registry.ASSET_PARAMETERS_NAME(), _assetParameters.address);
     await registry.addProxyContract(await registry.REWARDS_DISTRIBUTION_NAME(), _rewardsDistribution.address);
     await registry.addProxyContract(await registry.USER_INFO_REGISTRY_NAME(), _userInfoRegistry.address);
-    await registry.addProxyContract(await registry.LIQUIDITY_POOL_REGISTRY_NAME(), _liquidityPoolRegistry.address);
-    await registry.addProxyContract(await registry.LIQUIDITY_POOL_FACTORY_NAME(), _liquidityPoolFactory.address);
+    await registry.addProxyContract(await registry.SYSTEM_POOLS_REGISTRY_NAME(), _systemPoolsRegistry.address);
+    await registry.addProxyContract(await registry.SYSTEM_POOLS_FACTORY_NAME(), _liquidityPoolFactory.address);
     await registry.addProxyContract(await registry.PRICE_MANAGER_NAME(), _priceManager.address);
 
     await registry.addContract(await registry.INTEREST_RATE_LIBRARY_NAME(), interestRateLibrary.address);
-    await registry.addContract(await registry.GOVERNANCE_TOKEN_NAME(), governanceToken.address);
 
     defiCore = await DefiCore.at(await registry.getDefiCoreContract());
     assetParameters = await AssetParameters.at(await registry.getAssetParametersContract());
     userInfoRegistry = await UserInfoRegistry.at(await registry.getUserInfoRegistryContract());
-    liquidityPoolRegistry = await LiquidityPoolRegistry.at(await registry.getLiquidityPoolRegistryContract());
+    systemPoolsRegistry = await SystemPoolsRegistry.at(await registry.getSystemPoolsRegistryContract());
     rewardsDistribution = await RewardsDistribution.at(await registry.getRewardsDistributionContract());
-    priceManager = await PriceManager.at(await registry.getPriceManagerContract());
-
-    const systemParameters = await SystemParameters.at(await registry.getSystemParametersContract());
+    systemParameters = await SystemParameters.at(await registry.getSystemParametersContract());
 
     await registry.injectDependencies(await registry.DEFI_CORE_NAME());
+    await registry.injectDependencies(await registry.SYSTEM_PARAMETERS_NAME());
     await registry.injectDependencies(await registry.ASSET_PARAMETERS_NAME());
     await registry.injectDependencies(await registry.REWARDS_DISTRIBUTION_NAME());
     await registry.injectDependencies(await registry.USER_INFO_REGISTRY_NAME());
-    await registry.injectDependencies(await registry.LIQUIDITY_POOL_REGISTRY_NAME());
-    await registry.injectDependencies(await registry.LIQUIDITY_POOL_FACTORY_NAME());
+    await registry.injectDependencies(await registry.SYSTEM_POOLS_REGISTRY_NAME());
+    await registry.injectDependencies(await registry.SYSTEM_POOLS_FACTORY_NAME());
     await registry.injectDependencies(await registry.PRICE_MANAGER_NAME());
 
-    tokens.push(governanceToken);
+    tokens.push(rewardsToken);
     await deployTokens(["DAI", "WETH", "USDT"]);
+    tokens.push(nativeToken);
 
-    await systemParameters.systemParametersInitialize();
-    await assetParameters.assetParametersInitialize();
-    await rewardsDistribution.rewardsDistributionInitialize();
-    await liquidityPoolRegistry.liquidityPoolRegistryInitialize(_liquidityPoolImpl.address);
-    await priceManager.priceManagerInitialize(daiKey, tokens[1].address);
+    await defiCore.defiCoreInitialize();
+    await systemPoolsRegistry.systemPoolsRegistryInitialize(_liquidityPoolImpl.address, nativeTokenKey, zeroKey);
 
-    await interestRateLibrary.addNewRates(
-      110, // Start percentage
-      getInterestRateLibraryData("deploy/data/InterestRatesData.txt")
-    );
+    await systemPoolsRegistry.addPoolsBeacon(1, _stablePoolImpl.address);
+    await systemParameters.setupStablePoolsAvailability(true);
 
-    await createLiquidityPool(governanceTokenKey, tokens[0], await governanceToken.symbol(), true, true);
-    daiChainlinkOracle = await ChainlinkOracleMock.at(await createLiquidityPool(daiKey, tokens[1], "DAI", true, false));
-    wEthChainlinkOracle = await ChainlinkOracleMock.at(
-      await createLiquidityPool(wEthKey, tokens[2], "WETH", true, false)
-    );
+    await createLiquidityPool(rewardsTokenKey, tokens[0], await rewardsToken.symbol(), true, true);
+    await createStablePool(stableKey, stableToken.address);
+
+    daiChainlinkOracle = await createLiquidityPool(daiKey, tokens[1], "DAI", true, false);
+    wEthChainlinkOracle = await createLiquidityPool(wEthKey, tokens[2], "WETH", true, false);
     await createLiquidityPool(usdtKey, tokens[3], "USDT", false, false);
+    await createLiquidityPool(nativeTokenKey, tokens[4], "BNB", true, false);
 
-    daiPool = await LiquidityPool.at(await liquidityPoolRegistry.liquidityPools(daiKey));
+    nativePool = await LiquidityPool.at(await getLiquidityPoolAddr(nativeTokenKey));
+    daiPool = await LiquidityPool.at(await getLiquidityPoolAddr(daiKey));
 
     await systemParameters.setupLiquidationBoundary(liquidationBoundary);
+    await systemParameters.setRewardsTokenAddress(ZERO_ADDR);
 
-    await rewardsDistribution.setupRewardsPerBlockBatch(
-      [daiKey, wEthKey, usdtKey, governanceTokenKey],
-      [wei(2), oneToken, wei(5), oneToken]
-    );
+    // await rewardsDistribution.setupRewardsPerBlockBatch(
+    //   [daiKey, wEthKey, usdtKey, rewardsTokenKey, nativeTokenKey],
+    //   [wei(2), oneToken, wei(5), oneToken, oneToken]
+    // );
 
-    await governanceToken.transfer(defiCore.address, tokensAmount.times(10));
+    await rewardsToken.mintArbitrary(defiCore.address, tokensAmount);
+    await nativeToken.approve(nativePool.address, tokensAmount);
 
     await reverter.snapshot();
   });
 
   afterEach("revert", reverter.revert);
+
+  describe("modifiers check", () => {
+    it("should get exception if not a DefiCore call functions", async () => {
+      const reason = "UserInfoRegistry: Caller not a DefiCore.";
+
+      await truffleAssert.reverts(userInfoRegistry.updateUserSupplyAssets(USER1, daiKey), reason);
+      await truffleAssert.reverts(userInfoRegistry.updateUserBorrowAssets(USER1, daiKey), reason);
+    });
+
+    it("should get exception if caller not a LiquidityPool", async () => {
+      const reason = "UserInfoRegistry: Caller not a LiquidityPool.";
+
+      await truffleAssert.reverts(userInfoRegistry.updateAssetsAfterTransfer(daiKey, USER1, USER2, wei(10)), reason);
+    });
+  });
 
   describe("getUserSupplyAssets", () => {
     const liquidityAmount = wei(100);
@@ -290,12 +314,13 @@ describe("UserInfoRegistry", () => {
       let totalBorrowBalanceInUSD = convertToUSD(borrowAmount.times(2));
       let borrowLimitInUSD = convertToBorrowLimit(liquidityAmount);
 
+      assert.equal(userMainInfo.userCurrencyBalance.toString(), toBN(await web3.eth.getBalance(USER1)).toFixed());
       assert.equal(userMainInfo.totalSupplyBalanceInUSD.toString(), convertToUSD(liquidityAmount).toString());
       assert.equal(userMainInfo.totalBorrowBalanceInUSD.toString(), totalBorrowBalanceInUSD.toString());
       assert.equal(userMainInfo.borrowLimitInUSD.toString(), borrowLimitInUSD.toString());
       assert.equal(
         userMainInfo.borrowLimitUsed.toString(),
-        totalBorrowBalanceInUSD.times(getDecimal()).idiv(borrowLimitInUSD).toFixed()
+        totalBorrowBalanceInUSD.times(getPercentage100()).idiv(borrowLimitInUSD).toFixed()
       );
 
       await defiCore.addLiquidity(wEthKey, liquidityAmount.idiv(2), { from: USER1 });
@@ -314,7 +339,7 @@ describe("UserInfoRegistry", () => {
       assert.equal(userMainInfo.borrowLimitInUSD.toString(), borrowLimitInUSD.toString());
       assert.equal(
         userMainInfo.borrowLimitUsed.toString(),
-        totalBorrowBalanceInUSD.times(getDecimal()).idiv(borrowLimitInUSD).toFixed()
+        totalBorrowBalanceInUSD.times(getPercentage100()).idiv(borrowLimitInUSD).toFixed()
       );
     });
   });
@@ -324,6 +349,10 @@ describe("UserInfoRegistry", () => {
     const borrowAmount = wei(50);
 
     it("should get correct rewards", async () => {
+      await systemParameters.setRewardsTokenAddress(rewardsToken.address);
+      await systemPoolsRegistry.updateRewardsAssetKey(rewardsTokenKey);
+      await rewardsDistribution.setupRewardsPerBlockBatch([daiKey], [wei(2)]);
+
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
 
       await mine(499);
@@ -341,6 +370,10 @@ describe("UserInfoRegistry", () => {
     });
 
     it("should get correct rewards after claim", async () => {
+      await systemParameters.setRewardsTokenAddress(rewardsToken.address);
+      await systemPoolsRegistry.updateRewardsAssetKey(rewardsTokenKey);
+      await rewardsDistribution.setupRewardsPerBlockBatch([daiKey], [wei(2)]);
+
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
 
       await mine(499);
@@ -349,7 +382,11 @@ describe("UserInfoRegistry", () => {
 
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER2 });
 
+      const userBalanceBefore = toBN(await rewardsToken.balanceOf(USER1));
+
       await defiCore.claimDistributionRewards([daiKey], false, { from: USER1 });
+
+      const userBalanceAfter = toBN(await rewardsToken.balanceOf(USER1));
 
       const rewardInfo = await userInfoRegistry.getUserDistributionRewards(USER1);
 
@@ -357,15 +394,22 @@ describe("UserInfoRegistry", () => {
       assert.equal(rewardInfo.distributionReward.toString(), 0);
       assert.equal(rewardInfo.distributionRewardInUSD.toString(), 0);
 
-      const userBalance = await governanceToken.balanceOf(USER1);
+      const userBalance = await rewardsToken.balanceOf(USER1);
       assert.equal(rewardInfo.userBalance.toString(), userBalance.toString());
       assert.equal(rewardInfo.userBalanceInUSD.toString(), convertToUSD(userBalance).toString());
 
-      assert.equal(rewardInfo.userBalance.toString(), expectedRewards.toString());
-      assert.equal(rewardInfo.userBalanceInUSD.toString(), convertToUSD(expectedRewards).toString());
+      assert.closeTo(
+        userBalanceAfter.minus(userBalanceBefore).toNumber(),
+        expectedRewards.toNumber(),
+        wei(0.01).toNumber()
+      );
     });
 
     it("should get correct rewards after deposit and borrow", async () => {
+      await systemParameters.setRewardsTokenAddress(rewardsToken.address);
+      await systemPoolsRegistry.updateRewardsAssetKey(rewardsTokenKey);
+      await rewardsDistribution.setupRewardsPerBlockBatch([daiKey], [wei(2)]);
+
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
       await defiCore.borrowFor(daiKey, borrowAmount, USER1, { from: USER1 });
 
@@ -383,6 +427,22 @@ describe("UserInfoRegistry", () => {
       assert.equal(rewardInfo.userBalance.toString(), 0);
       assert.equal(rewardInfo.userBalanceInUSD.toString(), 0);
     });
+
+    it("should return emtpy structure if rewards token does not set", async () => {
+      await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
+
+      await mine(10);
+
+      await defiCore.borrowFor(daiKey, borrowAmount, USER1, { from: USER1 });
+
+      const rewardInfo = await userInfoRegistry.getUserDistributionRewards(USER1);
+
+      assert.equal(rewardInfo.assetAddr, ZERO_ADDR);
+      assert.equal(rewardInfo.distributionReward.toString(), 0);
+      assert.equal(rewardInfo.distributionRewardInUSD.toString(), 0);
+      assert.equal(rewardInfo.userBalance.toString(), 0);
+      assert.equal(rewardInfo.userBalanceInUSD.toString(), 0);
+    });
   });
 
   describe("getUserSupplyPoolsInfo", () => {
@@ -390,6 +450,10 @@ describe("UserInfoRegistry", () => {
     const borrowAmount = wei(50);
 
     it("should return correct supply pool data", async () => {
+      await systemParameters.setRewardsTokenAddress(rewardsToken.address);
+      await systemPoolsRegistry.updateRewardsAssetKey(rewardsTokenKey);
+      await rewardsDistribution.setupRewardsPerBlockBatch([daiKey, wEthKey], [wei(2), oneToken]);
+
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
       await defiCore.addLiquidity(daiKey, liquidityAmount.times(2), { from: USER2 });
       await defiCore.addLiquidity(wEthKey, liquidityAmount.times(2), { from: USER2 });
@@ -402,11 +466,11 @@ describe("UserInfoRegistry", () => {
       let userSupplyPoolInfo = dataArr[0];
       let totalSupplyAmount = liquidityAmount.times(3);
 
-      assert.isTrue(compareKeys(userSupplyPoolInfo.basePoolInfo.assetKey, daiKey));
-      assert.equal(userSupplyPoolInfo.basePoolInfo.assetAddr, tokens[1].address);
+      assert.isTrue(compareKeys(userSupplyPoolInfo.basePoolInfo.mainInfo.assetKey, daiKey));
+      assert.equal(userSupplyPoolInfo.basePoolInfo.mainInfo.assetAddr, tokens[1].address);
       assert.equal(
         userSupplyPoolInfo.basePoolInfo.utilizationRatio.toString(),
-        borrowAmount.times(getDecimal()).idiv(totalSupplyAmount).toFixed()
+        borrowAmount.times(getPercentage100()).idiv(totalSupplyAmount).toFixed()
       );
       assert.isTrue(userSupplyPoolInfo.basePoolInfo.isCollateralEnabled);
 
@@ -416,11 +480,15 @@ describe("UserInfoRegistry", () => {
       assert.equal(userSupplyPoolInfo.userDepositInUSD.toString(), convertToUSD(liquidityAmount).toString());
       assert.equal(userSupplyPoolInfo.supplyAPY.toString(), (await daiPool.getAPY()).toFixed());
 
+      let distrAPYs = await rewardsDistribution.getAPY(daiKey);
+
+      assert.equal(userSupplyPoolInfo.distrSupplyAPY.toString(), toBN(distrAPYs[0]).toFixed());
+
       userSupplyPoolInfo = dataArr[1];
       totalSupplyAmount = liquidityAmount.times(2);
 
-      assert.isTrue(compareKeys(userSupplyPoolInfo.basePoolInfo.assetKey, wEthKey));
-      assert.equal(userSupplyPoolInfo.basePoolInfo.assetAddr, tokens[2].address);
+      assert.isTrue(compareKeys(userSupplyPoolInfo.basePoolInfo.mainInfo.assetKey, wEthKey));
+      assert.equal(userSupplyPoolInfo.basePoolInfo.mainInfo.assetAddr, tokens[2].address);
       assert.equal(userSupplyPoolInfo.basePoolInfo.utilizationRatio.toString(), 0);
       assert.isFalse(userSupplyPoolInfo.basePoolInfo.isCollateralEnabled);
 
@@ -429,6 +497,10 @@ describe("UserInfoRegistry", () => {
       assert.equal(userSupplyPoolInfo.userDeposit.toString(), 0);
       assert.equal(userSupplyPoolInfo.userDepositInUSD.toString(), 0);
       assert.equal(userSupplyPoolInfo.supplyAPY.toString(), 0);
+
+      distrAPYs = await rewardsDistribution.getAPY(wEthKey);
+
+      assert.equal(userSupplyPoolInfo.distrSupplyAPY.toString(), toBN(distrAPYs[0]).toFixed());
     });
   });
 
@@ -446,21 +518,25 @@ describe("UserInfoRegistry", () => {
       const userBorrowPoolInfo = (await userInfoRegistry.getUserBorrowPoolsInfo(USER1, [daiKey]))[0];
       const totalSupplyAmount = liquidityAmount.times(3);
 
-      assert.isTrue(compareKeys(userBorrowPoolInfo.basePoolInfo.assetKey, daiKey));
-      assert.equal(userBorrowPoolInfo.basePoolInfo.assetAddr, tokens[1].address);
+      assert.isTrue(compareKeys(userBorrowPoolInfo.basePoolInfo.mainInfo.assetKey, daiKey));
+      assert.equal(userBorrowPoolInfo.basePoolInfo.mainInfo.assetAddr, tokens[1].address);
       assert.equal(
         userBorrowPoolInfo.basePoolInfo.utilizationRatio.toString(),
-        borrowAmount.times(getDecimal()).idiv(totalSupplyAmount).toFixed()
+        borrowAmount.times(getPercentage100()).idiv(totalSupplyAmount).toFixed()
       );
       assert.isTrue(userBorrowPoolInfo.basePoolInfo.isCollateralEnabled);
 
-      const availableToBorrow = totalSupplyAmount.times(maxUR).idiv(getDecimal()).minus(borrowAmount);
+      const availableToBorrow = totalSupplyAmount.times(maxUR).idiv(getPercentage100()).minus(borrowAmount);
 
       assert.equal(userBorrowPoolInfo.availableToBorrow.toString(), availableToBorrow.toString());
       assert.equal(userBorrowPoolInfo.availableToBorrowInUSD.toString(), convertToUSD(availableToBorrow).toString());
       assert.equal(userBorrowPoolInfo.userBorrowAmount.toString(), borrowAmount.toString());
       assert.equal(userBorrowPoolInfo.userBorrowAmountInUSD.toString(), convertToUSD(borrowAmount).toString());
       assert.equal(userBorrowPoolInfo.borrowAPY.toString(), (await daiPool.getAnnualBorrowRate()).toFixed());
+
+      const distrAPYs = await rewardsDistribution.getAPY(daiKey);
+
+      assert.equal(userBorrowPoolInfo.distrBorrowAPY.toString(), toBN(distrAPYs[1]).toFixed());
     });
   });
 
@@ -499,6 +575,40 @@ describe("UserInfoRegistry", () => {
       assert.equal(userPoolInfo.userBorrowBalanceInUSD.toString(), convertToUSD(borrowAmount).toString());
       assert.equal(userPoolInfo.isCollateralEnabled, false);
     });
+
+    it("should return correct user pool info for native pool", async () => {
+      await defiCore.addLiquidity(nativeTokenKey, liquidityAmount, { from: OWNER, value: liquidityAmount });
+      await defiCore.borrowFor(nativeTokenKey, borrowAmount, OWNER, { from: OWNER });
+
+      const userPoolInfo = await userInfoRegistry.getUserPoolInfo(OWNER, nativeTokenKey);
+      const userBalance = (await tokens[0].balanceOf(OWNER)).plus(await web3.eth.getBalance(OWNER));
+
+      assert.closeTo(
+        toBN(userPoolInfo.userWalletBalance).toNumber(),
+        userBalance.toNumber(),
+        oneToken.idiv(1000).toNumber()
+      );
+      assert.closeTo(
+        toBN(userPoolInfo.userWalletBalanceInUSD).toNumber(),
+        convertToUSD(userBalance).toNumber(),
+        wei(0.01, priceDecimals).toNumber()
+      );
+    });
+
+    it("should return correct user pool info for stable pool", async () => {
+      await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
+      await defiCore.borrowFor(stableKey, borrowAmount, USER1, { from: USER1 });
+
+      const userPoolInfo = await userInfoRegistry.getUserPoolInfo(USER1, stableKey);
+
+      assert.equal(userPoolInfo.userWalletBalance.toString(), borrowAmount.toFixed());
+      assert.equal(userPoolInfo.userWalletBalanceInUSD.toString(), convertToUSD(borrowAmount, 1).toString());
+      assert.equal(userPoolInfo.userSupplyBalance.toString(), 0);
+      assert.equal(userPoolInfo.userSupplyBalanceInUSD.toString(), 0);
+      assert.equal(userPoolInfo.userBorrowBalance.toString(), borrowAmount.toString());
+      assert.equal(userPoolInfo.userBorrowBalanceInUSD.toString(), convertToUSD(borrowAmount, 1).toString());
+      assert.equal(userPoolInfo.isCollateralEnabled, false);
+    });
   });
 
   describe("getUserMaxValues", () => {
@@ -512,12 +622,30 @@ describe("UserInfoRegistry", () => {
       const maxValues = await userInfoRegistry.getUserMaxValues(USER1, daiKey);
 
       const currentBorrowLimit = convertToBorrowLimit(liquidityAmount.times(2), colRatio, false);
-      const maxToWithdraw = liquidityAmount.times(2).minus(borrowAmount.times(colRatio).idiv(getDecimal()));
-      const maxToRepay = borrowAmount.times(await daiPool.getNewCompoundRate()).idiv(getDecimal());
+      const maxToWithdraw = liquidityAmount.times(2).minus(borrowAmount.times(colRatio).idiv(getPercentage100()));
+      const maxToRepay = borrowAmount.times(await daiPool.getNewCompoundRate()).idiv(getPercentage100());
 
       assert.equal(maxValues.maxToSupply.toString(), (await tokens[1].balanceOf(USER1)).toFixed());
       assert.equal(maxValues.maxToWithdraw.toString(), maxToWithdraw.toString());
       assert.equal(maxValues.maxToBorrow.toString(), currentBorrowLimit.minus(borrowAmount).toString());
+      assert.equal(maxValues.maxToRepay.toString(), maxToRepay.toString());
+    });
+
+    it("should return correct values for stable pool", async () => {
+      await defiCore.addLiquidity(daiKey, liquidityAmount.times(2), { from: USER1 });
+      await defiCore.borrowFor(stableKey, borrowAmount, USER1, { from: USER1 });
+
+      const maxValues = await userInfoRegistry.getUserMaxValues(USER1, stableKey);
+
+      const currentBorrowLimit = convertToBorrowLimit(liquidityAmount.times(2), colRatio, true);
+      const maxToRepay = borrowAmount.times(await daiPool.getNewCompoundRate()).idiv(getPercentage100());
+
+      assert.equal(maxValues.maxToSupply.toString(), 0);
+      assert.equal(maxValues.maxToWithdraw.toString(), 0);
+      assert.equal(
+        maxValues.maxToBorrow.toString(),
+        convertFromUSD(currentBorrowLimit, 1).minus(borrowAmount).toFixed()
+      );
       assert.equal(maxValues.maxToRepay.toString(), maxToRepay.toString());
     });
   });
@@ -525,6 +653,11 @@ describe("UserInfoRegistry", () => {
   describe("getUsersLiquidiationInfo", () => {
     const liquidityAmount = wei(100);
     const borrowAmount = wei(50);
+
+    const validMainPoolInfo = (mainInfo, expectedMainInfo) => {
+      assert.isTrue(compareKeys(mainInfo.assetKey, expectedMainInfo[0]));
+      assert.equal(mainInfo.assetAddr, expectedMainInfo[1]);
+    };
 
     it("should return correct user liquidation info", async () => {
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
@@ -537,12 +670,27 @@ describe("UserInfoRegistry", () => {
 
       const result = await userInfoRegistry.getUsersLiquidiationInfo([USER1, USER2]);
 
-      assert.isTrue(deepCompareKeys(result[0].borrowAssetKeys, [daiKey, wEthKey]));
-      assert.isTrue(deepCompareKeys(result[0].supplyAssetKeys, [daiKey, wEthKey]));
+      assert.equal(result[0].userAddr, USER1);
+
+      let expectedMainInfos = [
+        [daiKey, tokens[1].address],
+        [wEthKey, tokens[2].address],
+      ];
+
+      for (let i = 0; i < result[0].borrowPoolsInfo.length; i++) {
+        validMainPoolInfo(result[0].borrowPoolsInfo[i], expectedMainInfos[i]);
+        validMainPoolInfo(result[0].sypplyPoolsInfo[i], expectedMainInfos[i]);
+      }
+
       assert.equal(result[0].totalBorrowedAmount.toString(), convertToUSD(borrowAmount).toString());
 
-      assert.isTrue(deepCompareKeys(result[1].borrowAssetKeys, [wEthKey]));
-      assert.isTrue(deepCompareKeys(result[1].supplyAssetKeys, [wEthKey]));
+      assert.equal(result[1].userAddr, USER2);
+
+      expectedMainInfos = [[wEthKey, tokens[2].address]];
+
+      validMainPoolInfo(result[1].borrowPoolsInfo[0], expectedMainInfos[0]);
+      validMainPoolInfo(result[1].sypplyPoolsInfo[0], expectedMainInfos[0]);
+
       assert.equal(toBN(result[1].totalBorrowedAmount).toString(), convertToUSD(borrowAmount.idiv(2)).toString());
     });
 
@@ -559,8 +707,25 @@ describe("UserInfoRegistry", () => {
 
       const result = await userInfoRegistry.getUsersLiquidiationInfo([USER1, USER2]);
 
-      assert.isTrue(deepCompareKeys(result[0].supplyAssetKeys, [daiKey, wEthKey, "0x0"]));
-      assert.isTrue(deepCompareKeys(result[1].supplyAssetKeys, [wEthKey, "0x0", "0x0"]));
+      let expectedMainInfos = [
+        [daiKey, tokens[1].address],
+        [wEthKey, tokens[2].address],
+        ["0x0", ZERO_ADDR],
+      ];
+
+      for (let i = 0; i < result[0].sypplyPoolsInfo.length; i++) {
+        validMainPoolInfo(result[0].sypplyPoolsInfo[i], expectedMainInfos[i]);
+      }
+
+      expectedMainInfos = [
+        [wEthKey, tokens[2].address],
+        ["0x0", ZERO_ADDR],
+        ["0x0", ZERO_ADDR],
+      ];
+
+      for (let i = 0; i < result[1].sypplyPoolsInfo.length; i++) {
+        validMainPoolInfo(result[1].sypplyPoolsInfo[i], expectedMainInfos[i]);
+      }
     });
   });
 

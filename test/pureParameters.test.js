@@ -1,6 +1,7 @@
 const { toBytes, fromBytes } = require("./helpers/bytesCompareLibrary");
-const { accounts } = require("../scripts/utils");
+const { accounts } = require("../scripts/utils/utils");
 
+const truffleAssert = require("truffle-assertions");
 const Reverter = require("./helpers/reverter");
 
 const PureParametersMock = artifacts.require("PureParametersMock.sol");
@@ -35,7 +36,7 @@ describe("PureParametersMock", () => {
       const num = 7;
       const result = await pureParameters.makeUintParam(num);
 
-      assert.equal(result.uintParam, num);
+      assert.equal(result.param, num);
       assert.equal(result.currentType, ParamType.UINT);
     });
   });
@@ -48,25 +49,39 @@ describe("PureParametersMock", () => {
 
       assert.equal(result, num);
     });
+
+    it("should get exception if param not contain uint param", async () => {
+      const reason = "PureParameters: Parameter not contain uint.";
+      const param = await pureParameters.makeAddressParam(NOTHING);
+
+      await truffleAssert.reverts(pureParameters.getUintFromParam(param), reason);
+    });
   });
 
-  describe("makeAdrressParam()", () => {
+  describe("makeAddressParam()", () => {
     it("Should make struct param with not empty address", async () => {
       const address = NOTHING;
-      const result = await pureParameters.makeAdrressParam(address);
+      const result = await pureParameters.makeAddressParam(address);
 
-      assert.equal(result.addressParam, address);
+      assert.equal(await pureParameters.getAddressFromParam(result), address);
       assert.equal(result.currentType, ParamType.ADDRESS);
     });
   });
 
-  describe("getAdrressFromParam()", () => {
+  describe("getAddressFromParam()", () => {
     it("Should get from struct param empty address", async () => {
       const address = NOTHING;
-      const mock = await pureParameters.makeAdrressParam(address);
-      const result = await pureParameters.getAdrressFromParam(mock);
+      const mock = await pureParameters.makeAddressParam(address);
+      const result = await pureParameters.getAddressFromParam(mock);
 
       assert.equal(result, address);
+    });
+
+    it("should get exception if param not contain address param", async () => {
+      const reason = "PureParameters: Parameter not contain address.";
+      const param = await pureParameters.makeUintParam(10);
+
+      await truffleAssert.reverts(pureParameters.getAddressFromParam(param), reason);
     });
   });
 
@@ -76,7 +91,7 @@ describe("PureParametersMock", () => {
       const bytes = toBytes(text);
       const result = await pureParameters.makeBytes32Param(bytes);
 
-      assert.equal(fromBytes(result.bytes32Param), text);
+      assert.equal(fromBytes(result.param), text);
       assert.equal(result.currentType, ParamType.BYTES32);
     });
   });
@@ -90,23 +105,47 @@ describe("PureParametersMock", () => {
 
       assert.equal(fromBytes(result), text);
     });
+
+    it("should get exception if param not contain bytes32 param", async () => {
+      const reason = "PureParameters: Parameter not contain bytes32.";
+      const param = await pureParameters.makeUintParam(10);
+
+      await truffleAssert.reverts(pureParameters.getBytes32FromParam(param), reason);
+    });
   });
 
   describe("makeBoolParam()", () => {
     it("Should make struct param with not false bool", async () => {
-      const result = await pureParameters.makeBoolParam(true);
+      let result = await pureParameters.makeBoolParam(true);
 
-      assert.equal(result.boolParam, true);
+      assert.equal(result.param, true);
+      assert.equal(result.currentType, ParamType.BOOL);
+
+      result = await pureParameters.makeBoolParam(false);
+
+      assert.equal(result.param, false);
       assert.equal(result.currentType, ParamType.BOOL);
     });
   });
 
   describe("getBoolParam()", () => {
-    it("Should get boolfrom struct param", async () => {
-      const mock = await pureParameters.makeBoolParam(true);
-      const result = await pureParameters.getBoolParam(mock);
+    it("Should get bool from struct param", async () => {
+      let struct = await pureParameters.makeBoolParam(true);
+      let result = await pureParameters.getBoolParam(struct);
 
       assert.equal(result, true);
+
+      struct = await pureParameters.makeBoolParam(false);
+      result = await pureParameters.getBoolParam(struct);
+
+      assert.equal(result, false);
+    });
+
+    it("should get exception if param not contain bool param", async () => {
+      const reason = "PureParameters: Parameter not contain bool.";
+      const param = await pureParameters.makeUintParam(10);
+
+      await truffleAssert.reverts(pureParameters.getBoolParam(param), reason);
     });
   });
 

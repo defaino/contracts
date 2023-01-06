@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: LGPL-3.0-or-later
-pragma solidity 0.8.3;
+// SPDX-License-Identifier: GPL-3.0
+pragma solidity 0.8.17;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
@@ -8,39 +8,39 @@ contract MockERC20 is ERC20 {
 
     constructor(string memory name_, string memory symbol_) ERC20(name_, symbol_) {}
 
-    function mintArbitrary(address _to, uint256 _amount) public {
-        _mint(_to, _amount);
+    function mintArbitrary(address to_, uint256 amount_) public {
+        _mint(to_, amount_);
     }
 
-    function setDecimals(uint8 _newDecimals) external {
-        _decimals = _newDecimals;
+    function setDecimals(uint8 newDecimals_) external {
+        _decimals = newDecimals_;
     }
 
     function decimals() public view override returns (uint8) {
         return _decimals;
     }
 
-    function mintArbitraryBatch(address[] memory _to, uint256[] memory _amounts) public {
-        require(_to.length == _amounts.length, "MockERC20: Arrays must be the same length.");
+    function mintArbitraryBatch(address[] memory to_, uint256[] memory amounts_) public {
+        require(to_.length == amounts_.length, "MockERC20: Arrays must be the same length.");
 
-        for (uint256 i = 0; i < _to.length; i++) {
-            _mint(_to[i], _amounts[i]);
+        for (uint256 i = 0; i < to_.length; i++) {
+            _mint(to_[i], amounts_[i]);
         }
     }
 
     function approveArbitraryBacth(
         address spender,
-        address[] memory _owners,
-        uint256[] memory _amounts
+        address[] memory owners_,
+        uint256[] memory amounts_
     ) public {
-        require(_owners.length == _amounts.length, "MockERC20: Arrays must be the same length.");
+        require(owners_.length == amounts_.length, "MockERC20: Arrays must be the same length.");
 
-        for (uint256 i = 0; i < _owners.length; i++) {
-            _approve(_owners[i], spender, _amounts[i]);
+        for (uint256 i = 0; i < owners_.length; i++) {
+            _approve(owners_[i], spender, amounts_[i]);
         }
     }
 
-    function burn(address _account, uint256 _amount) external {
-        _burn(_account, _amount);
+    function burn(address account_, uint256 amount_) external {
+        _burn(account_, amount_);
     }
 }

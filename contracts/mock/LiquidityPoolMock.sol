@@ -1,23 +1,27 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity 0.8.3;
+pragma solidity 0.8.17;
 
 import "../LiquidityPool.sol";
 
 contract LiquidityPoolMock is LiquidityPool {
     function getNormalizedAmount(
-        uint256 _amountWithoutInterest,
-        uint256 _normalizedAmount,
-        uint256 _additionalAmount,
-        uint256 _currentRate,
-        bool _isAdding
+        uint256 amountWithoutInterest_,
+        uint256 normalizedAmount_,
+        uint256 additionalAmount_,
+        uint256 currentRate_,
+        bool isAdding_
     ) external pure returns (uint256) {
         return
             MathHelper.getNormalizedAmount(
-                _amountWithoutInterest,
-                _normalizedAmount,
-                _additionalAmount,
-                _currentRate,
-                _isAdding
+                amountWithoutInterest_,
+                normalizedAmount_,
+                additionalAmount_,
+                currentRate_,
+                isAdding_
             );
+    }
+
+    function getPriceManager() external view returns (address) {
+        return address(_priceManager);
     }
 }

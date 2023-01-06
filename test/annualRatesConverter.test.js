@@ -1,5 +1,5 @@
-const { getInterestRateLibraryData } = require("../deploy/helpers/deployHelper");
-const { toBN } = require("../scripts/utils");
+const { toBN } = require("../scripts/utils/utils");
+const { getInterestRateLibraryAddr } = require("./helpers/coverage-helper");
 
 const truffleAssert = require("truffle-assertions");
 const Reverter = require("./helpers/reverter");
@@ -21,14 +21,7 @@ describe("AnnualRatesConverter", () => {
 
   before("setup", async () => {
     annualRatesConverter = await AnnualRatesConverter.new();
-    interestRateLibrary = await InterestRateLibrary.new(
-      getInterestRateLibraryData("deploy/data/InterestRatesExactData.txt")
-    );
-
-    await interestRateLibrary.addNewRates(
-      110, // Start percentage
-      getInterestRateLibraryData("deploy/data/InterestRatesData.txt")
-    );
+    interestRateLibrary = await InterestRateLibrary.at(await getInterestRateLibraryAddr());
 
     await reverter.snapshot();
   });
@@ -74,26 +67,24 @@ describe("AnnualRatesConverter", () => {
   describe("convertToRatePerSecond", () => {
     it("should return correct rate per second if rate per year is an integer", async () => {
       let ratePerYear = onePercent.times(13);
-      let dataArr = getInterestRateLibraryData("deploy/data/InterestRatesData.txt");
 
       assert.equal(
         (await annualRatesConverter.convertToRatePerSecond(interestRateLibrary.address, ratePerYear)).toString(),
-        toBN(dataArr[2]).toString()
+        "3875500000000000000"
       );
 
       ratePerYear = onePercent.times(4);
-      dataArr = getInterestRateLibraryData("deploy/data/InterestRatesExactData.txt");
 
       assert.equal(
         (await annualRatesConverter.convertToRatePerSecond(interestRateLibrary.address, ratePerYear)).toString(),
-        toBN(dataArr[39]).toString()
+        "1243680000000000000"
       );
     });
 
     it("should return correct rate per second if annual rate > 10%", async () => {
       const ratePerYear = onePercent.times(27.18);
 
-      const expectedPercentage = toBN("7623946000000000000");
+      const expectedPercentage = toBN("7624082000000000000");
       assert.equal(
         (await annualRatesConverter.convertToRatePerSecond(interestRateLibrary.address, ratePerYear)).toString(),
         expectedPercentage.toString()

@@ -5,3 +5,8 @@ node_modules
 # Hardhat files
 cache
 artifacts
+coverage.json
+coverage
+
+# Typechain generated files
+generated-types

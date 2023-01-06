@@ -1,151 +1,61 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity 0.8.3;
+pragma solidity 0.8.17;
 
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@dlsl/dev-modules/contracts-registry/AbstractDependant.sol";
 
+import "./interfaces/IRegistry.sol";
 import "./interfaces/IPriceManager.sol";
+import "./interfaces/ISystemPoolsRegistry.sol";
 
-import "./libraries/UniswapOracleLibrary.sol";
-
-import "./Registry.sol";
-import "./abstract/AbstractDependant.sol";
 import "./common/Globals.sol";
 
-contract PriceManager is IPriceManager, OwnableUpgradeable, AbstractDependant {
-    address private liquidityPoolRegistry;
-
-    uint32 public constant PRICE_PERIOD = 10 minutes;
-
-    bool public redirectToUniswap;
-
-    address public quoteToken;
-    bytes32 public quoteAssetKey;
-    uint8 public quoteTokenDecimals;
+contract PriceManager is IPriceManager, AbstractDependant {
+    ISystemPoolsRegistry internal _systemPoolsRegistry;
 
     mapping(bytes32 => PriceFeed) public priceFeeds;
 
-    modifier onlyExistingAssets(bytes32 _assetKey) {
-        require(
-            priceFeeds[_assetKey].assetAddr != address(0),
-            "PriceManager: The oracle for assets does not exists."
+    function setDependencies(address contractsRegistry_) external override dependant {
+        _systemPoolsRegistry = ISystemPoolsRegistry(
+            IRegistry(contractsRegistry_).getSystemPoolsRegistryContract()
         );
-        _;
-    }
-
-    function priceManagerInitialize(bytes32 _quoteAssetKey, address _quoteToken)
-        external
-        initializer
-    {
-        __Ownable_init();
-
-        quoteToken = _quoteToken;
-        quoteAssetKey = _quoteAssetKey;
-        quoteTokenDecimals = ERC20(_quoteToken).decimals();
-    }
-
-    function setDependencies(Registry _registry) external override onlyInjectorOrZero {
-        liquidityPoolRegistry = _registry.getLiquidityPoolRegistryContract();
     }
 
     function addOracle(
-        bytes32 _assetKey,
-        address _assetAddr,
-        address _newMainOracle,
-        address _newBackupOracle
+        bytes32 assetKey_,
+        address assetAddr_,
+        address chainlinkOracle_
     ) external override {
         require(
-            liquidityPoolRegistry == msg.sender,
-            "PriceManager: Caller not a LiquidityPoolRegistry."
+            address(_systemPoolsRegistry) == msg.sender,
+            "PriceManager: Caller not a SystemPoolsRegistry."
         );
 
-        if (_assetKey != quoteAssetKey) {
+        (, ISystemPoolsRegistry.PoolType poolType_) = _systemPoolsRegistry.poolsInfo(assetKey_);
+
+        if (poolType_ == ISystemPoolsRegistry.PoolType.LIQUIDITY_POOL) {
             require(
-                _newBackupOracle != address(0),
-                "PriceManager: Uniswap pool should not be address zero."
+                chainlinkOracle_ != address(0),
+                "PriceManager: The oracle must not be a null address."
             );
         }
 
-        priceFeeds[_assetKey] = PriceFeed(
-            _assetAddr,
-            AggregatorV2V3Interface(_newMainOracle),
-            _newBackupOracle
-        );
+        priceFeeds[assetKey_] = PriceFeed(assetAddr_, AggregatorV2V3Interface(chainlinkOracle_));
 
-        emit OracleAdded(_assetKey, _newMainOracle, _newBackupOracle);
+        emit OracleAdded(assetKey_, chainlinkOracle_);
     }
 
-    function addChainlinkOracle(bytes32 _assetKey, address _newChainlinkOracle)
-        external
-        override
-        onlyExistingAssets(_assetKey)
-        onlyOwner
-    {
+    function getPrice(bytes32 assetKey_) external view override returns (uint256, uint8) {
         require(
-            _newChainlinkOracle != address(0),
-            "PriceManager: Chainlink oracle should not be address zero."
-        );
-        require(
-            address(priceFeeds[_assetKey].chainlinkOracle) == address(0),
-            "PriceManager: Can't modify an existing oracle."
+            priceFeeds[assetKey_].assetAddr != address(0),
+            "PriceManager: The oracle for assets does not exists."
         );
 
-        priceFeeds[_assetKey].chainlinkOracle = AggregatorV2V3Interface(_newChainlinkOracle);
+        AggregatorV2V3Interface priceFeed_ = priceFeeds[assetKey_].chainlinkOracle;
 
-        emit ChainlinkOracleAdded(_assetKey, _newChainlinkOracle);
-    }
-
-    function updateRedirectToUniswap(bool _newValue) external override onlyOwner {
-        redirectToUniswap = _newValue;
-
-        emit RedirectUpdated(block.timestamp, _newValue);
-    }
-
-    function getPrice(bytes32 _assetKey, uint8 _assetDecimals)
-        external
-        view
-        override
-        onlyExistingAssets(_assetKey)
-        returns (uint256, uint8)
-    {
-        if (!redirectToUniswap) {
-            AggregatorV2V3Interface _priceFeed = priceFeeds[_assetKey].chainlinkOracle;
-
-            int256 _currentAnswer;
-            uint8 _decimals;
-
-            if (address(_priceFeed) != address(0)) {
-                _currentAnswer = _priceFeed.latestAnswer();
-                _decimals = _priceFeed.decimals();
-            }
-
-            if (_currentAnswer > 0) {
-                return (uint256(_currentAnswer), _decimals);
-            }
+        if (address(priceFeed_) == address(0)) {
+            return (10 ** PRICE_DECIMALS, PRICE_DECIMALS);
         }
 
-        if (_assetKey != quoteAssetKey) {
-            return (_getPriceFromUniswap(_assetKey, _assetDecimals), quoteTokenDecimals);
-        }
-
-        return (10**_assetDecimals, _assetDecimals);
-    }
-
-    function _getPriceFromUniswap(bytes32 _assetKey, uint8 _assetDecimals)
-        internal
-        view
-        returns (uint256)
-    {
-        int24 _timeWeightedAverageTick = UniswapOracleLibrary.consult(
-            priceFeeds[_assetKey].uniswapPool,
-            PRICE_PERIOD
-        );
-        return
-            UniswapOracleLibrary.getQuoteAtTick(
-                _timeWeightedAverageTick,
-                uint128(10**_assetDecimals),
-                priceFeeds[_assetKey].assetAddr,
-                quoteToken
-            );
+        return (uint256(priceFeed_.latestAnswer()), priceFeed_.decimals());
     }
 }
