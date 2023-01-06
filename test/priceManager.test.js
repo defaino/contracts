@@ -1,5 +1,6 @@
 const { toBytes } = require("./helpers/bytesCompareLibrary");
-const { toBN, accounts, wei } = require("../scripts/utils");
+const { toBN, accounts, wei } = require("../scripts/utils/utils");
+const { ZERO_ADDR } = require("../scripts/utils/constants");
 
 const truffleAssert = require("truffle-assertions");
 const Reverter = require("./helpers/reverter");
@@ -11,8 +12,6 @@ const ChainlinkOracle = artifacts.require("ChainlinkOracleMock");
 
 describe("PriceManager", async () => {
   const reverter = new Reverter();
-
-  const ADDRESS_NULL = "0x0000000000000000000000000000000000000000";
 
   let NOTHING;
 
@@ -69,12 +68,12 @@ describe("PriceManager", async () => {
     it("should correctly set null address oracle for stable pool", async () => {
       await systemPoolsRegistry.setPoolType(wEthKey, 1);
 
-      await systemPoolsRegistry.addOracle(wEthKey, NOTHING, ADDRESS_NULL);
+      await systemPoolsRegistry.addOracle(wEthKey, NOTHING, ZERO_ADDR);
 
       const priceFeed = await priceManager.priceFeeds(wEthKey);
 
       assert.equal(priceFeed.assetAddr, NOTHING);
-      assert.equal(priceFeed.chainlinkOracle, ADDRESS_NULL);
+      assert.equal(priceFeed.chainlinkOracle, ZERO_ADDR);
     });
 
     it("should get exception if try to add null address oracle for liquidity pool", async () => {
@@ -82,7 +81,7 @@ describe("PriceManager", async () => {
 
       const reason = "PriceManager: The oracle must not be a null address.";
 
-      await truffleAssert.reverts(systemPoolsRegistry.addOracle(wEthKey, NOTHING, ADDRESS_NULL), reason);
+      await truffleAssert.reverts(systemPoolsRegistry.addOracle(wEthKey, NOTHING, ZERO_ADDR), reason);
     });
 
     it("should get exception if caller not a SystemPoolsRegistry contract", async () => {
@@ -135,7 +134,7 @@ describe("PriceManager", async () => {
 
     it("should return correct price for stable pool without oracle", async () => {
       await systemPoolsRegistry.setPoolType(daiKey, 1);
-      await systemPoolsRegistry.addOracle(daiKey, NOTHING, ADDRESS_NULL);
+      await systemPoolsRegistry.addOracle(daiKey, NOTHING, ZERO_ADDR);
 
       const result = await priceManager.getPrice(daiKey);
 

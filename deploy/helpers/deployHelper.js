@@ -1,4 +1,4 @@
-const { toBN, wei, getPrecision, getPercentage100 } = require("../../scripts/utils.js");
+const { toBN, wei, getPrecision, getPercentage100 } = require("../../scripts/utils/utils.js");
 const fs = require("fs");
 const web3 = require("web3");
 

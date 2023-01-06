@@ -1,6 +1,8 @@
 const { toBytes } = require("./helpers/bytesCompareLibrary");
-const { getCurrentBlockTime, setTime, setNextBlockTime } = require("./helpers/hardhatTimeTraveller");
-const { toBN, accounts, getPrecision, getPercentage100, wei } = require("../scripts/utils");
+const { getCurrentBlockTime, setNextBlockTime } = require("./helpers/block-helper");
+const { getInterestRateLibraryAddr } = require("./helpers/coverage-helper");
+const { toBN, accounts, getPrecision, getPercentage100, wei } = require("../scripts/utils/utils");
+const { ZERO_ADDR } = require("../scripts/utils/constants");
 
 const Reverter = require("./helpers/reverter");
 
@@ -28,8 +30,6 @@ DefiCore.numberFormat = "BigNumber";
 
 describe("StablePool", async () => {
   const reverter = new Reverter();
-
-  const ADDRESS_NULL = "0x0000000000000000000000000000000000000000";
 
   let OWNER;
   let USER1;
@@ -99,7 +99,7 @@ describe("StablePool", async () => {
   }
 
   async function createStablePool(assetKey, assetAddr) {
-    await systemPoolsRegistry.addStablePool(assetAddr, assetKey, ADDRESS_NULL);
+    await systemPoolsRegistry.addStablePool(assetAddr, assetKey, ZERO_ADDR);
 
     await assetParameters.setupAnnualBorrowRate(assetKey, annualBorrowRate);
     await assetParameters.setupMainParameters(assetKey, [standardColRatio, reserveFactor, liquidationDiscount, maxUR]);
@@ -130,7 +130,7 @@ describe("StablePool", async () => {
     const rewardsToken = await MockERC20.new("MockRTK", "RTK");
     const nativeToken = await WETH.new();
 
-    const interestRateLibrary = await InterestRateLibrary.new();
+    const interestRateLibrary = await InterestRateLibrary.at(await getInterestRateLibraryAddr());
 
     registry = await Registry.new();
     const _defiCore = await DefiCore.new();

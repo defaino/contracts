@@ -1,6 +1,8 @@
-const { setNextBlockTime, getCurrentBlockTime } = require("./helpers/hardhatTimeTraveller");
+const { setNextBlockTime, getCurrentBlockTime } = require("./helpers/block-helper");
 const { toBytes, fromBytes, deepCompareKeys, compareKeys } = require("./helpers/bytesCompareLibrary");
-const { toBN, accounts, getPrecision, getPercentage100, wei } = require("../scripts/utils");
+const { getInterestRateLibraryAddr } = require("./helpers/coverage-helper");
+const { toBN, accounts, getPrecision, getPercentage100, wei } = require("../scripts/utils/utils");
+const { ZERO_ADDR } = require("../scripts/utils/constants");
 
 const truffleAssert = require("truffle-assertions");
 const Reverter = require("./helpers/reverter");
@@ -33,8 +35,6 @@ SystemPoolsRegistryMock.numberFormat = "BigNumber";
 
 describe("SystemPoolsRegistry", () => {
   const reverter = new Reverter();
-
-  const ADDRESS_NULL = "0x0000000000000000000000000000000000000000";
 
   const annualBorrowRate = getPrecision().times(3);
   const colRatio = getPercentage100().times("1.25");
@@ -105,7 +105,7 @@ describe("SystemPoolsRegistry", () => {
   }
 
   async function createStablePool(assetKey, assetAddr) {
-    await systemPoolsRegistry.addStablePool(assetAddr, assetKey, ADDRESS_NULL);
+    await systemPoolsRegistry.addStablePool(assetAddr, assetKey, ZERO_ADDR);
 
     await assetParameters.setupAnnualBorrowRate(assetKey, annualBorrowRate);
     await assetParameters.setupMainParameters(assetKey, [colRatio, reserveFactor, liquidationDiscount, maxUR]);
@@ -137,9 +137,8 @@ describe("SystemPoolsRegistry", () => {
     TEST_ASSET = await accounts(9);
 
     rewardsToken = await MockERC20.new("MockRTK", "RTK");
-    const nativeToken = await WETH.new();
 
-    const interestRateLibrary = await InterestRateLibrary.new();
+    const interestRateLibrary = await InterestRateLibrary.at(await getInterestRateLibraryAddr());
 
     registry = await Registry.new();
     const _defiCore = await DefiCore.new();
@@ -185,7 +184,7 @@ describe("SystemPoolsRegistry", () => {
     await systemPoolsRegistry.systemPoolsRegistryInitialize(_liquidityPoolImpl.address, nativeTokenKey, zeroKey);
 
     await systemParameters.setupStablePoolsAvailability(true);
-    await systemParameters.setRewardsTokenAddress(ADDRESS_NULL);
+    await systemParameters.setRewardsTokenAddress(ZERO_ADDR);
 
     await deployRewardsPool(rewardsToken.address, await rewardsToken.symbol());
 
@@ -230,12 +229,12 @@ describe("SystemPoolsRegistry", () => {
 
   describe("addPoolsBeacon", () => {
     it("should correctly add new pools beacon", async () => {
-      assert.equal(await systemPoolsRegistry.getPoolsBeacon(1), ADDRESS_NULL);
+      assert.equal(await systemPoolsRegistry.getPoolsBeacon(1), ZERO_ADDR);
 
       const someAddr = systemPoolsRegistry.address;
       await systemPoolsRegistry.addPoolsBeacon(1, someAddr);
 
-      assert.notEqual(await systemPoolsRegistry.getPoolsBeacon(1), ADDRESS_NULL);
+      assert.notEqual(await systemPoolsRegistry.getPoolsBeacon(1), ZERO_ADDR);
       assert.equal(await systemPoolsRegistry.getPoolsImpl(1), someAddr);
     });
 
@@ -289,7 +288,7 @@ describe("SystemPoolsRegistry", () => {
       const reason = "SystemPoolsRegistry: Unable to add an asset with a zero address.";
 
       await truffleAssert.reverts(
-        systemPoolsRegistry.addLiquidityPool(ADDRESS_NULL, daiKey, NOTHING, "DAI", true),
+        systemPoolsRegistry.addLiquidityPool(ZERO_ADDR, daiKey, NOTHING, "DAI", true),
         reason
       );
     });

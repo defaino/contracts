@@ -1,6 +1,8 @@
-const { setNextBlockTime, setTime, mine, getCurrentBlockTime } = require("./helpers/hardhatTimeTraveller");
+const { setNextBlockTime, setTime, mine, getCurrentBlockTime } = require("./helpers/block-helper");
 const { toBytes, compareKeys, deepCompareKeys } = require("./helpers/bytesCompareLibrary");
-const { toBN, accounts, getPrecision, getPercentage100, wei } = require("../scripts/utils");
+const { getInterestRateLibraryAddr } = require("./helpers/coverage-helper");
+const { toBN, accounts, getPrecision, getPercentage100, wei } = require("../scripts/utils/utils");
+const { ZERO_ADDR } = require("../scripts/utils/constants");
 
 const Reverter = require("./helpers/reverter");
 const truffleAssert = require("truffle-assertions");
@@ -32,8 +34,6 @@ UserInfoRegistry.numberFormat = "BigNumber";
 
 describe("DefiCore", async () => {
   const reverter = new Reverter();
-
-  const ADDRESS_NULL = "0x0000000000000000000000000000000000000000";
 
   let OWNER;
   let USER1;
@@ -125,7 +125,7 @@ describe("DefiCore", async () => {
   }
 
   async function createStablePool(assetKey, assetAddr) {
-    await systemPoolsRegistry.addStablePool(assetAddr, assetKey, ADDRESS_NULL);
+    await systemPoolsRegistry.addStablePool(assetAddr, assetKey, ZERO_ADDR);
 
     await assetParameters.setupAnnualBorrowRate(assetKey, annualBorrowRate);
     await assetParameters.setupMainParameters(assetKey, [standardColRatio, reserveFactor, liquidationDiscount, maxUR]);
@@ -165,7 +165,7 @@ describe("DefiCore", async () => {
 
     rewardsToken = await MockERC20.new("MockRTK", "RTK");
     nativeToken = await WETH.new();
-    const interestRateLibrary = await InterestRateLibrary.new();
+    const interestRateLibrary = await InterestRateLibrary.at(await getInterestRateLibraryAddr());
 
     registry = await Registry.new();
     const _defiCore = await DefiCore.new();
@@ -220,7 +220,7 @@ describe("DefiCore", async () => {
     await systemPoolsRegistry.addPoolsBeacon(1, _stablePoolImpl.address);
     await systemParameters.setupStablePoolsAvailability(true);
     await systemParameters.setupMinCurrencyAmount(minCurrencyAmount);
-    await systemParameters.setRewardsTokenAddress(ADDRESS_NULL);
+    await systemParameters.setRewardsTokenAddress(ZERO_ADDR);
 
     await deployRewardsPool(rewardsToken.address, await rewardsToken.symbol());
     await createStablePool(stableKey, stableToken.address);

@@ -1,6 +1,8 @@
-const { mine } = require("./helpers/hardhatTimeTraveller");
+const { mine } = require("./helpers/block-helper");
 const { toBytes, compareKeys, deepCompareKeys } = require("./helpers/bytesCompareLibrary");
-const { toBN, accounts, getPrecision, getPercentage100, wei } = require("../scripts/utils");
+const { getInterestRateLibraryAddr } = require("./helpers/coverage-helper");
+const { toBN, accounts, getPrecision, getPercentage100, wei } = require("../scripts/utils/utils");
+const { ZERO_ADDR } = require("../scripts/utils/constants");
 
 const truffleAssert = require("truffle-assertions");
 const Reverter = require("./helpers/reverter");
@@ -31,8 +33,6 @@ WETH.numberFormat = "BigNumber";
 
 describe("UserInfoRegistry", () => {
   const reverter = new Reverter();
-
-  const ADDRESS_NULL = "0x0000000000000000000000000000000000000000";
 
   let OWNER;
   let USER1;
@@ -120,7 +120,7 @@ describe("UserInfoRegistry", () => {
   }
 
   async function createStablePool(assetKey, assetAddr) {
-    await systemPoolsRegistry.addStablePool(assetAddr, assetKey, ADDRESS_NULL);
+    await systemPoolsRegistry.addStablePool(assetAddr, assetKey, ZERO_ADDR);
 
     await assetParameters.setupAnnualBorrowRate(assetKey, annualBorrowRate);
     await assetParameters.setupMainParameters(assetKey, [colRatio, reserveFactor, liquidationDiscount, maxUR]);
@@ -150,7 +150,7 @@ describe("UserInfoRegistry", () => {
 
     rewardsToken = await MockERC20.new("MockRTK", "RTK");
     nativeToken = await WETH.new();
-    const interestRateLibrary = await InterestRateLibrary.new();
+    const interestRateLibrary = await InterestRateLibrary.at(await getInterestRateLibraryAddr());
 
     registry = await Registry.new();
     const _defiCore = await DefiCore.new();
@@ -217,7 +217,7 @@ describe("UserInfoRegistry", () => {
     daiPool = await LiquidityPool.at(await getLiquidityPoolAddr(daiKey));
 
     await systemParameters.setupLiquidationBoundary(liquidationBoundary);
-    await systemParameters.setRewardsTokenAddress(ADDRESS_NULL);
+    await systemParameters.setRewardsTokenAddress(ZERO_ADDR);
 
     // await rewardsDistribution.setupRewardsPerBlockBatch(
     //   [daiKey, wEthKey, usdtKey, rewardsTokenKey, nativeTokenKey],
@@ -437,7 +437,7 @@ describe("UserInfoRegistry", () => {
 
       const rewardInfo = await userInfoRegistry.getUserDistributionRewards(USER1);
 
-      assert.equal(rewardInfo.assetAddr, ADDRESS_NULL);
+      assert.equal(rewardInfo.assetAddr, ZERO_ADDR);
       assert.equal(rewardInfo.distributionReward.toString(), 0);
       assert.equal(rewardInfo.distributionRewardInUSD.toString(), 0);
       assert.equal(rewardInfo.userBalance.toString(), 0);
@@ -710,7 +710,7 @@ describe("UserInfoRegistry", () => {
       let expectedMainInfos = [
         [daiKey, tokens[1].address],
         [wEthKey, tokens[2].address],
-        ["0x0", ADDRESS_NULL],
+        ["0x0", ZERO_ADDR],
       ];
 
       for (let i = 0; i < result[0].sypplyPoolsInfo.length; i++) {
@@ -719,8 +719,8 @@ describe("UserInfoRegistry", () => {
 
       expectedMainInfos = [
         [wEthKey, tokens[2].address],
-        ["0x0", ADDRESS_NULL],
-        ["0x0", ADDRESS_NULL],
+        ["0x0", ZERO_ADDR],
+        ["0x0", ZERO_ADDR],
       ];
 
       for (let i = 0; i < result[1].sypplyPoolsInfo.length; i++) {

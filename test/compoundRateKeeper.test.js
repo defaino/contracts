@@ -1,5 +1,5 @@
-const { setNextBlockTime } = require("./helpers/hardhatTimeTraveller");
-const { toBN, accounts, getPercentage100 } = require("../scripts/utils");
+const { setNextBlockTime } = require("./helpers/block-helper");
+const { toBN, accounts, getPercentage100 } = require("../scripts/utils/utils");
 const truffleAssert = require("truffle-assertions");
 
 const CompoundRateKeeper = artifacts.require("./contracts/common/CompoundRateKeeper");

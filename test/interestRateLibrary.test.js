@@ -1,4 +1,5 @@
-const { toBN } = require("../scripts/utils");
+const { toBN } = require("../scripts/utils/utils");
+const { getInterestRateLibraryAddr } = require("./helpers/coverage-helper");
 
 const truffleAssert = require("truffle-assertions");
 const Reverter = require("./helpers/reverter");
@@ -15,7 +16,7 @@ describe("InterestRateLibrary", () => {
   let interestRateLibrary;
 
   before("setup", async () => {
-    interestRateLibrary = await InterestRateLibrary.new();
+    interestRateLibrary = await InterestRateLibrary.at(await getInterestRateLibraryAddr());
 
     await reverter.snapshot();
   });

@@ -1,5 +1,5 @@
 const { toBytes, fromBytes } = require("./helpers/bytesCompareLibrary");
-const { accounts } = require("../scripts/utils");
+const { accounts } = require("../scripts/utils/utils");
 
 const truffleAssert = require("truffle-assertions");
 const Reverter = require("./helpers/reverter");

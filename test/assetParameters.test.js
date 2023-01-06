@@ -1,5 +1,7 @@
 const { toBytes, fromBytes, compareKeys } = require("./helpers/bytesCompareLibrary");
-const { toBN, accounts, wei, getPrecision, getPercentage100 } = require("../scripts/utils");
+const { getInterestRateLibraryAddr } = require("./helpers/coverage-helper");
+const { toBN, accounts, wei, getPrecision, getPercentage100 } = require("../scripts/utils/utils");
+const { ZERO_ADDR } = require("../scripts/utils/constants");
 
 const truffleAssert = require("truffle-assertions");
 const Reverter = require("./helpers/reverter");
@@ -29,8 +31,6 @@ SystemPoolsRegistry.numberFormat = "BigNumber";
 
 describe("AssetParameters", () => {
   const reverter = new Reverter();
-
-  const ADDRESS_NULL = "0x0000000000000000000000000000000000000000";
 
   const colRatio = getPercentage100().times("1.25");
   const tokensAmount = wei(1000);
@@ -117,7 +117,7 @@ describe("AssetParameters", () => {
     NOTHING = await accounts(8);
     TEST_ASSET = await accounts(9);
 
-    const interestRateLibrary = await InterestRateLibrary.new();
+    const interestRateLibrary = await InterestRateLibrary.at(await getInterestRateLibraryAddr());
     rewardsToken = await MockERC20.new("MockRTK", "RTK");
 
     registry = await Registry.new();
@@ -167,7 +167,7 @@ describe("AssetParameters", () => {
     await systemPoolsRegistry.addPoolsBeacon(1, _stablePoolImpl.address);
 
     await systemParameters.setupStablePoolsAvailability(true);
-    await systemParameters.setRewardsTokenAddress(ADDRESS_NULL);
+    await systemParameters.setRewardsTokenAddress(ZERO_ADDR);
 
     await deployRewardsPool(rewardsToken.address, await rewardsToken.symbol());
 
@@ -509,7 +509,7 @@ describe("AssetParameters", () => {
 
     beforeEach("setup", async () => {
       await systemPoolsRegistry.addLiquidityPool(TEST_ASSET, daiKey, NOTHING, "DAI", true);
-      await systemPoolsRegistry.addStablePool(TEST_ASSET, stableKey, ADDRESS_NULL);
+      await systemPoolsRegistry.addStablePool(TEST_ASSET, stableKey, ZERO_ADDR);
     });
 
     it("should correctly set annual rate for stable pool", async () => {

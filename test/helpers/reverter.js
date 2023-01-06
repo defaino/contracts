@@ -1,31 +1,13 @@
-const ht = require("hardhat");
-
 class Reverter {
-  revert = () => {
-    return new Promise((resolve, reject) => {
-      ht.network.provider
-        .send("evm_revert", [this.snapshotId])
-        .then(() => {
-          return resolve(this.snapshot());
-        })
-        .catch((err) => {
-          return reject(err);
-        });
-    });
+  #snapshotId;
+
+  revert = async () => {
+    await network.provider.send("evm_revert", [this.#snapshotId]);
+    await this.snapshot();
   };
 
-  snapshot = () => {
-    return new Promise((resolve, reject) => {
-      ht.network.provider
-        .send("evm_snapshot", [])
-        .then((res) => {
-          this.snapshotId = res;
-          return resolve(res);
-        })
-        .catch((err) => {
-          return reject(err);
-        });
-    });
+  snapshot = async () => {
+    this.#snapshotId = await network.provider.send("evm_snapshot", []);
   };
 }
 

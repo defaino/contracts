@@ -1,4 +1,5 @@
-const { accounts, getPrecision } = require("../scripts/utils");
+const { accounts, getPrecision } = require("../scripts/utils/utils");
+const { ZERO_ADDR } = require("../scripts/utils/constants");
 
 const truffleAssert = require("truffle-assertions");
 const Reverter = require("./helpers/reverter");
@@ -11,8 +12,6 @@ Registry.numberFormat = "BigNumber";
 
 describe("SystemParameters", () => {
   const reverter = new Reverter();
-
-  const ADDRESS_NULL = "0x0000000000000000000000000000000000000000";
 
   let OWNER;
   let SOMEBODY;
@@ -44,11 +43,11 @@ describe("SystemParameters", () => {
 
   describe("setRewardsTokenAddress", async () => {
     it("should correctly set rewards token address", async () => {
-      const txReceipt = await systemParameters.setRewardsTokenAddress(ADDRESS_NULL);
+      const txReceipt = await systemParameters.setRewardsTokenAddress(ZERO_ADDR);
 
-      assert.equal(await systemParameters.getRewardsTokenAddress(), ADDRESS_NULL);
+      assert.equal(await systemParameters.getRewardsTokenAddress(), ZERO_ADDR);
       assert.equal(txReceipt.receipt.logs[0].event, "RewardsTokenUpdated");
-      assert.equal(txReceipt.receipt.logs[0].args.rewardsToken, ADDRESS_NULL);
+      assert.equal(txReceipt.receipt.logs[0].args.rewardsToken, ZERO_ADDR);
 
       await systemParameters.setRewardsTokenAddress(NOTHING);
 
@@ -60,7 +59,7 @@ describe("SystemParameters", () => {
 
       await systemParameters.setRewardsTokenAddress(NOTHING);
 
-      await truffleAssert.reverts(systemParameters.setRewardsTokenAddress(ADDRESS_NULL), reason);
+      await truffleAssert.reverts(systemParameters.setRewardsTokenAddress(ZERO_ADDR), reason);
     });
   });
 

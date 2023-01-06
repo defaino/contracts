@@ -1,4 +1,5 @@
-const { toBN } = require("../scripts/utils");
+const { toBN } = require("../scripts/utils/utils");
+const { getInterestRateLibraryAddr } = require("./helpers/coverage-helper");
 
 const truffleAssert = require("truffle-assertions");
 const Reverter = require("./helpers/reverter");
@@ -20,7 +21,7 @@ describe("AnnualRatesConverter", () => {
 
   before("setup", async () => {
     annualRatesConverter = await AnnualRatesConverter.new();
-    interestRateLibrary = await InterestRateLibrary.new();
+    interestRateLibrary = await InterestRateLibrary.at(await getInterestRateLibraryAddr());
 
     await reverter.snapshot();
   });

@@ -1,6 +1,8 @@
-const { setNextBlockTime, mine, getCurrentBlockNumber } = require("./helpers/hardhatTimeTraveller");
+const { setNextBlockTime, mine, getCurrentBlockNumber } = require("./helpers/block-helper");
 const { toBytes, deepCompareKeys } = require("./helpers/bytesCompareLibrary");
-const { toBN, accounts, getPrecision, getPercentage100, wei } = require("../scripts/utils");
+const { getInterestRateLibraryAddr } = require("./helpers/coverage-helper");
+const { toBN, accounts, getPrecision, getPercentage100, wei } = require("../scripts/utils/utils");
+const { ZERO_ADDR } = require("../scripts/utils/constants");
 
 const truffleAssert = require("truffle-assertions");
 const Reverter = require("./helpers/reverter");
@@ -31,8 +33,6 @@ LiquidityPool.numberFormat = "BigNumber";
 
 describe("LiquidityPool", () => {
   const reverter = new Reverter();
-
-  const ADDRESS_NULL = "0x0000000000000000000000000000000000000000";
 
   let OWNER;
   let USER1;
@@ -193,7 +193,7 @@ describe("LiquidityPool", () => {
     rewardsToken = await MockERC20.new("MockRTK", "RTK");
     nativeToken = await WETH.new();
 
-    const interestRateLibrary = await InterestRateLibrary.new();
+    const interestRateLibrary = await InterestRateLibrary.at(await getInterestRateLibraryAddr());
 
     registry = await Registry.new();
     const _defiCore = await DefiCore.new();
@@ -254,7 +254,7 @@ describe("LiquidityPool", () => {
 
     await systemParameters.setupLiquidationBoundary(liquidationBoundary);
     await systemParameters.setupMinCurrencyAmount(minCurrencyAmount);
-    await systemParameters.setRewardsTokenAddress(ADDRESS_NULL);
+    await systemParameters.setRewardsTokenAddress(ZERO_ADDR);
 
     await rewardsToken.mintArbitrary(defiCore.address, tokensAmount);
 
