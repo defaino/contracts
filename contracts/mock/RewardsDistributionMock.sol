@@ -11,6 +11,10 @@ contract RewardsDistributionMock is RewardsDistribution {
         return _getRewardsPerBlock(assetKey_, currentUR_);
     }
 
+    function getSystemOwnerAddr() public view returns (address) {
+        return _systemOwnerAddr;
+    }
+
     function getNewCumulativeSum(
         uint256 rewardPerBlock_,
         uint256 totalPool_,
