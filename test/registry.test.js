@@ -109,11 +109,13 @@ describe("Registry", async () => {
     });
   });
 
-  describe("transferOwnershipAndInject", () => {
-    it("should get exception if called not by the owner", async () => {
+  describe("renounceOwnership()", () => {
+    it("should get exception if called not by anyone", async () => {
       const reason = "Registry: renounceOwnership is prohibbited";
 
       await truffleAssert.reverts(registry.renounceOwnership(), reason);
+
+      await truffleAssert.reverts(registry.renounceOwnership({ from: NOT_AN_OWNER }), reason);
     });
   });
 });
