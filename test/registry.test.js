@@ -4,6 +4,7 @@ const { ZERO_ADDR } = require("../scripts/utils/constants");
 const { getInterestRateLibraryAddr } = require("./helpers/coverage-helper");
 const truffleAssert = require("truffle-assertions");
 const Reverter = require("./helpers/reverter");
+const { Assertion } = require("chai");
 
 const Registry = artifacts.require("Registry");
 const AssetParameters = artifacts.require("AssetParametersMock");
@@ -17,8 +18,8 @@ const SystemPoolsFactory = artifacts.require("SystemPoolsFactory");
 
 describe("Registry", async () => {
   const reverter = new Reverter();
-
-  let NOTHING;
+  let NOT_AN_OWNER;
+  let NEW_OWNER;
 
   let registry;
   let assetParameters;
@@ -28,9 +29,9 @@ describe("Registry", async () => {
   let systemPoolsRegistry;
 
   before("setup", async () => {
-    NOTHING = await accounts(8);
     LIQUIDITY_POOL_REGISTRY = await accounts(9);
-
+    NEW_OWNER = await accounts(2);
+    NOT_AN_OWNER = await accounts(3);
     registry = await Registry.new();
 
     const _defiCore = await DefiCore.new();
@@ -67,15 +68,12 @@ describe("Registry", async () => {
 
   describe("transferOwnershipAndInject", () => {
     it("should correctly change the owner and set the _systemOwnerAddr on contracts", async () => {
-      let NEW_OWNER;
-      NEW_OWNER = await accounts(2);
-
       await registry.transferOwnershipAndInject(NEW_OWNER, [
-        "ASSET_PARAMETERS",
-        "DEFI_CORE",
-        "REWARDS_DISTRIBUTION",
-        "SYSTEM_PARAMETERS",
-        "SYSTEM_POOLS_REGISTRY",
+        await registry.ASSET_PARAMETERS_NAME(),
+        await registry.DEFI_CORE_NAME(),
+        await registry.REWARDS_DISTRIBUTION_NAME(),
+        await registry.SYSTEM_PARAMETERS_NAME(),
+        await registry.SYSTEM_POOLS_REGISTRY_NAME(),
       ]);
 
       assetParamOwner = await assetParameters.getSystemOwnerAddr();
@@ -89,6 +87,33 @@ describe("Registry", async () => {
       assert.equal(NEW_OWNER, rewDistribOwner);
       assert.equal(NEW_OWNER, sysParamsOwner);
       assert.equal(NEW_OWNER, sysPoolsRegOwner);
+    });
+
+    it("should get exception if called not by the owner", async () => {
+      const reason = "Ownable: caller is not the owner";
+
+      await truffleAssert.reverts(
+        registry.transferOwnershipAndInject(
+          NEW_OWNER,
+          [
+            await registry.ASSET_PARAMETERS_NAME(),
+            await registry.DEFI_CORE_NAME(),
+            await registry.REWARDS_DISTRIBUTION_NAME(),
+            await registry.SYSTEM_PARAMETERS_NAME(),
+            await registry.SYSTEM_POOLS_REGISTRY_NAME(),
+          ],
+          { from: NOT_AN_OWNER }
+        ),
+        reason
+      );
+    });
+  });
+
+  describe("transferOwnershipAndInject", () => {
+    it("should get exception if called not by the owner", async () => {
+      const reason = "Registry: renounceOwnership is prohibbited";
+
+      await truffleAssert.reverts(registry.renounceOwnership(), reason);
     });
   });
 });
