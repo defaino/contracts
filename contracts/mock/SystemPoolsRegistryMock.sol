@@ -11,6 +11,10 @@ contract SystemPoolsRegistryMock is SystemPoolsRegistry {
         rewardsAssetKey = bytes32("RK");
     }
 
+    function getSystemOwnerAddr() public view returns (address) {
+        return _systemOwnerAddr;
+    }
+
     function setExistingLiquidityPool(address newLP_) external {
         existingLiquidityPools[newLP_] = true;
     }

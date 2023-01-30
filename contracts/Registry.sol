@@ -21,6 +21,23 @@ contract Registry is IRegistry, OwnableContractsRegistry {
 
     string public constant INTEREST_RATE_LIBRARY_NAME = "INTEREST_RATE_LIBRARY";
 
+    function transferOwnershipAndInject(
+        address newOwner_,
+        string[] calldata names_
+    ) external onlyOwner {
+        require(newOwner_ != address(0), "Registry: new owner is the zero address");
+
+        _transferOwnership(newOwner_);
+
+        for (uint256 i = 0; i < names_.length; ++i) {
+            _injectDependencies(names_[i]);
+        }
+    }
+
+    function renounceOwnership() public override onlyOwner {
+        revert("Registry: renounceOwnership is prohibbited");
+    }
+
     function getSystemOwner() external view override returns (address) {
         return owner();
     }
