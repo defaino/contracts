@@ -12,6 +12,13 @@ interface IDefiCore {
     /// @param newValue a new collateral value
     event CollateralUpdated(address indexed userAddr, bytes32 indexed assetKey, bool newValue);
 
+    event Liquidation(
+        address userAddr_,
+        bytes32 supplyAssetKey_,
+        bytes32 borrowAssetKey_,
+        uint256 liquidationAmount_
+    );
+
     /// @notice This event is emitted when a user deposits liquidity into the pool
     /// @param userAddr address of the user who deposited the liquidity
     /// @param assetKey key of the pool where the liquidity was deposited

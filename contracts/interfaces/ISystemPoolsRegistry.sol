@@ -113,12 +113,14 @@ interface ISystemPoolsRegistry {
     /// @param chainlinkOracle_ the address of the chainlink oracle for the passed asset
     /// @param tokenSymbol_ symbol of the underlying liquidity pool asset
     /// @param isCollateral_ is it possible for the new liquidity pool to be a collateral
+    /// @param isCollateralWithPRT_ is it possible for the new liquidity pool to be a collateral for a user with PRT
     function addLiquidityPool(
         address assetAddr_,
         bytes32 assetKey_,
         address chainlinkOracle_,
         string calldata tokenSymbol_,
-        bool isCollateral_
+        bool isCollateral_,
+        bool isCollateralWithPRT_
     ) external;
 
     /// @notice The function is needed to add new stable pools
@@ -193,9 +195,11 @@ interface ISystemPoolsRegistry {
 
     /// @notice A function that returns an array of structures with liquidity pool information
     /// @param assetKeys_ an array of pool keys for which you want to get information
+    /// @param withPRT_ whether to get the information for the user with PRT
     /// @return poolsInfo_ an array of LiquidityPoolInfo structures
     function getLiquidityPoolsInfo(
-        bytes32[] calldata assetKeys_
+        bytes32[] calldata assetKeys_,
+        bool withPRT_
     ) external view returns (LiquidityPoolInfo[] memory poolsInfo_);
 
     /// @notice A function that returns an array of structures with stable pool information
@@ -207,9 +211,11 @@ interface ISystemPoolsRegistry {
 
     /// @notice A function that returns a structure with detailed pool information
     /// @param assetKey_ pool key for which you want to get information
+    /// @param withPRT_ whether to get the information for the user with PRT
     /// @return a DetailedLiquidityPoolInfo structure
     function getDetailedLiquidityPoolInfo(
-        bytes32 assetKey_
+        bytes32 assetKey_,
+        bool withPRT_
     ) external view returns (DetailedLiquidityPoolInfo memory);
 
     /// @notice Returns the address of the liquidity pool for the rewards token

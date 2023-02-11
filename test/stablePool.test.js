@@ -17,6 +17,7 @@ const SystemPoolsFactory = artifacts.require("SystemPoolsFactory");
 const LiquidityPool = artifacts.require("LiquidityPool");
 const StablePool = artifacts.require("StablePool");
 const PriceManager = artifacts.require("PriceManager");
+const Prt = artifacts.require("PRT");
 const InterestRateLibrary = artifacts.require("InterestRateLibrary");
 const WETH = artifacts.require("WETH");
 const StablePermitToken = artifacts.require("StablePermitTokenMock");
@@ -39,6 +40,7 @@ describe("StablePool", async () => {
   let assetParameters;
   let systemPoolsRegistry;
   let stableToken;
+  let prt;
 
   let stablePool;
 
@@ -83,14 +85,21 @@ describe("StablePool", async () => {
   async function createLiquidityPool(assetKey, asset, symbol, isCollateral) {
     const chainlinkOracle = await ChainlinkOracleMock.new(wei(100, chainlinkPriceDecimals), chainlinkPriceDecimals);
 
-    await systemPoolsRegistry.addLiquidityPool(asset.address, assetKey, chainlinkOracle.address, symbol, isCollateral);
+    await systemPoolsRegistry.addLiquidityPool(
+      asset.address,
+      assetKey,
+      chainlinkOracle.address,
+      symbol,
+      isCollateral,
+      isCollateral
+    );
 
     if (assetKey != nativeTokenKey) {
-      await asset.approveArbitraryBacth(await getPoolAddr(assetKey), [OWNER, USER1], [tokensAmount, tokensAmount]);
+      await asset.approveArbitraryBatch(await getPoolAddr(assetKey), [OWNER, USER1], [tokensAmount, tokensAmount]);
     }
 
     await assetParameters.setupAllParameters(assetKey, [
-      [standardColRatio, reserveFactor, liquidationDiscount, maxUR],
+      [standardColRatio, standardColRatio, reserveFactor, liquidationDiscount, maxUR],
       [0, firstSlope, secondSlope, utilizationBreakingPoint],
       [minSupplyDistributionPart, minBorrowDistributionPart],
     ]);
@@ -102,7 +111,13 @@ describe("StablePool", async () => {
     await systemPoolsRegistry.addStablePool(assetAddr, assetKey, ZERO_ADDR);
 
     await assetParameters.setupAnnualBorrowRate(assetKey, annualBorrowRate);
-    await assetParameters.setupMainParameters(assetKey, [standardColRatio, reserveFactor, liquidationDiscount, maxUR]);
+    await assetParameters.setupMainParameters(assetKey, [
+      standardColRatio,
+      standardColRatio,
+      reserveFactor,
+      liquidationDiscount,
+      maxUR,
+    ]);
   }
 
   async function deployGovernancePool(rewardsTokenAddr, symbol) {
@@ -113,11 +128,12 @@ describe("StablePool", async () => {
       rewardsTokenKey,
       chainlinkOracle.address,
       symbol,
+      true,
       true
     );
 
     await assetParameters.setupAllParameters(rewardsTokenKey, [
-      [standardColRatio, reserveFactor, liquidationDiscount, maxUR],
+      [standardColRatio, standardColRatio, reserveFactor, liquidationDiscount, maxUR],
       [0, firstSlope, secondSlope, utilizationBreakingPoint],
       [minSupplyDistributionPart, minBorrowDistributionPart],
     ]);
@@ -143,6 +159,7 @@ describe("StablePool", async () => {
     const _liquidityPoolImpl = await LiquidityPool.new();
     const _stablePoolImpl = await StablePool.new();
     const _priceManager = await PriceManager.new();
+    const _prt = await Prt.new();
 
     await registry.__OwnableContractsRegistry_init();
 
@@ -156,6 +173,7 @@ describe("StablePool", async () => {
     await registry.addProxyContract(await registry.SYSTEM_POOLS_REGISTRY_NAME(), _systemPoolsRegistry.address);
     await registry.addProxyContract(await registry.SYSTEM_POOLS_FACTORY_NAME(), _liquidityPoolFactory.address);
     await registry.addProxyContract(await registry.PRICE_MANAGER_NAME(), _priceManager.address);
+    await registry.addProxyContract(await registry.PRT_NAME(), _prt.address);
 
     await registry.addContract(await registry.INTEREST_RATE_LIBRARY_NAME(), interestRateLibrary.address);
 
@@ -173,6 +191,7 @@ describe("StablePool", async () => {
     await registry.injectDependencies(await registry.SYSTEM_POOLS_REGISTRY_NAME());
     await registry.injectDependencies(await registry.SYSTEM_POOLS_FACTORY_NAME());
     await registry.injectDependencies(await registry.PRICE_MANAGER_NAME());
+    await registry.injectDependencies(await registry.PRT_NAME());
 
     tokens.push(rewardsToken.address, stableToken.address);
     await deployTokens(["DAI"]);

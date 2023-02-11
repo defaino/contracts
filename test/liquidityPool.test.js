@@ -22,6 +22,7 @@ const LiquidityPoolMock = artifacts.require("LiquidityPoolMock");
 const PriceManager = artifacts.require("PriceManager");
 const InterestRateLibrary = artifacts.require("InterestRateLibrary");
 const WETH = artifacts.require("WETH");
+const Prt = artifacts.require("PRT");
 
 const MockERC20 = artifacts.require("MockERC20");
 const ChainlinkOracleMock = artifacts.require("ChainlinkOracleMock");
@@ -45,6 +46,7 @@ describe("LiquidityPool", () => {
   let rewardsDistribution;
   let userInfoRegistry;
   let systemPoolsRegistry;
+  let prt;
 
   let nativePool;
   let liquidityPool;
@@ -147,10 +149,17 @@ describe("LiquidityPool", () => {
   async function createLiquidityPool(assetKey, asset, symbol, isCollateral, price = 100) {
     const chainlinkOracle = await ChainlinkOracleMock.new(wei(price, chainlinkPriceDecimals), chainlinkPriceDecimals);
 
-    await systemPoolsRegistry.addLiquidityPool(asset.address, assetKey, chainlinkOracle.address, symbol, isCollateral);
+    await systemPoolsRegistry.addLiquidityPool(
+      asset.address,
+      assetKey,
+      chainlinkOracle.address,
+      symbol,
+      isCollateral,
+      isCollateral
+    );
 
     if (assetKey != nativeTokenKey) {
-      await asset.approveArbitraryBacth(
+      await asset.approveArbitraryBatch(
         await getLiquidityPoolAddr(assetKey),
         [OWNER, USER1, USER2],
         [tokensAmount, tokensAmount, tokensAmount]
@@ -158,7 +167,7 @@ describe("LiquidityPool", () => {
     }
 
     await assetParameters.setupAllParameters(assetKey, [
-      [standardColRatio, reserveFactor, liquidationDiscount, maxUR],
+      [standardColRatio, standardColRatio, reserveFactor, liquidationDiscount, maxUR],
       [0, firstSlope, secondSlope, utilizationBreakingPoint],
       [minSupplyDistributionPart, minBorrowDistributionPart],
     ]);
@@ -174,11 +183,12 @@ describe("LiquidityPool", () => {
       rewardsTokenKey,
       chainlinkOracle.address,
       symbol,
+      true,
       true
     );
 
     await assetParameters.setupAllParameters(rewardsTokenKey, [
-      [standardColRatio, reserveFactor, liquidationDiscount, maxUR],
+      [standardColRatio, standardColRatio, reserveFactor, liquidationDiscount, maxUR],
       [0, firstSlope, secondSlope, utilizationBreakingPoint],
       [minSupplyDistributionPart, minBorrowDistributionPart],
     ]);
@@ -205,6 +215,7 @@ describe("LiquidityPool", () => {
     const _liquidityPoolFactory = await SystemPoolsFactory.new();
     const _liquidityPoolImpl = await LiquidityPool.new();
     const _priceManager = await PriceManager.new();
+    const _prt = await Prt.new();
 
     await registry.__OwnableContractsRegistry_init();
 
@@ -216,6 +227,7 @@ describe("LiquidityPool", () => {
     await registry.addProxyContract(await registry.SYSTEM_POOLS_REGISTRY_NAME(), _systemPoolsRegistry.address);
     await registry.addProxyContract(await registry.SYSTEM_POOLS_FACTORY_NAME(), _liquidityPoolFactory.address);
     await registry.addProxyContract(await registry.PRICE_MANAGER_NAME(), _priceManager.address);
+    await registry.addProxyContract(await registry.PRT_NAME(), _prt.address);
 
     await registry.addContract(await registry.INTEREST_RATE_LIBRARY_NAME(), interestRateLibrary.address);
 
@@ -234,6 +246,7 @@ describe("LiquidityPool", () => {
     await registry.injectDependencies(await registry.SYSTEM_POOLS_REGISTRY_NAME());
     await registry.injectDependencies(await registry.SYSTEM_POOLS_FACTORY_NAME());
     await registry.injectDependencies(await registry.PRICE_MANAGER_NAME());
+    await registry.injectDependencies(await registry.PRT_NAME());
 
     tokens.push(rewardsToken);
     await deployTokens(["DAI", "BAT"]);
@@ -1824,7 +1837,7 @@ describe("LiquidityPool", () => {
       await liquidityPool.updateCompoundRate(false);
 
       await tokens[2].mintArbitrary(USER3, tokensAmount);
-      await tokens[2].approveArbitraryBacth(batPool.address, [USER3], [tokensAmount]);
+      await tokens[2].approveArbitraryBatch(batPool.address, [USER3], [tokensAmount]);
 
       await defiCore.liquidation(USER2, tokenKey, batKey, amountToBorrow.idiv(2), { from: USER3 });
 
@@ -1854,7 +1867,7 @@ describe("LiquidityPool", () => {
       await liquidityPool.updateCompoundRate(false);
 
       await tokens[2].mintArbitrary(USER3, tokensAmount);
-      await tokens[2].approveArbitraryBacth(batPool.address, [USER3], [tokensAmount]);
+      await tokens[2].approveArbitraryBatch(batPool.address, [USER3], [tokensAmount]);
 
       await defiCore.liquidation(USER2, tokenKey, batKey, amountToBorrow.idiv(2), { from: USER3 });
 
@@ -1874,7 +1887,7 @@ describe("LiquidityPool", () => {
       const amountToLiquidate = wei(20);
 
       await tokens[1].mintArbitrary(USER3, tokensAmount);
-      await tokens[1].approveArbitraryBacth(liquidityPool.address, [USER3], [tokensAmount]);
+      await tokens[1].approveArbitraryBatch(liquidityPool.address, [USER3], [tokensAmount]);
 
       await defiCore.addLiquidity(tokenKey, liquidityAmount.idiv(10), { from: USER3 });
       await defiCore.addLiquidity(nativeTokenKey, liquidityAmount, { from: USER2, value: liquidityAmount });

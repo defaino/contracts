@@ -1,4 +1,4 @@
-const { mine } = require("./helpers/block-helper");
+const { mine, getCurrentBlockTime } = require("./helpers/block-helper");
 const { toBytes, compareKeys, deepCompareKeys } = require("./helpers/bytesCompareLibrary");
 const { getInterestRateLibraryAddr } = require("./helpers/coverage-helper");
 const { toBN, accounts, getPrecision, getPercentage100, wei } = require("../scripts/utils/utils");
@@ -19,6 +19,7 @@ const LiquidityPool = artifacts.require("LiquidityPool");
 const StablePool = artifacts.require("StablePool");
 const PriceManager = artifacts.require("PriceManager");
 const InterestRateLibrary = artifacts.require("InterestRateLibrary");
+const Prt = artifacts.require("PRT");
 const WETH = artifacts.require("WETH");
 const StablePermitToken = artifacts.require("StablePermitTokenMock");
 
@@ -37,6 +38,8 @@ describe("UserInfoRegistry", () => {
   let OWNER;
   let USER1;
   let USER2;
+  let USER3;
+  let USER4;
 
   let registry;
   let defiCore;
@@ -45,6 +48,7 @@ describe("UserInfoRegistry", () => {
   let userInfoRegistry;
   let systemPoolsRegistry;
   let rewardsDistribution;
+  let prt;
 
   let nativePool;
   let daiPool;
@@ -58,7 +62,7 @@ describe("UserInfoRegistry", () => {
   let nativeToken;
 
   const oneToken = wei(1);
-  const tokensAmount = wei(1000);
+  const tokensAmount = wei(100000);
   const colRatio = getPercentage100().times("1.25");
   const reserveFactor = getPrecision().times("15");
 
@@ -91,7 +95,10 @@ describe("UserInfoRegistry", () => {
   async function deployTokens(symbols) {
     for (let i = 0; i < symbols.length; i++) {
       const token = await MockERC20.new("Mock" + symbols[i], symbols[i]);
-      await token.mintArbitraryBatch([OWNER, USER1, USER2], [tokensAmount, tokensAmount, tokensAmount]);
+      await token.mintArbitraryBatch(
+        [OWNER, USER1, USER2, USER3, USER4],
+        [tokensAmount, tokensAmount, tokensAmount, tokensAmount, tokensAmount]
+      );
 
       tokens.push(token);
     }
@@ -100,18 +107,25 @@ describe("UserInfoRegistry", () => {
   async function createLiquidityPool(assetKey, asset, symbol, isCollateral, isRewardsPool) {
     const chainlinkOracle = await ChainlinkOracleMock.new(wei(100, chainlinkPriceDecimals), chainlinkPriceDecimals);
 
-    await systemPoolsRegistry.addLiquidityPool(asset.address, assetKey, chainlinkOracle.address, symbol, isCollateral);
+    await systemPoolsRegistry.addLiquidityPool(
+      asset.address,
+      assetKey,
+      chainlinkOracle.address,
+      symbol,
+      isCollateral,
+      isCollateral
+    );
 
     if (!isRewardsPool && assetKey != nativeTokenKey) {
-      await asset.approveArbitraryBacth(
+      await asset.approveArbitraryBatch(
         await getLiquidityPoolAddr(assetKey),
-        [OWNER, USER1, USER2],
-        [tokensAmount, tokensAmount, tokensAmount]
+        [OWNER, USER1, USER2, USER3, USER4],
+        [tokensAmount, tokensAmount, tokensAmount, tokensAmount, tokensAmount]
       );
     }
 
     await assetParameters.setupAllParameters(assetKey, [
-      [colRatio, reserveFactor, liquidationDiscount, maxUR],
+      [colRatio, colRatio, reserveFactor, liquidationDiscount, maxUR],
       [0, firstSlope, secondSlope, utilizationBreakingPoint],
       [minSupplyDistributionPart, minBorrowDistributionPart],
     ]);
@@ -123,7 +137,13 @@ describe("UserInfoRegistry", () => {
     await systemPoolsRegistry.addStablePool(assetAddr, assetKey, ZERO_ADDR);
 
     await assetParameters.setupAnnualBorrowRate(assetKey, annualBorrowRate);
-    await assetParameters.setupMainParameters(assetKey, [colRatio, reserveFactor, liquidationDiscount, maxUR]);
+    await assetParameters.setupMainParameters(assetKey, [
+      colRatio,
+      colRatio,
+      reserveFactor,
+      liquidationDiscount,
+      maxUR,
+    ]);
   }
 
   function convertToUSD(amountToConvert, price = toBN(100)) {
@@ -146,6 +166,8 @@ describe("UserInfoRegistry", () => {
     OWNER = await accounts(0);
     USER1 = await accounts(1);
     USER2 = await accounts(2);
+    USER3 = await accounts(3);
+    USER4 = await accounts(4);
     NOTHING = await accounts(9);
 
     rewardsToken = await MockERC20.new("MockRTK", "RTK");
@@ -163,6 +185,7 @@ describe("UserInfoRegistry", () => {
     const _liquidityPoolImpl = await LiquidityPool.new();
     const _stablePoolImpl = await StablePool.new();
     const _priceManager = await PriceManager.new();
+    const _prt = await Prt.new();
 
     await registry.__OwnableContractsRegistry_init();
 
@@ -176,6 +199,7 @@ describe("UserInfoRegistry", () => {
     await registry.addProxyContract(await registry.SYSTEM_POOLS_REGISTRY_NAME(), _systemPoolsRegistry.address);
     await registry.addProxyContract(await registry.SYSTEM_POOLS_FACTORY_NAME(), _liquidityPoolFactory.address);
     await registry.addProxyContract(await registry.PRICE_MANAGER_NAME(), _priceManager.address);
+    await registry.addProxyContract(await registry.PRT_NAME(), _prt.address);
 
     await registry.addContract(await registry.INTEREST_RATE_LIBRARY_NAME(), interestRateLibrary.address);
 
@@ -185,6 +209,7 @@ describe("UserInfoRegistry", () => {
     systemPoolsRegistry = await SystemPoolsRegistry.at(await registry.getSystemPoolsRegistryContract());
     rewardsDistribution = await RewardsDistribution.at(await registry.getRewardsDistributionContract());
     systemParameters = await SystemParameters.at(await registry.getSystemParametersContract());
+    prt = await Prt.at(await registry.getPRTContract());
 
     await registry.injectDependencies(await registry.DEFI_CORE_NAME());
     await registry.injectDependencies(await registry.SYSTEM_PARAMETERS_NAME());
@@ -194,6 +219,7 @@ describe("UserInfoRegistry", () => {
     await registry.injectDependencies(await registry.SYSTEM_POOLS_REGISTRY_NAME());
     await registry.injectDependencies(await registry.SYSTEM_POOLS_FACTORY_NAME());
     await registry.injectDependencies(await registry.PRICE_MANAGER_NAME());
+    await registry.injectDependencies(await registry.PRT_NAME());
 
     tokens.push(rewardsToken);
     await deployTokens(["DAI", "WETH", "USDT"]);
@@ -201,6 +227,10 @@ describe("UserInfoRegistry", () => {
 
     await defiCore.defiCoreInitialize();
     await systemPoolsRegistry.systemPoolsRegistryInitialize(_liquidityPoolImpl.address, nativeTokenKey, zeroKey);
+    await prt.prtInitialize("Platform Reputation Token", "PRT", [
+      [1000000000000, 100],
+      [300000000000, 100],
+    ]);
 
     await systemPoolsRegistry.addPoolsBeacon(1, _stablePoolImpl.address);
     await systemParameters.setupStablePoolsAvailability(true);
@@ -210,9 +240,11 @@ describe("UserInfoRegistry", () => {
 
     daiChainlinkOracle = await createLiquidityPool(daiKey, tokens[1], "DAI", true, false);
     wEthChainlinkOracle = await createLiquidityPool(wEthKey, tokens[2], "WETH", true, false);
-    await createLiquidityPool(usdtKey, tokens[3], "USDT", false, false);
+    usdtChainlinkOracle = await createLiquidityPool(usdtKey, tokens[3], "USDT", true, false);
+
     await createLiquidityPool(nativeTokenKey, tokens[4], "BNB", true, false);
 
+    usdtPool = await LiquidityPool.at(await getLiquidityPoolAddr(usdtKey));
     nativePool = await LiquidityPool.at(await getLiquidityPoolAddr(nativeTokenKey));
     daiPool = await LiquidityPool.at(await getLiquidityPoolAddr(daiKey));
 
@@ -232,12 +264,90 @@ describe("UserInfoRegistry", () => {
 
   afterEach("revert", reverter.revert);
 
+  describe("getUserPRTStats", () => {
+    it("PRTStats should be set correctly after suppy, borrow, repay and liqudiation", async () => {
+      const liquidityAmount = wei(10000);
+      const amountToBorrow = wei(3000);
+      let price = wei(1, 7);
+
+      await daiChainlinkOracle.setPrice(price);
+      await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
+
+      let prtStats = await userInfoRegistry.getUserPRTStats(USER1);
+
+      assert.equal(toBN(prtStats.liquidationsNum).toString(), toBN(0).toString());
+      assert.equal(toBN(prtStats.repaysNum).toString(), toBN(0).toString());
+      assert.equal(toBN(prtStats.borrowStats.amountInUSD).toString(), toBN(0).toString());
+      assert.equal(toBN(prtStats.borrowStats.timestamp).toString(), toBN(0).toString());
+      assert.equal(toBN(prtStats.supplyStats.amountInUSD).toString(), toBN(10000).times(wei(1, 7)));
+      assert.equal(toBN(prtStats.supplyStats.timestamp).toString(), toBN(0).toString());
+
+      await defiCore.addLiquidity(daiKey, liquidityAmount.times(9), { from: USER1 });
+      prtStats = await userInfoRegistry.getUserPRTStats(USER1);
+
+      assert.equal(toBN(prtStats.liquidationsNum).toString(), toBN(0).toString());
+      assert.equal(toBN(prtStats.repaysNum).toString(), toBN(0).toString());
+      assert.equal(toBN(prtStats.borrowStats.amountInUSD).toString(), toBN(0).toString());
+      assert.equal(toBN(prtStats.borrowStats.timestamp).toString(), toBN(0).toString());
+      assert.equal(toBN(prtStats.supplyStats.amountInUSD).toString(), toBN(10000).times(wei(1, 8)).toString());
+      assert.equal(toBN(prtStats.supplyStats.timestamp).toString(), toBN(await getCurrentBlockTime()).toString());
+
+      price = wei(1, 7);
+      await usdtChainlinkOracle.setPrice(price);
+      await usdtPool.updateCompoundRate(false);
+
+      await defiCore.addLiquidity(usdtKey, amountToBorrow.times(20), { from: USER2 });
+      await defiCore.borrowFor(usdtKey, amountToBorrow, USER1, { from: USER1 });
+
+      prtStats = await userInfoRegistry.getUserPRTStats(USER1);
+      assert.equal(toBN(prtStats.liquidationsNum).toString(), toBN(0).toString());
+      assert.equal(toBN(prtStats.repaysNum).toString(), toBN(0).toString());
+      assert.equal(toBN(prtStats.borrowStats.amountInUSD).toString(), toBN(3000).times(wei(1, 7)).toString());
+      assert.equal(toBN(prtStats.borrowStats.timestamp).toString(), toBN(0).toString());
+      assert.equal(toBN(prtStats.supplyStats.amountInUSD).toString(), toBN(10000).times(wei(1, 8)).toString());
+      assert.equal(toBN(prtStats.supplyStats.timestamp).toString(), toBN((await getCurrentBlockTime()) - 4).toString());
+
+      await defiCore.borrowFor(usdtKey, amountToBorrow.times(11), USER1, { from: USER1 });
+
+      prtStats = await userInfoRegistry.getUserPRTStats(USER1);
+      assert.equal(toBN(prtStats.liquidationsNum).toString(), toBN(0).toString());
+      assert.equal(toBN(prtStats.repaysNum).toString(), toBN(0).toString());
+      assert.equal(toBN(prtStats.borrowStats.amountInUSD).toString(), toBN(3600).times(wei(1, 8)).toString());
+      assert.equal(toBN(prtStats.borrowStats.timestamp).toString(), toBN(await getCurrentBlockTime()).toString());
+      assert.equal(toBN(prtStats.supplyStats.amountInUSD).toString(), toBN(10000).times(wei(1, 8)).toString());
+      assert.equal(toBN(prtStats.supplyStats.timestamp).toString(), toBN((await getCurrentBlockTime()) - 5).toString());
+
+      let amountToRepayBorrow = amountToBorrow;
+
+      await defiCore.repayBorrow(usdtKey, amountToRepayBorrow, false, { from: USER1 });
+      prtStats = await userInfoRegistry.getUserPRTStats(USER1);
+      assert.equal(toBN(prtStats.liquidationsNum).toString(), toBN(0).toString());
+      assert.equal(toBN(prtStats.repaysNum).toString(), toBN(1).toString());
+      assert.equal(
+        toBN(prtStats.borrowStats.amountInUSD).toNumber(),
+        (await await defiCore.getTotalBorrowBalanceInUSD(USER1)).toNumber()
+      );
+      assert.equal(toBN(prtStats.borrowStats.timestamp).toString(), toBN((await getCurrentBlockTime()) - 1).toString());
+      assert.equal(toBN(prtStats.supplyStats.amountInUSD).toString(), toBN(10000).times(wei(1, 8)).toString());
+      assert.equal(toBN(prtStats.supplyStats.timestamp).toString(), toBN((await getCurrentBlockTime()) - 6).toString());
+
+      price = toBN(46);
+      liquidateAmount = await userInfoRegistry.getMaxLiquidationQuantity(USER1, daiKey, usdtKey);
+      await usdtChainlinkOracle.setPrice(price.times(priceDecimals));
+
+      await defiCore.liquidation(USER1, daiKey, usdtKey, liquidateAmount, { from: USER2 });
+
+      assert.equal(toBN(prtStats.liquidationsNum).toString(), toBN(0).toString());
+      assert.equal(toBN(prtStats.repaysNum).toString(), toBN(1).toString());
+    });
+  });
+
   describe("modifiers check", () => {
     it("should get exception if not a DefiCore call functions", async () => {
       const reason = "UserInfoRegistry: Caller not a DefiCore.";
 
-      await truffleAssert.reverts(userInfoRegistry.updateUserSupplyAssets(USER1, daiKey), reason);
-      await truffleAssert.reverts(userInfoRegistry.updateUserBorrowAssets(USER1, daiKey), reason);
+      await truffleAssert.reverts(userInfoRegistry.updateUserAssets(USER1, daiKey, true), reason);
+      await truffleAssert.reverts(userInfoRegistry.updateUserAssets(USER1, daiKey, false), reason);
     });
 
     it("should get exception if caller not a LiquidityPool", async () => {
@@ -695,18 +805,18 @@ describe("UserInfoRegistry", () => {
     });
 
     it("should return correct user supply assets", async () => {
-      await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
-      await defiCore.addLiquidity(usdtKey, liquidityAmount, { from: USER1 });
-      await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER1 });
+      let liquiditySupplyAmount = wei(100);
+      await defiCore.addLiquidity(daiKey, liquiditySupplyAmount, { from: USER3 });
+      await defiCore.addLiquidity(usdtKey, liquiditySupplyAmount, { from: USER3 });
+      await defiCore.addLiquidity(wEthKey, liquiditySupplyAmount, { from: USER3 });
 
-      await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER2 });
-      await defiCore.addLiquidity(usdtKey, liquidityAmount, { from: USER2 });
-      await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER2 });
+      await defiCore.addLiquidity(daiKey, liquiditySupplyAmount, { from: USER4 });
+      await defiCore.addLiquidity(usdtKey, liquiditySupplyAmount, { from: USER4 });
+      await defiCore.addLiquidity(wEthKey, liquiditySupplyAmount, { from: USER4 });
 
-      await defiCore.updateCollateral(daiKey, true, { from: USER2 });
+      await defiCore.updateCollateral(daiKey, true, { from: USER4 });
 
-      const result = await userInfoRegistry.getUsersLiquidiationInfo([USER1, USER2]);
-
+      const result = await userInfoRegistry.getUsersLiquidiationInfo([USER3, USER4]);
       let expectedMainInfos = [
         [daiKey, tokens[1].address],
         [wEthKey, tokens[2].address],

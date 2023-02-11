@@ -28,7 +28,7 @@ contract MockERC20 is ERC20 {
         }
     }
 
-    function approveArbitraryBacth(
+    function approveArbitraryBatch(
         address spender,
         address[] memory owners_,
         uint256[] memory amounts_
