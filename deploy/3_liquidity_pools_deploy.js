@@ -22,6 +22,7 @@ module.exports = async (deployer, logger) => {
           getAssetKey(currentSymbol),
           currentPoolData.chainlinkOracle,
           currentSymbol,
+          currentPoolData.isAvailableAsCollateral,
           currentPoolData.isAvailableAsCollateral
         ),
         `Create liquidity pool for ${currentSymbol} asset`

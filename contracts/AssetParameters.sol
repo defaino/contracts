@@ -22,7 +22,10 @@ contract AssetParameters is IAssetParameters, AbstractDependant {
     using MathUpgradeable for uint256;
 
     bytes32 public constant FREEZE_KEY = keccak256("FREEZE");
+
     bytes32 public constant ENABLE_COLLATERAL_KEY = keccak256("ENABLE_COLLATERAL");
+    bytes32 public constant ENABLE_COLLATERAL_WITH_PRT_KEY =
+        keccak256("ENABLE_COLLATERAL_WITH_PRT");
 
     bytes32 public constant BASE_PERCENTAGE_KEY = keccak256("BASE_PERCENTAGE");
     bytes32 public constant FIRST_SLOPE_KEY = keccak256("FIRST_SLOPE");
@@ -38,6 +41,8 @@ contract AssetParameters is IAssetParameters, AbstractDependant {
         keccak256("MIN_BORROW_DISTRIBUTION_PART");
 
     bytes32 public constant COL_RATIO_KEY = keccak256("COL_RATIO");
+    bytes32 public constant COL_RATIO_WITH_PRT_KEY = keccak256("COL_RATIO_WITH_PRT");
+
     bytes32 public constant RESERVE_FACTOR_KEY = keccak256("RESERVE_FACTOR");
 
     bytes32 public constant ANNUAL_BORROW_RATE_KEY = keccak256("ANNUAL_BORROW_RATE");
@@ -72,7 +77,11 @@ contract AssetParameters is IAssetParameters, AbstractDependant {
         _systemPoolsRegistry = ISystemPoolsRegistry(registry_.getSystemPoolsRegistryContract());
     }
 
-    function setPoolInitParams(bytes32 assetKey_, bool isCollateral_) external override {
+    function setPoolInitParams(
+        bytes32 assetKey_,
+        bool isCollateral_,
+        bool isCollateralWithPRT_
+    ) external override {
         require(
             address(_systemPoolsRegistry) == msg.sender,
             "AssetParameters: Caller not a SystemPoolsRegistry."
@@ -83,6 +92,10 @@ contract AssetParameters is IAssetParameters, AbstractDependant {
 
         _parameters[assetKey_][ENABLE_COLLATERAL_KEY] = PureParameters.makeBoolParam(
             isCollateral_
+        );
+
+        _parameters[assetKey_][ENABLE_COLLATERAL_WITH_PRT_KEY] = PureParameters.makeBoolParam(
+            isCollateralWithPRT_
         );
         emit CollateralParamUpdated(assetKey_, isCollateral_);
     }
@@ -167,8 +180,14 @@ contract AssetParameters is IAssetParameters, AbstractDependant {
         return _getParam(assetKey_, FREEZE_KEY).getBoolFromParam();
     }
 
-    function isAvailableAsCollateral(bytes32 assetKey_) external view override returns (bool) {
-        return _getParam(assetKey_, ENABLE_COLLATERAL_KEY).getBoolFromParam();
+    function isAvailableAsCollateral(
+        bytes32 assetKey_,
+        bool withPRT_
+    ) external view override returns (bool) {
+        return
+            withPRT_
+                ? _getParam(assetKey_, ENABLE_COLLATERAL_WITH_PRT_KEY).getBoolFromParam()
+                : _getParam(assetKey_, ENABLE_COLLATERAL_KEY).getBoolFromParam();
     }
 
     function getAnnualBorrowRate(bytes32 assetKey_) external view override returns (uint256) {
@@ -181,6 +200,7 @@ contract AssetParameters is IAssetParameters, AbstractDependant {
         return
             MainPoolParams(
                 _getParam(assetKey_, COL_RATIO_KEY).getUintFromParam(),
+                _getParam(assetKey_, COL_RATIO_WITH_PRT_KEY).getUintFromParam(),
                 _getParam(assetKey_, RESERVE_FACTOR_KEY).getUintFromParam(),
                 _getParam(assetKey_, LIQUIDATION_DISCOUNT_KEY).getUintFromParam(),
                 _getParam(assetKey_, MAX_UTILIZATION_RATIO_KEY).getUintFromParam()
@@ -209,8 +229,14 @@ contract AssetParameters is IAssetParameters, AbstractDependant {
             );
     }
 
-    function getColRatio(bytes32 assetKey_) external view override returns (uint256) {
-        return _getParam(assetKey_, COL_RATIO_KEY).getUintFromParam();
+    function getColRatio(
+        bytes32 assetKey_,
+        bool withPRT_
+    ) external view override returns (uint256) {
+        return
+            withPRT_
+                ? _getParam(assetKey_, COL_RATIO_WITH_PRT_KEY).getUintFromParam()
+                : _getParam(assetKey_, COL_RATIO_KEY).getUintFromParam();
     }
 
     function getReserveFactor(bytes32 assetKey_) external view override returns (uint256) {
@@ -297,6 +323,10 @@ contract AssetParameters is IAssetParameters, AbstractDependant {
 
         _parameters[assetKey_][COL_RATIO_KEY] = PureParameters.makeUintParam(
             mainParams_.collateralizationRatio
+        );
+
+        _parameters[assetKey_][COL_RATIO_WITH_PRT_KEY] = PureParameters.makeUintParam(
+            mainParams_.collateralizationRatioWithPRT
         );
         _parameters[assetKey_][RESERVE_FACTOR_KEY] = PureParameters.makeUintParam(
             mainParams_.reserveFactor

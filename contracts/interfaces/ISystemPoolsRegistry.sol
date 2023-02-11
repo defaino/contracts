@@ -113,12 +113,14 @@ interface ISystemPoolsRegistry {
     /// @param chainlinkOracle_ the address of the chainlink oracle for the passed asset
     /// @param tokenSymbol_ symbol of the underlying liquidity pool asset
     /// @param isCollateral_ is it possible for the new liquidity pool to be a collateral
+    /// @param isCollateralWithPRT_ is it possible for the new liquidity pool to be a collateral for a user with PRT
     function addLiquidityPool(
         address assetAddr_,
         bytes32 assetKey_,
         address chainlinkOracle_,
         string calldata tokenSymbol_,
-        bool isCollateral_
+        bool isCollateral_,
+        bool isCollateralWithPRT_
     ) external;
 
     /// @notice The function is needed to add new stable pools

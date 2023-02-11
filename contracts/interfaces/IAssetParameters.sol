@@ -7,11 +7,13 @@ pragma solidity 0.8.17;
 interface IAssetParameters {
     /// @notice This structure contains the main parameters of the pool
     /// @param collateralizationRatio percentage that shows how much collateral will be added from the deposit
+    /// @param collateralizationRatioWithPRT same as collateralizationRatio but for the user with PRT
     /// @param reserveFactor the percentage of the platform's earnings that will be deducted from the interest on the borrows
     /// @param liquidationDiscount percentage of the discount that the liquidator will receive on the collateral
     /// @param maxUtilizationRatio maximum possible utilization ratio
     struct MainPoolParams {
         uint256 collateralizationRatio;
+        uint256 collateralizationRatioWithPRT;
         uint256 reserveFactor;
         uint256 liquidationDiscount;
         uint256 maxUtilizationRatio;
@@ -101,7 +103,12 @@ interface IAssetParameters {
     /// @dev Only SystemPoolsRegistry contract can call this function
     /// @param assetKey_ the key of the pool for which the parameters are set
     /// @param isCollateral_ a flag that indicates whether a pool can even be a collateral
-    function setPoolInitParams(bytes32 assetKey_, bool isCollateral_) external;
+    /// @param isCollateralWithPRT_ a flag that indicates whether a pool can even be a collateral for a user with PRT
+    function setPoolInitParams(
+        bytes32 assetKey_,
+        bool isCollateral_,
+        bool isCollateralWithPRT_
+    ) external;
 
     /// @notice Function for setting the annual borrow rate of the stable pool
     /// @dev Only contract owner can call this function. Only for stable pools
@@ -156,8 +163,12 @@ interface IAssetParameters {
 
     /// @notice Function for getting information about whether a pool can be a collateral
     /// @param assetKey_ the key of the pool for which you want to get information
+    /// @param withPRT_ a flag that indicates whether to check the collateral availability in case user has PRT minted
     /// @return true, if the pool is available as a collateral, false otherwise
-    function isAvailableAsCollateral(bytes32 assetKey_) external view returns (bool);
+    function isAvailableAsCollateral(
+        bytes32 assetKey_,
+        bool withPRT_
+    ) external view returns (bool);
 
     /// @notice Function for getting annual borrow rate
     /// @param assetKey_ the key of the pool for which you want to get information
@@ -185,8 +196,9 @@ interface IAssetParameters {
 
     /// @notice Function to get the collateralization ratio for the desired pool
     /// @param assetKey_ the key of the pool for which you want to get information
+    /// @param withPRT_ a flag that indicates whether to check the collateralization ratio in case user has PRT minted
     /// @return current collateralization ratio value
-    function getColRatio(bytes32 assetKey_) external view returns (uint256);
+    function getColRatio(bytes32 assetKey_, bool withPRT_) external view returns (uint256);
 
     /// @notice Function to get the reserve factor for the desired pool
     /// @param assetKey_ the key of the pool for which you want to get information

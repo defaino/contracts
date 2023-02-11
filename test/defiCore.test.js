@@ -23,6 +23,7 @@ const PriceManager = artifacts.require("PriceManager");
 const InterestRateLibrary = artifacts.require("InterestRateLibrary");
 const WETH = artifacts.require("WETH");
 const StablePermitToken = artifacts.require("StablePermitTokenMock");
+const Prt = artifacts.require("PRT");
 
 const MockERC20 = artifacts.require("MockERC20");
 const ChainlinkOracleMock = artifacts.require("ChainlinkOracleMock");
@@ -46,6 +47,7 @@ describe("DefiCore", async () => {
   let rewardsDistribution;
   let userInfoRegistry;
   let systemPoolsRegistry;
+  let prt;
 
   let nativePool;
   let daiPool;
@@ -105,10 +107,17 @@ describe("DefiCore", async () => {
   async function createLiquidityPool(assetKey, asset, symbol, isCollateral) {
     const chainlinkOracle = await ChainlinkOracleMock.new(wei(100, chainlinkPriceDecimals), chainlinkPriceDecimals);
 
-    await systemPoolsRegistry.addLiquidityPool(asset.address, assetKey, chainlinkOracle.address, symbol, isCollateral);
+    await systemPoolsRegistry.addLiquidityPool(
+      asset.address,
+      assetKey,
+      chainlinkOracle.address,
+      symbol,
+      isCollateral,
+      isCollateral
+    );
 
     if (assetKey != nativeTokenKey) {
-      await asset.approveArbitraryBacth(
+      await asset.approveArbitraryBatch(
         await getLiquidityPoolAddr(assetKey),
         [OWNER, USER1, USER2],
         [tokensAmount, tokensAmount, tokensAmount]
@@ -116,7 +125,7 @@ describe("DefiCore", async () => {
     }
 
     await assetParameters.setupAllParameters(assetKey, [
-      [standardColRatio, reserveFactor, liquidationDiscount, maxUR],
+      [standardColRatio, standardColRatio, reserveFactor, liquidationDiscount, maxUR],
       [0, firstSlope, secondSlope, utilizationBreakingPoint],
       [minSupplyDistributionPart, minBorrowDistributionPart],
     ]);
@@ -128,7 +137,13 @@ describe("DefiCore", async () => {
     await systemPoolsRegistry.addStablePool(assetAddr, assetKey, ZERO_ADDR);
 
     await assetParameters.setupAnnualBorrowRate(assetKey, annualBorrowRate);
-    await assetParameters.setupMainParameters(assetKey, [standardColRatio, reserveFactor, liquidationDiscount, maxUR]);
+    await assetParameters.setupMainParameters(assetKey, [
+      standardColRatio,
+      standardColRatio,
+      reserveFactor,
+      liquidationDiscount,
+      maxUR,
+    ]);
   }
 
   async function deployRewardsPool(rewardsTokenAddr, symbol) {
@@ -139,11 +154,12 @@ describe("DefiCore", async () => {
       rewardsTokenKey,
       chainlinkOracle.address,
       symbol,
+      true,
       true
     );
 
     await assetParameters.setupAllParameters(rewardsTokenKey, [
-      [standardColRatio, reserveFactor, liquidationDiscount, maxUR],
+      [standardColRatio, standardColRatio, reserveFactor, liquidationDiscount, maxUR],
       [0, firstSlope, secondSlope, utilizationBreakingPoint],
       [minSupplyDistributionPart, minBorrowDistributionPart],
     ]);
@@ -178,6 +194,7 @@ describe("DefiCore", async () => {
     const _liquidityPoolImpl = await LiquidityPool.new();
     const _stablePoolImpl = await StablePool.new();
     const _priceManager = await PriceManager.new();
+    const _prt = await Prt.new();
 
     await registry.__OwnableContractsRegistry_init();
 
@@ -191,6 +208,7 @@ describe("DefiCore", async () => {
     await registry.addProxyContract(await registry.SYSTEM_POOLS_REGISTRY_NAME(), _systemPoolsRegistry.address);
     await registry.addProxyContract(await registry.SYSTEM_POOLS_FACTORY_NAME(), _liquidityPoolFactory.address);
     await registry.addProxyContract(await registry.PRICE_MANAGER_NAME(), _priceManager.address);
+    await registry.addProxyContract(await registry.PRT_NAME(), _prt.address);
 
     await registry.addContract(await registry.INTEREST_RATE_LIBRARY_NAME(), interestRateLibrary.address);
 
@@ -209,6 +227,7 @@ describe("DefiCore", async () => {
     await registry.injectDependencies(await registry.SYSTEM_POOLS_REGISTRY_NAME());
     await registry.injectDependencies(await registry.SYSTEM_POOLS_FACTORY_NAME());
     await registry.injectDependencies(await registry.PRICE_MANAGER_NAME());
+    await registry.injectDependencies(await registry.PRT_NAME());
 
     tokens.push(rewardsToken.address);
     await deployTokens(["DAI", "WETH", "USDT"]);
@@ -326,8 +345,20 @@ describe("DefiCore", async () => {
       const newDaiColRatio = getPercentage100().times(1.15);
       const newWEthColRatio = getPercentage100().times(1.3);
 
-      await assetParameters.setupMainParameters(daiKey, [newDaiColRatio, reserveFactor, liquidationDiscount, maxUR]);
-      await assetParameters.setupMainParameters(wEthKey, [newWEthColRatio, reserveFactor, liquidationDiscount, maxUR]);
+      await assetParameters.setupMainParameters(daiKey, [
+        newDaiColRatio,
+        newDaiColRatio,
+        reserveFactor,
+        liquidationDiscount,
+        maxUR,
+      ]);
+      await assetParameters.setupMainParameters(wEthKey, [
+        newWEthColRatio,
+        newWEthColRatio,
+        reserveFactor,
+        liquidationDiscount,
+        maxUR,
+      ]);
 
       const daiPart = liquidityAmount
         .times(price)
@@ -1064,7 +1095,7 @@ describe("DefiCore", async () => {
       await truffleAssert.reverts(defiCore.borrowFor(daiKey, liquidityAmount.times(2), USER2, { from: USER2 }), reason);
     });
 
-    it("should get exception if liquidity pool sis freezed", async () => {
+    it("should get exception if liquidity pool is freezed", async () => {
       await assetParameters.freeze(daiKey);
 
       const reason = "DefiCore: Pool is freeze for borrow operations.";

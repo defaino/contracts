@@ -54,4 +54,6 @@ interface IRegistry {
     /// @dev Used in dependency injection mechanism in the system
     /// @return InterestRateLibrary contract address
     function getInterestRateLibraryContract() external view returns (address);
+
+    function getPRTContract() external view returns (address);
 }

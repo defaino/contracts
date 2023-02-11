@@ -20,6 +20,7 @@ const RewardsDistribution = artifacts.require("RewardsDistributionMock");
 const PriceManager = artifacts.require("PriceManager");
 const ChainlinkOracleMock = artifacts.require("ChainlinkOracleMock");
 const SystemPoolsRegistry = artifacts.require("SystemPoolsRegistry");
+const Prt = artifacts.require("PRT");
 
 DefiCore.numberFormat = "BigNumber";
 AssetParameters.numberFormat = "BigNumber";
@@ -65,6 +66,7 @@ describe("AssetParameters", () => {
   let rewardsDistribution;
   let systemPoolsRegistry;
   let rewardsToken;
+  let prt;
 
   async function createLiquidityPool(assetKey, symbol, isCollateral) {
     const token = await MockERC20.new("Mock" + symbol, symbol);
@@ -72,9 +74,16 @@ describe("AssetParameters", () => {
 
     const chainlinkOracle = await ChainlinkOracleMock.new(wei(100, 8), 8);
 
-    await systemPoolsRegistry.addLiquidityPool(token.address, assetKey, chainlinkOracle.address, symbol, isCollateral);
+    await systemPoolsRegistry.addLiquidityPool(
+      token.address,
+      assetKey,
+      chainlinkOracle.address,
+      symbol,
+      isCollateral,
+      isCollateral
+    );
 
-    await token.approveArbitraryBacth(
+    await token.approveArbitraryBatch(
       (
         await systemPoolsRegistry.poolsInfo(assetKey)
       )[0],
@@ -83,7 +92,7 @@ describe("AssetParameters", () => {
     );
 
     await assetParameters.setupAllParameters(assetKey, [
-      [colRatio, reserveFactor, liquidationDiscount, maxUR],
+      [colRatio, colRatio, reserveFactor, liquidationDiscount, maxUR],
       [0, firstSlope, secondSlope, utilizationBreakingPoint],
       [minSupplyDistributionPart, minBorrowDistributionPart],
     ]);
@@ -99,11 +108,12 @@ describe("AssetParameters", () => {
       rewardsTokenKey,
       chainlinkOracle.address,
       symbol,
+      true,
       true
     );
 
     await assetParameters.setupAllParameters(rewardsTokenKey, [
-      [colRatio, reserveFactor, liquidationDiscount, maxUR],
+      [colRatio, colRatio, reserveFactor, liquidationDiscount, maxUR],
       [0, firstSlope, secondSlope, utilizationBreakingPoint],
       [minSupplyDistributionPart, minBorrowDistributionPart],
     ]);
@@ -131,6 +141,7 @@ describe("AssetParameters", () => {
     const _liquidityPoolImpl = await LiquidityPool.new();
     const _stablePoolImpl = await StablePool.new();
     const _systemPoolsRegistry = await SystemPoolsRegistry.new();
+    const _prt = await Prt.new();
 
     await registry.__OwnableContractsRegistry_init();
 
@@ -142,6 +153,7 @@ describe("AssetParameters", () => {
     await registry.addProxyContract(await registry.REWARDS_DISTRIBUTION_NAME(), _rewardsDistribution.address);
     await registry.addProxyContract(await registry.PRICE_MANAGER_NAME(), _priceManager.address);
     await registry.addProxyContract(await registry.SYSTEM_POOLS_REGISTRY_NAME(), _systemPoolsRegistry.address);
+    await registry.addProxyContract(await registry.PRT_NAME(), _prt.address);
 
     await registry.addContract(await registry.INTEREST_RATE_LIBRARY_NAME(), interestRateLibrary.address);
 
@@ -160,6 +172,7 @@ describe("AssetParameters", () => {
     await registry.injectDependencies(await registry.PRICE_MANAGER_NAME());
     await registry.injectDependencies(await registry.SYSTEM_POOLS_REGISTRY_NAME());
     await registry.injectDependencies(await registry.USER_INFO_REGISTRY_NAME());
+    await registry.injectDependencies(await registry.PRT_NAME());
 
     await defiCore.defiCoreInitialize();
     await systemPoolsRegistry.systemPoolsRegistryInitialize(_liquidityPoolImpl.address, rewardsTokenKey, zeroKey);
@@ -180,7 +193,7 @@ describe("AssetParameters", () => {
 
   describe("isPoolFrozen", () => {
     beforeEach("setup", async () => {
-      await systemPoolsRegistry.addLiquidityPool(TEST_ASSET, daiKey, NOTHING, "DAI", true);
+      await systemPoolsRegistry.addLiquidityPool(TEST_ASSET, daiKey, NOTHING, "DAI", true, true);
     });
 
     it("should return true if pool frozen", async () => {
@@ -196,13 +209,13 @@ describe("AssetParameters", () => {
 
   describe("isAvailableAsCollateral", () => {
     beforeEach("setup", async () => {
-      await systemPoolsRegistry.addLiquidityPool(TEST_ASSET, daiKey, NOTHING, "DAI", true);
-      await systemPoolsRegistry.addLiquidityPool(TEST_ASSET, wEthKey, NOTHING, "WETH", false);
+      await systemPoolsRegistry.addLiquidityPool(TEST_ASSET, daiKey, NOTHING, "DAI", true, true);
+      await systemPoolsRegistry.addLiquidityPool(TEST_ASSET, wEthKey, NOTHING, "WETH", false, false);
     });
 
     it("should correctly return is asset collateral", async () => {
-      const result1 = await assetParameters.isAvailableAsCollateral(daiKey);
-      const result2 = await assetParameters.isAvailableAsCollateral(wEthKey);
+      const result1 = await assetParameters.isAvailableAsCollateral(daiKey, false);
+      const result2 = await assetParameters.isAvailableAsCollateral(wEthKey, false);
 
       assert.equal(result1, true);
       assert.equal(result2, false);
@@ -210,7 +223,7 @@ describe("AssetParameters", () => {
 
     it("should correctly return is asset collateral after changes", async () => {
       await assetParameters.enableCollateral(wEthKey);
-      const result2 = await assetParameters.isAvailableAsCollateral(wEthKey);
+      const result2 = await assetParameters.isAvailableAsCollateral(wEthKey, false);
 
       assert.equal(result2, true);
     });
@@ -261,7 +274,7 @@ describe("AssetParameters", () => {
 
   describe("freeze", () => {
     beforeEach("setup", async () => {
-      await systemPoolsRegistry.addLiquidityPool(TEST_ASSET, daiKey, NOTHING, "DAI", false);
+      await systemPoolsRegistry.addLiquidityPool(TEST_ASSET, daiKey, NOTHING, "DAI", false, false);
     });
 
     it("should correctly freeze the pool", async () => {
@@ -286,7 +299,7 @@ describe("AssetParameters", () => {
 
   describe("enableCollateral", () => {
     beforeEach("setup", async () => {
-      await systemPoolsRegistry.addLiquidityPool(TEST_ASSET, daiKey, NOTHING, "DAI", false);
+      await systemPoolsRegistry.addLiquidityPool(TEST_ASSET, daiKey, NOTHING, "DAI", false, false);
     });
 
     it("should correctly freeze the asset", async () => {
@@ -305,7 +318,7 @@ describe("AssetParameters", () => {
 
   describe("setupInterestRateModel", () => {
     beforeEach("setup", async () => {
-      await systemPoolsRegistry.addLiquidityPool(TEST_ASSET, daiKey, NOTHING, "DAI", true);
+      await systemPoolsRegistry.addLiquidityPool(TEST_ASSET, daiKey, NOTHING, "DAI", true, true);
     });
 
     it("should correct setup interest rate model", async () => {
@@ -395,13 +408,19 @@ describe("AssetParameters", () => {
 
   describe("setupMainParameters", () => {
     beforeEach("setup", async () => {
-      await systemPoolsRegistry.addLiquidityPool(TEST_ASSET, daiKey, NOTHING, "DAI", true);
+      await systemPoolsRegistry.addLiquidityPool(TEST_ASSET, daiKey, NOTHING, "DAI", true, true);
     });
 
     it("should correct setup main parameters", async () => {
-      await assetParameters.setupMainParameters(daiKey, [colRatio, reserveFactor, liquidationDiscount, maxUR]);
+      await assetParameters.setupMainParameters(daiKey, [
+        colRatio,
+        colRatio,
+        reserveFactor,
+        liquidationDiscount,
+        maxUR,
+      ]);
 
-      assert.equal((await assetParameters.getColRatio(daiKey)).toString(), colRatio.toString());
+      assert.equal((await assetParameters.getColRatio(daiKey, false)).toString(), colRatio.toString());
       assert.equal((await assetParameters.getReserveFactor(daiKey)).toString(), reserveFactor.toString());
       assert.equal((await assetParameters.getLiquidationDiscount(daiKey)).toString(), liquidationDiscount.toString());
       assert.equal((await assetParameters.getMaxUtilizationRatio(daiKey)).toString(), maxUR.toString());
@@ -412,6 +431,7 @@ describe("AssetParameters", () => {
 
       await truffleAssert.reverts(
         assetParameters.setupMainParameters(daiKey, [
+          colRatio,
           colRatio,
           reserveFactor,
           liquidationDiscount,
@@ -425,7 +445,13 @@ describe("AssetParameters", () => {
       const reason = "AssetParameters: The new value of the liquidation discount is invalid.";
 
       await truffleAssert.reverts(
-        assetParameters.setupMainParameters(daiKey, [colRatio, reserveFactor, getPrecision().times(15), maxUR]),
+        assetParameters.setupMainParameters(daiKey, [
+          colRatio,
+          colRatio,
+          reserveFactor,
+          getPrecision().times(15),
+          maxUR,
+        ]),
         reason
       );
     });
@@ -436,6 +462,7 @@ describe("AssetParameters", () => {
       await truffleAssert.reverts(
         assetParameters.setupMainParameters(daiKey, [
           getPrecision().times(90),
+          getPrecision().times(90),
           reserveFactor,
           liquidationDiscount,
           maxUR,
@@ -444,6 +471,7 @@ describe("AssetParameters", () => {
       );
       await truffleAssert.reverts(
         assetParameters.setupMainParameters(daiKey, [
+          getPrecision().times(201),
           getPrecision().times(201),
           reserveFactor,
           liquidationDiscount,
@@ -457,7 +485,13 @@ describe("AssetParameters", () => {
       const reason = "AssetParameters: The new value of the reserve factor is invalid.";
 
       await truffleAssert.reverts(
-        assetParameters.setupMainParameters(daiKey, [colRatio, getPrecision().times(7), liquidationDiscount, maxUR]),
+        assetParameters.setupMainParameters(daiKey, [
+          colRatio,
+          colRatio,
+          getPrecision().times(7),
+          liquidationDiscount,
+          maxUR,
+        ]),
         reason
       );
     });
@@ -465,7 +499,7 @@ describe("AssetParameters", () => {
 
   describe("setupDistributionsMinimums", () => {
     beforeEach("setup", async () => {
-      await systemPoolsRegistry.addLiquidityPool(TEST_ASSET, daiKey, NOTHING, "DAI", true);
+      await systemPoolsRegistry.addLiquidityPool(TEST_ASSET, daiKey, NOTHING, "DAI", true, true);
     });
 
     it("should correct setup distribution minimums", async () => {
@@ -508,7 +542,7 @@ describe("AssetParameters", () => {
     const annualBorrowRate = getPrecision().times(2);
 
     beforeEach("setup", async () => {
-      await systemPoolsRegistry.addLiquidityPool(TEST_ASSET, daiKey, NOTHING, "DAI", true);
+      await systemPoolsRegistry.addLiquidityPool(TEST_ASSET, daiKey, NOTHING, "DAI", true, true);
       await systemPoolsRegistry.addStablePool(TEST_ASSET, stableKey, ZERO_ADDR);
     });
 
@@ -545,19 +579,19 @@ describe("AssetParameters", () => {
     it("should correctly set init pool parameters", async () => {
       const reason = "AssetParameters: Param for this asset doesn't exist.";
 
-      await truffleAssert.reverts(assetParameters.isAvailableAsCollateral(daiKey), reason);
+      await truffleAssert.reverts(assetParameters.isAvailableAsCollateral(daiKey, false), reason);
       await truffleAssert.reverts(assetParameters.isPoolFrozen(daiKey), reason);
 
-      await systemPoolsRegistry.addLiquidityPool(TEST_ASSET, daiKey, NOTHING, "DAI", true);
+      await systemPoolsRegistry.addLiquidityPool(TEST_ASSET, daiKey, NOTHING, "DAI", true, true);
 
-      assert.equal(await assetParameters.isAvailableAsCollateral(daiKey), true);
+      assert.equal(await assetParameters.isAvailableAsCollateral(daiKey, false), true);
       assert.equal(await assetParameters.isPoolFrozen(daiKey), false);
     });
 
     it("should get exception if caller not a SystemPoolsRegistry contrac", async () => {
       const reason = "AssetParameters: Caller not a SystemPoolsRegistry.";
 
-      await truffleAssert.reverts(assetParameters.setPoolInitParams(daiKey, true), reason);
+      await truffleAssert.reverts(assetParameters.setPoolInitParams(daiKey, true, true), reason);
     });
   });
 });

@@ -104,7 +104,8 @@ contract SystemPoolsRegistry is ISystemPoolsRegistry, Initializable, AbstractDep
         bytes32 assetKey_,
         address chainlinkOracle_,
         string calldata tokenSymbol_,
-        bool isCollateral_
+        bool isCollateral_,
+        bool isCollateralWithPRT_
     ) external override onlySystemOwner {
         _addPool(
             assetAddr_,
@@ -112,6 +113,7 @@ contract SystemPoolsRegistry is ISystemPoolsRegistry, Initializable, AbstractDep
             chainlinkOracle_,
             tokenSymbol_,
             isCollateral_,
+            isCollateralWithPRT_,
             PoolType.LIQUIDITY_POOL
         );
     }
@@ -126,7 +128,7 @@ contract SystemPoolsRegistry is ISystemPoolsRegistry, Initializable, AbstractDep
             "SystemPoolsRegistry: Stable pools are unavailable."
         );
 
-        _addPool(assetAddr_, assetKey_, chainlinkOracle_, "", true, PoolType.STABLE_POOL);
+        _addPool(assetAddr_, assetKey_, chainlinkOracle_, "", true, true, PoolType.STABLE_POOL);
     }
 
     function withdrawReservedFunds(
@@ -341,6 +343,7 @@ contract SystemPoolsRegistry is ISystemPoolsRegistry, Initializable, AbstractDep
         address chainlinkOracle_,
         string memory tokenSymbol_,
         bool isCollateral_,
+        bool isCollateralWithPRT_,
         PoolType poolType_
     ) internal {
         require(assetKey_ > 0, "SystemPoolsRegistry: Unable to add an asset without a key.");
@@ -361,7 +364,7 @@ contract SystemPoolsRegistry is ISystemPoolsRegistry, Initializable, AbstractDep
             poolAddr_ = _systemPoolsFactory.newStablePool(assetAddr_, assetKey_);
         }
 
-        _assetParameters.setPoolInitParams(assetKey_, isCollateral_);
+        _assetParameters.setPoolInitParams(assetKey_, isCollateral_, isCollateralWithPRT_);
 
         _allSupportedAssetKeys.add(assetKey_);
         _poolTypesInfo[poolType_].supportedAssetKeys.add(assetKey_);
@@ -390,7 +393,7 @@ contract SystemPoolsRegistry is ISystemPoolsRegistry, Initializable, AbstractDep
                 marketSize_,
                 liquidityPool_.getAmountInUSD(marketSize_),
                 liquidityPool_.getBorrowPercentage(),
-                parameters_.isAvailableAsCollateral(assetKey_)
+                parameters_.isAvailableAsCollateral(assetKey_, false)
             );
     }
 
