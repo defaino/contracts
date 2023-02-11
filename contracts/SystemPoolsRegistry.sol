@@ -104,7 +104,8 @@ contract SystemPoolsRegistry is ISystemPoolsRegistry, Initializable, AbstractDep
         bytes32 assetKey_,
         address chainlinkOracle_,
         string calldata tokenSymbol_,
-        bool isCollateral_
+        bool isCollateral_,
+        bool isCollateralWithPRT_
     ) external override onlySystemOwner {
         _addPool(
             assetAddr_,
@@ -112,6 +113,7 @@ contract SystemPoolsRegistry is ISystemPoolsRegistry, Initializable, AbstractDep
             chainlinkOracle_,
             tokenSymbol_,
             isCollateral_,
+            isCollateralWithPRT_,
             PoolType.LIQUIDITY_POOL
         );
     }
@@ -126,7 +128,7 @@ contract SystemPoolsRegistry is ISystemPoolsRegistry, Initializable, AbstractDep
             "SystemPoolsRegistry: Stable pools are unavailable."
         );
 
-        _addPool(assetAddr_, assetKey_, chainlinkOracle_, "", true, PoolType.STABLE_POOL);
+        _addPool(assetAddr_, assetKey_, chainlinkOracle_, "", true, true, PoolType.STABLE_POOL);
     }
 
     function withdrawReservedFunds(
@@ -202,7 +204,8 @@ contract SystemPoolsRegistry is ISystemPoolsRegistry, Initializable, AbstractDep
     }
 
     function getLiquidityPoolsInfo(
-        bytes32[] calldata assetKeys_
+        bytes32[] calldata assetKeys_,
+        bool withPRT_
     ) external view override returns (LiquidityPoolInfo[] memory poolsInfo_) {
         IAssetParameters assetParameters_ = _assetParameters;
 
@@ -212,7 +215,8 @@ contract SystemPoolsRegistry is ISystemPoolsRegistry, Initializable, AbstractDep
             poolsInfo_[i] = _getLiquidityPoolInfo(
                 assetKeys_[i],
                 ILiquidityPool(poolsInfo[assetKeys_[i]].poolAddr),
-                assetParameters_
+                assetParameters_,
+                withPRT_
             );
         }
     }
@@ -230,7 +234,8 @@ contract SystemPoolsRegistry is ISystemPoolsRegistry, Initializable, AbstractDep
     }
 
     function getDetailedLiquidityPoolInfo(
-        bytes32 assetKey_
+        bytes32 assetKey_,
+        bool withPRT_
     ) external view override returns (DetailedLiquidityPoolInfo memory) {
         ILiquidityPool liquidityPool_ = ILiquidityPool(poolsInfo[assetKey_].poolAddr);
         IAssetParameters parameters_ = _assetParameters;
@@ -247,7 +252,7 @@ contract SystemPoolsRegistry is ISystemPoolsRegistry, Initializable, AbstractDep
 
         return
             DetailedLiquidityPoolInfo(
-                _getLiquidityPoolInfo(assetKey_, liquidityPool_, parameters_),
+                _getLiquidityPoolInfo(assetKey_, liquidityPool_, parameters_, withPRT_),
                 mainPoolParams_,
                 availableToBorrow_,
                 liquidityPool_.getAmountInUSD(availableToBorrow_),
@@ -341,6 +346,7 @@ contract SystemPoolsRegistry is ISystemPoolsRegistry, Initializable, AbstractDep
         address chainlinkOracle_,
         string memory tokenSymbol_,
         bool isCollateral_,
+        bool isCollateralWithPRT_,
         PoolType poolType_
     ) internal {
         require(assetKey_ > 0, "SystemPoolsRegistry: Unable to add an asset without a key.");
@@ -361,7 +367,7 @@ contract SystemPoolsRegistry is ISystemPoolsRegistry, Initializable, AbstractDep
             poolAddr_ = _systemPoolsFactory.newStablePool(assetAddr_, assetKey_);
         }
 
-        _assetParameters.setPoolInitParams(assetKey_, isCollateral_);
+        _assetParameters.setPoolInitParams(assetKey_, isCollateral_, isCollateralWithPRT_);
 
         _allSupportedAssetKeys.add(assetKey_);
         _poolTypesInfo[poolType_].supportedAssetKeys.add(assetKey_);
@@ -377,7 +383,8 @@ contract SystemPoolsRegistry is ISystemPoolsRegistry, Initializable, AbstractDep
     function _getLiquidityPoolInfo(
         bytes32 assetKey_,
         ILiquidityPool liquidityPool_,
-        IAssetParameters parameters_
+        IAssetParameters parameters_,
+        bool withPRT_
     ) internal view returns (LiquidityPoolInfo memory) {
         uint256 marketSize_ = liquidityPool_.getTotalLiquidity();
         (uint256 distrSupplyAPY_, ) = _rewardsDistribution.getAPY(assetKey_);
@@ -390,7 +397,7 @@ contract SystemPoolsRegistry is ISystemPoolsRegistry, Initializable, AbstractDep
                 marketSize_,
                 liquidityPool_.getAmountInUSD(marketSize_),
                 liquidityPool_.getBorrowPercentage(),
-                parameters_.isAvailableAsCollateral(assetKey_)
+                parameters_.isAvailableAsCollateral(assetKey_, withPRT_)
             );
     }
 

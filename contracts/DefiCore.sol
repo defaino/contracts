@@ -18,6 +18,7 @@ import "./interfaces/IUserInfoRegistry.sol";
 import "./interfaces/ISystemPoolsRegistry.sol";
 import "./interfaces/IRewardsDistribution.sol";
 import "./interfaces/IBasicPool.sol";
+import "./interfaces/IPRT.sol";
 
 import "./libraries/AssetsHelperLibrary.sol";
 import "./libraries/MathHelper.sol";
@@ -41,6 +42,7 @@ contract DefiCore is
     IUserInfoRegistry internal _userInfoRegistry;
     ISystemPoolsRegistry internal _systemPoolsRegistry;
     IRewardsDistribution internal _rewardsDistribution;
+    IPRT internal _prt;
 
     mapping(address => mapping(bytes32 => bool)) public override disabledCollateralAssets;
 
@@ -66,6 +68,7 @@ contract DefiCore is
         _userInfoRegistry = IUserInfoRegistry(registry_.getUserInfoRegistryContract());
         _rewardsDistribution = IRewardsDistribution(registry_.getRewardsDistributionContract());
         _systemPoolsRegistry = ISystemPoolsRegistry(registry_.getSystemPoolsRegistryContract());
+        _prt = IPRT(registry_.getPRTContract());
     }
 
     function pause() external override onlySystemOwner {
@@ -80,10 +83,11 @@ contract DefiCore is
         bytes32 assetKey_,
         bool isDisabled_
     ) external override whenNotPaused nonReentrant {
+        bool hasPRT_ = _prt.hasValidPRT(msg.sender);
         IAssetParameters assetParameters_ = _assetParameters;
 
         require(
-            assetParameters_.isAvailableAsCollateral(assetKey_),
+            assetParameters_.isAvailableAsCollateral(assetKey_, hasPRT_),
             "DefiCore: Asset is blocked for collateral."
         );
 
@@ -101,7 +105,7 @@ contract DefiCore is
         if (isDisabled_ && currentSupplyAmount_ > 0) {
             (uint256 availableLiquidity_, ) = getAvailableLiquidity(msg.sender);
             uint256 currentLimitPart_ = currentSupplyAmount_.divWithPrecision(
-                assetParameters_.getColRatio(assetKey_)
+                assetParameters_.getColRatio(assetKey_, hasPRT_)
             );
 
             require(
@@ -137,7 +141,9 @@ contract DefiCore is
 
         assetLiquidityPool_.addLiquidity{value: msg.value}(msg.sender, liquidityAmount_);
 
-        _userInfoRegistry.updateUserSupplyAssets(msg.sender, assetKey_);
+        _userInfoRegistry.updateUserAssets(msg.sender, assetKey_, true);
+
+        _userInfoRegistry.updateUserStatsForPRT(msg.sender, 0, 0, true);
 
         emit LiquidityAdded(msg.sender, assetKey_, liquidityAmount_);
     }
@@ -175,9 +181,11 @@ contract DefiCore is
 
         assetLiquidityPool_.withdrawLiquidity(msg.sender, liquidityAmount_, isMaxWithdraw_);
 
-        emit LiquidityWithdrawn(msg.sender, assetKey_, liquidityAmount_);
+        _userInfoRegistry.updateUserAssets(msg.sender, assetKey_, true);
 
-        _userInfoRegistry.updateUserSupplyAssets(msg.sender, assetKey_);
+        _userInfoRegistry.updateUserStatsForPRT(msg.sender, 0, 0, true);
+
+        emit LiquidityWithdrawn(msg.sender, assetKey_, liquidityAmount_);
     }
 
     function approveToDelegateBorrow(
@@ -209,7 +217,9 @@ contract DefiCore is
             borrowAmount_
         );
 
-        _userInfoRegistry.updateUserBorrowAssets(msg.sender, assetKey_);
+        _userInfoRegistry.updateUserAssets(msg.sender, assetKey_, false);
+
+        _userInfoRegistry.updateUserStatsForPRT(msg.sender, 0, 0, false);
 
         emit Borrowed(msg.sender, recipientAddr_, assetKey_, borrowAmount_);
     }
@@ -227,7 +237,9 @@ contract DefiCore is
             borrowAmount_
         );
 
-        _userInfoRegistry.updateUserBorrowAssets(borrowerAddr_, assetKey_);
+        _userInfoRegistry.updateUserAssets(borrowerAddr_, assetKey_, false);
+
+        _userInfoRegistry.updateUserStatsForPRT(borrowerAddr_, 0, 0, false);
 
         emit Borrowed(borrowerAddr_, msg.sender, assetKey_, borrowAmount_);
     }
@@ -252,9 +264,11 @@ contract DefiCore is
             isMaxRepay_
         );
 
-        emit BorrowRepaid(msg.sender, assetKey_, repayAmount_);
+        _userInfoRegistry.updateUserAssets(msg.sender, assetKey_, false);
 
-        _userInfoRegistry.updateUserBorrowAssets(msg.sender, assetKey_);
+        _userInfoRegistry.updateUserStatsForPRT(msg.sender, 1, 0, false);
+
+        emit BorrowRepaid(msg.sender, assetKey_, repayAmount_);
     }
 
     function delegateRepayBorrow(
@@ -276,9 +290,11 @@ contract DefiCore is
             isMaxRepay_
         );
 
-        emit BorrowRepaid(recipientAddr_, assetKey_, repayAmount_);
+        _userInfoRegistry.updateUserAssets(recipientAddr_, assetKey_, false);
 
-        _userInfoRegistry.updateUserBorrowAssets(recipientAddr_, assetKey_);
+        _userInfoRegistry.updateUserStatsForPRT(recipientAddr_, 1, 0, false);
+
+        emit BorrowRepaid(recipientAddr_, assetKey_, repayAmount_);
     }
 
     function liquidation(
@@ -341,8 +357,13 @@ contract DefiCore is
 
         IUserInfoRegistry userInfoRegistry_ = _userInfoRegistry;
 
-        userInfoRegistry_.updateUserSupplyAssets(userAddr_, supplyAssetKey_);
-        userInfoRegistry_.updateUserBorrowAssets(userAddr_, borrowAssetKey_);
+        userInfoRegistry_.updateUserAssets(userAddr_, supplyAssetKey_, true);
+        userInfoRegistry_.updateUserAssets(userAddr_, borrowAssetKey_, false);
+
+        _userInfoRegistry.updateUserStatsForPRT(userAddr_, 0, 1, true);
+        _userInfoRegistry.updateUserStatsForPRT(userAddr_, 0, 0, false);
+
+        emit Liquidation(userAddr_, supplyAssetKey_, borrowAssetKey_, liquidationAmount_);
     }
 
     function claimDistributionRewards(
@@ -468,6 +489,7 @@ contract DefiCore is
         address userAddr_,
         bytes32 assetKey_
     ) public view override returns (uint256 maxToWithdraw_) {
+        bool hasPRT_ = _prt.hasValidPRT(userAddr_);
         IAssetParameters assetParameters_ = _assetParameters;
         ILiquidityPool liquidityPool_ = assetKey_.getAssetLiquidityPool(_systemPoolsRegistry);
 
@@ -478,7 +500,7 @@ contract DefiCore is
             );
 
         uint256 totalBorrowBalance_ = getTotalBorrowBalanceInUSD(userAddr_);
-        uint256 colRatio_ = assetParameters_.getColRatio(assetKey_);
+        uint256 colRatio_ = assetParameters_.getColRatio(assetKey_, hasPRT_);
 
         if (isCollateralAssetEnabled(userAddr_, assetKey_)) {
             uint256 borrowLimitInUSD_ = getCurrentBorrowLimitInUSD(userAddr_);
@@ -516,8 +538,9 @@ contract DefiCore is
         address userAddr_,
         bytes32 assetKey_
     ) public view override returns (bool) {
+        bool hasPRT_ = _prt.hasValidPRT(userAddr_);
         if (
-            _assetParameters.isAvailableAsCollateral(assetKey_) &&
+            _assetParameters.isAvailableAsCollateral(assetKey_, hasPRT_) &&
             !disabledCollateralAssets[userAddr_][assetKey_]
         ) {
             return true;
@@ -566,6 +589,7 @@ contract DefiCore is
     function getCurrentBorrowLimitInUSD(
         address userAddr_
     ) public view override returns (uint256 currentBorrowLimit_) {
+        bool hasPRT_ = _prt.hasValidPRT(userAddr_);
         ISystemPoolsRegistry poolsRegistry_ = _systemPoolsRegistry;
         IAssetParameters assetParameters_ = _assetParameters;
         bytes32[] memory userSupplyAssets_ = _userInfoRegistry.getUserSupplyAssets(userAddr_);
@@ -581,7 +605,7 @@ contract DefiCore is
                 );
 
                 currentBorrowLimit_ += currentTokensAmount_.divWithPrecision(
-                    assetParameters_.getColRatio(currentAssetKey_)
+                    assetParameters_.getColRatio(currentAssetKey_, hasPRT_)
                 );
             }
         }
@@ -593,6 +617,7 @@ contract DefiCore is
         uint256 tokensAmount_,
         bool isAdding_
     ) public view override returns (uint256) {
+        bool hasPRT_ = _prt.hasValidPRT(userAddr_);
         uint256 newLimit_ = getCurrentBorrowLimitInUSD(userAddr_);
 
         if (!isCollateralAssetEnabled(userAddr_, assetKey_)) {
@@ -602,7 +627,7 @@ contract DefiCore is
         ILiquidityPool _liquidityPool = assetKey_.getAssetLiquidityPool(_systemPoolsRegistry);
 
         uint256 _newAmount = _liquidityPool.getAmountInUSD(tokensAmount_).divWithPrecision(
-            _assetParameters.getColRatio(assetKey_)
+            _assetParameters.getColRatio(assetKey_, hasPRT_)
         );
 
         if (isAdding_) {

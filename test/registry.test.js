@@ -15,6 +15,7 @@ const SystemPoolsRegistry = artifacts.require("SystemPoolsRegistryMock");
 const PriceManager = artifacts.require("PriceManager");
 const UserInfoRegistry = artifacts.require("UserInfoRegistry");
 const SystemPoolsFactory = artifacts.require("SystemPoolsFactory");
+const Prt = artifacts.require("PRT");
 
 describe("Registry", async () => {
   const reverter = new Reverter();
@@ -27,6 +28,7 @@ describe("Registry", async () => {
   let rewardsDistribution;
   let systemParameters;
   let systemPoolsRegistry;
+  let prt;
 
   before("setup", async () => {
     LIQUIDITY_POOL_REGISTRY = await accounts(9);
@@ -42,6 +44,7 @@ describe("Registry", async () => {
     const _priceManager = await PriceManager.new();
     const _userInfoRegistry = await UserInfoRegistry.new();
     const _systemPoolsFactory = await SystemPoolsFactory.new();
+    const _prt = await Prt.new();
 
     await registry.__OwnableContractsRegistry_init();
 
@@ -54,6 +57,7 @@ describe("Registry", async () => {
     await registry.addProxyContract(await registry.ASSET_PARAMETERS_NAME(), _assetParameters.address);
     await registry.addProxyContract(await registry.REWARDS_DISTRIBUTION_NAME(), _rewardsDistribution.address);
     await registry.addProxyContract(await registry.SYSTEM_POOLS_REGISTRY_NAME(), _systemPoolsRegistry.address);
+    await registry.addProxyContract(await registry.PRT_NAME(), _prt.address);
 
     defiCore = await DefiCore.at(await registry.getDefiCoreContract());
     assetParameters = await AssetParameters.at(await registry.getAssetParametersContract());
@@ -110,10 +114,12 @@ describe("Registry", async () => {
   });
 
   describe("renounceOwnership()", () => {
-    it("should get exception if called not by anyone", async () => {
-      const reason = "Registry: renounceOwnership is prohibbited";
+    it("should get exception if called by owner and by not an owner", async () => {
+      let reason = "Registry: renounceOwnership is prohibbited";
 
       await truffleAssert.reverts(registry.renounceOwnership(), reason);
+
+      reason = "Ownable: caller is not the owner";
 
       await truffleAssert.reverts(registry.renounceOwnership({ from: NOT_AN_OWNER }), reason);
     });
