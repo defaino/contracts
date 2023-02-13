@@ -40,9 +40,10 @@ module.exports = async (deployer, logger) => {
       console.log(`${currentSymbol} liquidity pool asset parameters:
         Main parameters:
           COLLATERALIZATION_RATIO: ${percentToStr(currentPoolData.mainParams[0], true)}
-          RESERVE_FACTOR: ${percentToStr(currentPoolData.mainParams[1])}
-          LIQUIDATION_DISCOUNT: ${percentToStr(currentPoolData.mainParams[2])}
-          MAX_UTILIZATION_RATIO: ${percentToStr(currentPoolData.mainParams[3])}
+          COLLATERALIZATION_RATIO WITH PRT: ${percentToStr(currentPoolData.mainParams[1], true)}
+          RESERVE_FACTOR: ${percentToStr(currentPoolData.mainParams[2])}
+          LIQUIDATION_DISCOUNT: ${percentToStr(currentPoolData.mainParams[3])}
+          MAX_UTILIZATION_RATIO: ${percentToStr(currentPoolData.mainParams[4])}
   
         Interest rate parameters:
           BASE_PERCENTAGE: ${percentToStr(currentPoolData.interestRateParams[0])}
@@ -73,9 +74,10 @@ module.exports = async (deployer, logger) => {
         ANNUAL_BORROW_RATE: ${percentToStr(currentPoolData.annualBorrowRate)}
         Main parameters:
           COLLATERALIZATION_RATIO: ${percentToStr(currentPoolData.mainParams[0], true)}
-          RESERVE_FACTOR: ${percentToStr(currentPoolData.mainParams[1])}
-          LIQUIDATION_DISCOUNT: ${percentToStr(currentPoolData.mainParams[2])}
-          MAX_UTILIZATION_RATIO: ${percentToStr(currentPoolData.mainParams[3])}\n
+          COLLATERALIZATION_RATIO WITH PRT: ${percentToStr(currentPoolData.mainParams[1], true)}
+          RESERVE_FACTOR: ${percentToStr(currentPoolData.mainParams[2])}
+          LIQUIDATION_DISCOUNT: ${percentToStr(currentPoolData.mainParams[3])}
+          MAX_UTILIZATION_RATIO: ${percentToStr(currentPoolData.mainParams[4])}\n
       `);
     }
 

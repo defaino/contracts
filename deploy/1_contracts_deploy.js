@@ -10,7 +10,9 @@ const InterestRateLibrary = artifacts.require("InterestRateLibrary");
 const RewardsDistribution = artifacts.require("RewardsDistribution");
 const UserInfoRegistry = artifacts.require("UserInfoRegistry");
 const PriceManager = artifacts.require("PriceManager");
+const Prt = artifacts.require("PRT");
 
+const { artifacts } = require("hardhat");
 const { isStablePoolsAvailable } = require("./helpers/deployHelper.js");
 
 require("dotenv").config();
@@ -49,6 +51,9 @@ module.exports = async (deployer, logger) => {
 
   await deployer.deploy(SystemPoolsFactory);
   const systemPoolsFactory = await SystemPoolsFactory.deployed();
+
+  await deployer.deploy(Prt);
+  const prt = await Prt.deployed();
 
   await deployer.deploy(LiquidityPool);
 
@@ -107,6 +112,11 @@ module.exports = async (deployer, logger) => {
   logger.logTransaction(
     await registry.addContract(await registry.INTEREST_RATE_LIBRARY_NAME(), interestRateLibrary.address),
     "Add InterestRateLibrary contract to the registry"
+  );
+
+  logger.logTransaction(
+    await registry.addProxyContract(await registry.PRT_NAME(), prt.address),
+    "Add Prt contract proxy to the registry"
   );
 
   console.log("+--------------------------------------------------------------------------------+");

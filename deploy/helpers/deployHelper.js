@@ -37,6 +37,7 @@ function parsePoolsData(path) {
       convertToPercents(poolsData[i].distributionMinimums);
 
       poolsData[i].isAvailableAsCollateral = poolsData[i].isAvailableAsCollateral === "true";
+      poolsData[i].isAvailableAsCollateralWithPrt = poolsData[i].isAvailableAsCollateralWithPrt === "true";
     } else {
       poolsData[i].annualBorrowRate = convertToPercents([poolsData[i].annualBorrowRate])[0];
     }
@@ -46,6 +47,12 @@ function parsePoolsData(path) {
   }
 
   return poolsData;
+}
+
+function parsePrtData(path) {
+  let prtData = JSON.parse(fs.readFileSync(path, "utf8"));
+
+  return prtData;
 }
 
 function convertToPercents(arr) {
@@ -77,6 +84,7 @@ function rewardsAssetToken() {
 module.exports = {
   getAssetKey,
   parsePoolsData,
+  parsePrtData,
   percentToStr,
   isStablePoolsAvailable,
   nativeAssetSymbol,

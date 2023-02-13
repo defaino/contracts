@@ -22,7 +22,8 @@ module.exports = async (deployer, logger) => {
           getAssetKey(currentSymbol),
           currentPoolData.chainlinkOracle,
           currentSymbol,
-          currentPoolData.isAvailableAsCollateral
+          currentPoolData.isAvailableAsCollateral,
+          currentPoolData.isAvailableAsCollateralWithPrt
         ),
         `Create liquidity pool for ${currentSymbol} asset`
       );
@@ -32,7 +33,8 @@ module.exports = async (deployer, logger) => {
         ASSET_ADDR: ${currentPoolData.assetAddr}
         ASSET_KEY: ${getAssetKey(currentSymbol)}
         CHAINLINK_ORACLE: ${currentPoolData.chainlinkOracle}
-        IS_AVAILABLE_AS_COLLATERL: ${currentPoolData.isAvailableAsCollateral}\n
+        IS_AVAILABLE_AS_COLLATERAL: ${currentPoolData.isAvailableAsCollateral}
+        IS_AVAILABLE_AS_COLLATERAL WITH PRT: ${currentPoolData.isAvailableAsCollateralWithPrt}\n
       `);
 
       console.log(

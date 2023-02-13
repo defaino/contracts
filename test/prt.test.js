@@ -34,7 +34,7 @@ LiquidityPool.numberFormat = "BigNumber";
 UserInfoRegistry.numberFormat = "BigNumber";
 WETH.numberFormat = "BigNumber";
 
-describe.only("PRT", () => {
+describe("PRT", () => {
   const reverter = new Reverter();
 
   let OWNER;
@@ -260,7 +260,7 @@ describe.only("PRT", () => {
 
   afterEach("revert", reverter.revert);
 
-  describe.only("mintPRT", () => {
+  describe("mintPRT", () => {
     it("should revert if the deposit criteria hasn't been met (no deposit at all)", async () => {
       const liquidityAmount = wei(10000);
       const amountToBorrow = wei(3000);
@@ -517,6 +517,16 @@ describe.only("PRT", () => {
     });
   });
 
+  describe("getPRTParams()", () => {
+    it("should return correct values", async () => {
+      let prtParams = await prt.getPRTParams();
+      assert.equal(toBN(prtParams[0].minAmountInUSD).toString(), 1000000000000);
+      assert.equal(toBN(prtParams[0].minTimeAfter).toString(), 100);
+      assert.equal(toBN(prtParams[1].minAmountInUSD).toString(), 300000000000);
+      assert.equal(toBN(prtParams[1].minTimeAfter).toString(), 100);
+    });
+  });
+
   describe("updatePRTRarams()", () => {
     it("should revert if not the system owner tries to update the PRT params", async () => {
       let reason = "PRT: Only system owner can call this function";
@@ -531,13 +541,71 @@ describe.only("PRT", () => {
         reason
       );
     });
-    it("should pass if  the system owner tries to update the PRT params", async () => {
+    it("should pass if the system owner tries to update the PRT params", async () => {
       await truffleAssert.passes(
         prt.updatePRTParams([
-          [1000000000000, 100],
+          [3000000000000, 100],
           [300000000000, 100],
         ])
       );
+
+      let prtParams = await prt.getPRTParams();
+      assert.equal(toBN(prtParams[0].minAmountInUSD).toString(), 3000000000000);
+    });
+  });
+
+  describe("hasValidPRT()", () => {
+    it("should return true if a user has minted a PRT and was not liquidated", async () => {
+      const liquidityAmount = wei(10000);
+      const amountToBorrow = wei(3000);
+      let price = wei(1, 7);
+
+      await daiChainlinkOracle.setPrice(price);
+      await defiCore.addLiquidity(daiKey, liquidityAmount.times(10), { from: USER1 });
+
+      await usdtChainlinkOracle.setPrice(price);
+      await usdtPool.updateCompoundRate(false);
+
+      await defiCore.addLiquidity(usdtKey, amountToBorrow.times(20), { from: USER2 });
+      await defiCore.borrowFor(usdtKey, amountToBorrow.times(11), USER1, { from: USER1 });
+
+      let amountToRepayBorrow = amountToBorrow;
+
+      await defiCore.repayBorrow(usdtKey, amountToRepayBorrow, false, { from: USER1 });
+      await mine(100);
+      await prt.mintPRT({ from: USER1 });
+
+      assert.isTrue(await prt.hasValidPRT(USER1));
+    });
+    it("should return false if user has minted a PRT and then was liquidated", async () => {
+      const liquidityAmount = wei(10000);
+      const amountToBorrow = wei(3000);
+      let price = wei(1, 7);
+
+      await daiChainlinkOracle.setPrice(price);
+      await defiCore.addLiquidity(daiKey, liquidityAmount.times(200), { from: USER1 });
+
+      await usdtChainlinkOracle.setPrice(price);
+      await usdtPool.updateCompoundRate(false);
+
+      await defiCore.addLiquidity(usdtKey, amountToBorrow.times(300), { from: USER2 });
+      await defiCore.borrowFor(usdtKey, amountToBorrow.times(20), USER1, { from: USER1 });
+
+      let amountToRepayBorrow = amountToBorrow;
+
+      await defiCore.repayBorrow(usdtKey, amountToRepayBorrow, false, { from: USER1 });
+
+      await mine(100);
+
+      await truffleAssert.passes(prt.mintPRT({ from: USER1 }));
+      assert.isTrue(await prt.hasValidPRT(USER1));
+
+      price = wei(1, 8);
+      liquidateAmount = await userInfoRegistry.getMaxLiquidationQuantity(USER1, daiKey, usdtKey);
+      await usdtChainlinkOracle.setPrice(price.times(priceDecimals));
+
+      await defiCore.liquidation(USER1, daiKey, usdtKey, liquidateAmount, { from: USER2 });
+      assert.isFalse(await prt.hasValidPRT(USER1));
     });
   });
 });

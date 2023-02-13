@@ -57,7 +57,7 @@ contract PRT is IPRT, ERC721Upgradeable, AbstractDependant, ReentrancyGuardUpgra
             owner_
         );
 
-        return userStats_.liquidationsNum != 0 && balanceOf(owner_) > 0;
+        return userStats_.liquidationsNum == 0 && balanceOf(owner_) > 0;
     }
 
     function mintPRT() public nonReentrant {
