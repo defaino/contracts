@@ -4,7 +4,7 @@
   "description": "",
   "scripts": {
     "install": "npx husky install",
-    "compile": "npx hardhat compile --force",
+    "compile": "IS_COVERAGE=true npx hardhat compile --force",
     "coverage": "npx hardhat coverage",
     "test": "npx hardhat test",
     "test-all": "npm run deploy-dev && npm run test",

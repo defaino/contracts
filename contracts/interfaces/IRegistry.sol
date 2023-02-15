@@ -55,5 +55,8 @@ interface IRegistry {
     /// @return InterestRateLibrary contract address
     function getInterestRateLibraryContract() external view returns (address);
 
+    /// @notice Function to get the address of the PRT contract
+    /// @dev Used in dependency injection mechanism in the system
+    /// @return PRT contract address
     function getPRTContract() external view returns (address);
 }

@@ -107,16 +107,16 @@ module.exports = async (deployer, logger) => {
     "Add PriceManager contract proxy to the registry"
   );
 
+  logger.logTransaction(
+    await registry.addProxyContract(await registry.PRT_NAME(), prt.address),
+    "Add Prt contract proxy to the registry"
+  );
+
   console.log();
 
   logger.logTransaction(
     await registry.addContract(await registry.INTEREST_RATE_LIBRARY_NAME(), interestRateLibrary.address),
     "Add InterestRateLibrary contract to the registry"
-  );
-
-  logger.logTransaction(
-    await registry.addProxyContract(await registry.PRT_NAME(), prt.address),
-    "Add Prt contract proxy to the registry"
   );
 
   console.log("+--------------------------------------------------------------------------------+");

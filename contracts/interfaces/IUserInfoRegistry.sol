@@ -7,11 +7,20 @@ pragma solidity 0.8.17;
  * information about the user's rewards, the user's basic information, detailed information about deposits and credits
  */
 interface IUserInfoRegistry {
+    /// @notice A saved user eligible position: borrow or supply
+    /// @param amountInUSD USD amount of the eligible supply/borrow action
+    /// @param timestamp timestamp of the corresponding action
     struct LastSavedUserPosition {
         uint256 amountInUSD;
         uint256 timestamp;
     }
 
+    /// @notice User stats for PRT: eligible deposit and borrow amounts in USD and their timestamps, number of repays and liquidations
+    /// @dev Set only if the user's deposit/borrow amount in USD is more than one set in _prtParams field of the PRT contract
+    /// @param supplyStats element type LastSavedUserPosition structure
+    /// @param borrowStats element type LastSavedUserPosition structure
+    /// @param repaysNum the number of the user debt repayments
+    /// @param liquidationsNum the number of the user's liquidations
     struct StatsForPRT {
         LastSavedUserPosition supplyStats;
         LastSavedUserPosition borrowStats;
@@ -185,6 +194,9 @@ interface IUserInfoRegistry {
     /// @param isSupply_ shows whether the user put a deposit or took a credit
     function updateUserAssets(address userAddr_, bytes32 assetKey_, bool isSupply_) external;
 
+    /// @notice A function that returns a structure with the user stats for PRT
+    /// @param userAddr_  user address
+    /// @return a StatsForPRT structure
     function getUserPRTStats(address userAddr_) external view returns (StatsForPRT memory);
 
     /// @notice The function that returns for a particular user a list of keys from pools where he has deposited

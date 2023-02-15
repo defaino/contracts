@@ -30,7 +30,7 @@ contract PRT is IPRT, ERC721Upgradeable, AbstractDependant, ReentrancyGuardUpgra
         string calldata name_,
         string calldata symbol_,
         PRTParams calldata prtParams_
-    ) external override initializer {
+    ) external initializer {
         __ERC721_init(name_, symbol_);
         __ReentrancyGuard_init();
         _prtParams = prtParams_;
@@ -60,9 +60,8 @@ contract PRT is IPRT, ERC721Upgradeable, AbstractDependant, ReentrancyGuardUpgra
         return userStats_.liquidationsNum == 0 && balanceOf(owner_) > 0;
     }
 
-    function mintPRT() public nonReentrant {
+    function mintPRT() public override nonReentrant {
         require(balanceOf(msg.sender) == 0, "PRT: user has already minted a PRT token");
-
         IUserInfoRegistry.StatsForPRT memory userStats_ = _userInfoRegistry.getUserPRTStats(
             msg.sender
         );

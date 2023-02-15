@@ -6,7 +6,7 @@ const { ZERO_ADDR } = require("../scripts/utils/constants");
 const { setNextBlockTime, setTime, mine, getCurrentBlockTime } = require("./helpers/block-helper");
 const truffleAssert = require("truffle-assertions");
 const Reverter = require("./helpers/reverter");
-const { web3 } = require("hardhat");
+const { web3, artifacts } = require("hardhat");
 const { assert } = require("chai");
 
 const Registry = artifacts.require("Registry");
@@ -27,6 +27,8 @@ const StablePermitToken = artifacts.require("StablePermitTokenMock");
 
 const MockERC20 = artifacts.require("MockERC20");
 const ChainlinkOracleMock = artifacts.require("ChainlinkOracleMock");
+
+const PRTReentrancy = artifacts.require("PRTReentrancy");
 
 MockERC20.numberFormat = "BigNumber";
 DefiCore.numberFormat = "BigNumber";
@@ -205,6 +207,14 @@ describe("PRT", () => {
     systemParameters = await SystemParameters.at(await registry.getSystemParametersContract());
     prt = await Prt.at(await registry.getPRTContract());
 
+    const _prtReentrancy = await PRTReentrancy.new(
+      await registry.getPRTContract(),
+      1,
+      USER1,
+      await registry.getDefiCoreContract()
+    );
+    prtReentrancy = await PRTReentrancy.at(_prtReentrancy.address);
+
     await registry.injectDependencies(await registry.DEFI_CORE_NAME());
     await registry.injectDependencies(await registry.SYSTEM_PARAMETERS_NAME());
     await registry.injectDependencies(await registry.ASSET_PARAMETERS_NAME());
@@ -237,6 +247,14 @@ describe("PRT", () => {
     daiChainlinkOracle = await createLiquidityPool(daiKey, tokens[1], "DAI", true, false);
     wEthChainlinkOracle = await createLiquidityPool(wEthKey, tokens[2], "WETH", true, false);
     usdtChainlinkOracle = await createLiquidityPool(usdtKey, tokens[3], "USDT", true, false);
+    await tokens[1].mintArbitraryBatch([_prtReentrancy.address], [tokensAmount]);
+    await tokens[3].mintArbitraryBatch([_prtReentrancy.address], [tokensAmount]);
+    await tokens[1].approveArbitraryBatch(await getLiquidityPoolAddr(daiKey), [_prtReentrancy.address], [tokensAmount]);
+    await tokens[3].approveArbitraryBatch(
+      await getLiquidityPoolAddr(usdtKey),
+      [_prtReentrancy.address],
+      [tokensAmount]
+    );
 
     await createLiquidityPool(nativeTokenKey, tokens[4], "BNB", true, false);
 
@@ -342,7 +360,7 @@ describe("PRT", () => {
 
       await defiCore.addLiquidity(usdtKey, amountToBorrow.times(20), { from: USER2 });
       await defiCore.borrowFor(usdtKey, amountToBorrow.times(10), USER1, { from: USER1 });
-      await mine(100);
+      await mine(1000);
 
       let reason = "PRT: can't mint PRT since the user hasn't ever used the repay function";
       await truffleAssert.reverts(prt.mintPRT({ from: USER1 }), reason);
@@ -393,6 +411,28 @@ describe("PRT", () => {
 
       let reason = "PRT: can't mint PRT because the user has been liquidated";
       await truffleAssert.reverts(prt.mintPRT({ from: USER1 }), reason);
+    });
+
+    it("should revert if user tries to reenter the mint function", async () => {
+      const liquidityAmount = wei(10000);
+      const amountToBorrow = wei(3000);
+      let price = wei(1, 7);
+
+      await daiChainlinkOracle.setPrice(price);
+      await prtReentrancy.addLiquidity(daiKey, liquidityAmount.times(10), { from: USER1 });
+
+      await usdtChainlinkOracle.setPrice(price);
+      await usdtPool.updateCompoundRate(false);
+
+      await defiCore.addLiquidity(usdtKey, amountToBorrow.times(20), { from: USER2 });
+
+      await prtReentrancy.borrowFor(usdtKey, amountToBorrow.times(11), USER1, { from: USER1 });
+
+      let amountToRepayBorrow = amountToBorrow;
+      await prtReentrancy.repayBorrow(usdtKey, amountToRepayBorrow, false, { from: USER1 });
+      await mine(100);
+      let reason = "ReentrancyGuard: reentrant call";
+      await truffleAssert.reverts(prtReentrancy.mintPRT({ from: USER1 }), reason);
     });
 
     it("should successfully mint if user hasn't minted the PRT yet and fullfilled the requrements", async () => {
@@ -606,6 +646,26 @@ describe("PRT", () => {
 
       await defiCore.liquidation(USER1, daiKey, usdtKey, liquidateAmount, { from: USER2 });
       assert.isFalse(await prt.hasValidPRT(USER1));
+    });
+  });
+
+  describe("prtInitialize()", () => {
+    it("should fail if called after initilizing", async () => {
+      let reason = "Initializable: contract is already initialized";
+      await truffleAssert.reverts(
+        prt.prtInitialize("Platform Reputation Token", "PRT", [
+          [1000000000000, 100],
+          [300000000000, 100],
+        ]),
+        reason
+      );
+    });
+  });
+
+  describe("setDependencies()", () => {
+    it("should fail if called not by an injector", async () => {
+      let reason = "Dependant: Not an injector";
+      await truffleAssert.reverts(prt.setDependencies(registry.address), reason);
     });
   });
 });
