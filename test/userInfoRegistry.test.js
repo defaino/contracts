@@ -819,8 +819,8 @@ describe("UserInfoRegistry", () => {
       const result = await userInfoRegistry.getUsersLiquidiationInfo([USER3, USER4]);
       let expectedMainInfos = [
         [daiKey, tokens[1].address],
+        [usdtKey, tokens[3].address],
         [wEthKey, tokens[2].address],
-        ["0x0", ZERO_ADDR],
       ];
 
       for (let i = 0; i < result[0].sypplyPoolsInfo.length; i++) {
@@ -828,8 +828,8 @@ describe("UserInfoRegistry", () => {
       }
 
       expectedMainInfos = [
+        [usdtKey, tokens[3].address],
         [wEthKey, tokens[2].address],
-        ["0x0", ZERO_ADDR],
         ["0x0", ZERO_ADDR],
       ];
 

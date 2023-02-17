@@ -2,7 +2,7 @@
 pragma solidity 0.8.17;
 
 /**
- * This is a Platform Reputation Token ("PRT) contract. The token grants special conditions for its owner: wider range of collateral assets, higher collateralization ratios.
+ * This is a Platform Reputation Token (PRT) contract. The token grants special conditions for its owner: wider range of collateral assets, higher collateralization ratios.
  * In order to mint a token user must meet the requirements on minimum supply and borrow amount together with the minimum time period that must pass after the actions mentioned previously.
  * The aforementioned requirements are stored in a contract field.
  * It is possible to mint and burn a PRT through this contract
