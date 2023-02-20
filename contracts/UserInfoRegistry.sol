@@ -17,6 +17,8 @@ import "./interfaces/ISystemPoolsRegistry.sol";
 import "./interfaces/IBasicPool.sol";
 import "./interfaces/IUserInfoRegistry.sol";
 
+import "./interfaces/IPRT.sol";
+
 import "./libraries/AssetsHelperLibrary.sol";
 import "./libraries/MathHelper.sol";
 
@@ -31,9 +33,12 @@ contract UserInfoRegistry is IUserInfoRegistry, AbstractDependant {
     IAssetParameters internal _assetParameters;
     IRewardsDistribution internal _rewardsDistribution;
     ISystemPoolsRegistry internal _systemPoolsRegistry;
+    IPRT internal _prt;
 
     mapping(address => EnumerableSet.Bytes32Set) internal _supplyAssets;
     mapping(address => EnumerableSet.Bytes32Set) internal _borrowAssets;
+
+    mapping(address => StatsForPRT) internal _userPRTStats;
 
     modifier onlyDefiCore() {
         require(address(_defiCore) == msg.sender, "UserInfoRegistry: Caller not a DefiCore.");
@@ -56,6 +61,8 @@ contract UserInfoRegistry is IUserInfoRegistry, AbstractDependant {
         _systemParameters = ISystemParameters(registry_.getSystemParametersContract());
         _rewardsDistribution = IRewardsDistribution(registry_.getRewardsDistributionContract());
         _systemPoolsRegistry = ISystemPoolsRegistry(registry_.getSystemPoolsRegistryContract());
+
+        _prt = IPRT(registry_.getPRTContract());
     }
 
     function updateAssetsAfterTransfer(
@@ -71,28 +78,53 @@ contract UserInfoRegistry is IUserInfoRegistry, AbstractDependant {
         _supplyAssets[to_].add(assetKey_);
     }
 
-    function updateUserSupplyAssets(
+    function updateUserStatsForPRT(
         address userAddr_,
-        bytes32 assetKey_
+        uint256 repaysCount_,
+        uint256 liquidationsCount_,
+        bool isSupply_
     ) external override onlyDefiCore {
-        _updateUserAssets(
+        if (repaysCount_ > 0) {
+            _userPRTStats[userAddr_].repaysNum += repaysCount_;
+        }
+
+        if (liquidationsCount_ > 0) {
+            _userPRTStats[userAddr_].liquidationsNum += liquidationsCount_;
+        }
+
+        _updateUserPositionStatsForPRT(
             userAddr_,
-            assetKey_,
-            _supplyAssets[userAddr_],
-            IDefiCore(msg.sender).getUserLiquidityAmount
+            isSupply_
+                ? _userPRTStats[userAddr_].supplyStats
+                : _userPRTStats[userAddr_].borrowStats,
+            isSupply_
+                ? IDefiCore(msg.sender).getTotalSupplyBalanceInUSD
+                : IDefiCore(msg.sender).getTotalBorrowBalanceInUSD,
+            isSupply_
+                ? _prt.getPRTParams().supplyParams.minAmountInUSD
+                : _prt.getPRTParams().borrowParams.minAmountInUSD
         );
     }
 
-    function updateUserBorrowAssets(
+    function updateUserAssets(
         address userAddr_,
-        bytes32 assetKey_
+        bytes32 assetKey_,
+        bool isSupply_
     ) external override onlyDefiCore {
         _updateUserAssets(
             userAddr_,
             assetKey_,
-            _borrowAssets[userAddr_],
-            IDefiCore(msg.sender).getUserBorrowedAmount
+            isSupply_ ? _supplyAssets[userAddr_] : _borrowAssets[userAddr_],
+            isSupply_
+                ? IDefiCore(msg.sender).getUserLiquidityAmount
+                : IDefiCore(msg.sender).getUserBorrowedAmount
         );
+    }
+
+    function getUserPRTStats(
+        address userAddr_
+    ) external view override returns (StatsForPRT memory) {
+        return _userPRTStats[userAddr_];
     }
 
     function getUserSupplyAssets(
@@ -376,6 +408,30 @@ contract UserInfoRegistry is IUserInfoRegistry, AbstractDependant {
             .mulWithPrecision(_systemParameters.getLiquidationBoundary());
 
         maxQuantityInUSD_ = Math.min(maxQuantityInUSD_, maxLiquidatePart_);
+    }
+
+    function _updateUserPositionStatsForPRT(
+        address userAddr_,
+        LastSavedUserPosition storage userPosition_,
+        function(address) external view returns (uint256) getUserCurrentUSDAmount_,
+        uint256 minUSDAmountForPRT_
+    ) internal {
+        uint256 userLastSavedUSDAmount_ = userPosition_.amountInUSD;
+        uint256 userCurrentUSDAmount_ = getUserCurrentUSDAmount_(userAddr_);
+
+        if (
+            userLastSavedUSDAmount_ >= minUSDAmountForPRT_ &&
+            userCurrentUSDAmount_ < minUSDAmountForPRT_
+        ) {
+            userPosition_.timestamp = 0;
+        } else if (
+            userLastSavedUSDAmount_ < minUSDAmountForPRT_ &&
+            userCurrentUSDAmount_ >= minUSDAmountForPRT_
+        ) {
+            userPosition_.timestamp = block.timestamp;
+        }
+
+        userPosition_.amountInUSD = userCurrentUSDAmount_;
     }
 
     function _updateUserAssets(

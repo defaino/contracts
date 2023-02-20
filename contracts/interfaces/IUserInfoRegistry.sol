@@ -7,6 +7,27 @@ pragma solidity 0.8.17;
  * information about the user's rewards, the user's basic information, detailed information about deposits and credits
  */
 interface IUserInfoRegistry {
+    /// @notice A saved user eligible position: borrow or supply
+    /// @param amountInUSD USD amount of the eligible supply/borrow action
+    /// @param timestamp timestamp of the corresponding action
+    struct LastSavedUserPosition {
+        uint256 amountInUSD;
+        uint256 timestamp;
+    }
+
+    /// @notice User stats for PRT: eligible deposit and borrow amounts in USD and their timestamps, number of repays and liquidations
+    /// @dev Set only if the user's deposit/borrow amount in USD is more than one set in _prtParams field of the PRT contract
+    /// @param supplyStats element type LastSavedUserPosition structure
+    /// @param borrowStats element type LastSavedUserPosition structure
+    /// @param repaysNum the number of the user debt repayments
+    /// @param liquidationsNum the number of the user's liquidations
+    struct StatsForPRT {
+        LastSavedUserPosition supplyStats;
+        LastSavedUserPosition borrowStats;
+        uint256 liquidationsNum;
+        uint256 repaysNum;
+    }
+
     /// @notice The main pool parameters
     /// @param assetKey the key of the current pool. Can be thought of as a pool identifier
     /// @param assetAddr the address of the pool underlying asset
@@ -159,17 +180,24 @@ interface IUserInfoRegistry {
         uint256 amount_
     ) external;
 
-    /// @notice System function, which is needed to update the list of keys of pools of the user, in which he put a deposit
-    /// @dev Only DefiCore contracts can call this function
-    /// @param userAddr_ the address of the user for whom the pool key list will be updated
-    /// @param assetKey_ the key of the specific liquidity pool
-    function updateUserSupplyAssets(address userAddr_, bytes32 assetKey_) external;
+    function updateUserStatsForPRT(
+        address userAddr_,
+        uint256 repaysCount_,
+        uint256 liquidationsCount_,
+        bool isSupply_
+    ) external;
 
-    /// @notice System function required to update the list of keys of pools the user has taken credit from
+    /// @notice System function, which is needed to update the list of keys of pools of the user, which he put a deposit in or has taken credit from
     /// @dev Only DefiCore contracts can call this function
     /// @param userAddr_ the address of the user for whom the pool key list will be updated
     /// @param assetKey_ the key of the specific liquidity pool
-    function updateUserBorrowAssets(address userAddr_, bytes32 assetKey_) external;
+    /// @param isSupply_ shows whether the user put a deposit or took a credit
+    function updateUserAssets(address userAddr_, bytes32 assetKey_, bool isSupply_) external;
+
+    /// @notice A function that returns a structure with the user stats for PRT
+    /// @param userAddr_  user address
+    /// @return a StatsForPRT structure
+    function getUserPRTStats(address userAddr_) external view returns (StatsForPRT memory);
 
     /// @notice The function that returns for a particular user a list of keys from pools where he has deposited
     /// @param userAddr_ user address

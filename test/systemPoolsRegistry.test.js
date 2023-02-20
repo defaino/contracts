@@ -21,6 +21,7 @@ const LiquidityPool = artifacts.require("LiquidityPool");
 const StablePool = artifacts.require("StablePool");
 const LiquidityPoolMock = artifacts.require("LiquidityPoolMock");
 const PriceManager = artifacts.require("PriceManager");
+const Prt = artifacts.require("PRT");
 const InterestRateLibrary = artifacts.require("InterestRateLibrary");
 const WETH = artifacts.require("WETH");
 const StablePermitToken = artifacts.require("StablePermitTokenMock");
@@ -67,6 +68,7 @@ describe("SystemPoolsRegistry", () => {
   let rewardsDistribution;
   let systemPoolsRegistry;
   let liquidityPoolFactory;
+  let prt;
 
   let rewardsToken;
 
@@ -85,10 +87,17 @@ describe("SystemPoolsRegistry", () => {
 
     const chainlinkOracle = await ChainlinkOracleMock.new(wei(price, priceDecimals), priceDecimals);
 
-    await systemPoolsRegistry.addLiquidityPool(token.address, assetKey, chainlinkOracle.address, symbol, isCollateral);
+    await systemPoolsRegistry.addLiquidityPool(
+      token.address,
+      assetKey,
+      chainlinkOracle.address,
+      symbol,
+      isCollateral,
+      isCollateral
+    );
 
     if (assetKey != nativeTokenKey) {
-      await token.approveArbitraryBacth(
+      await token.approveArbitraryBatch(
         await getLiquidityPoolAddr(assetKey),
         [OWNER, USER1, USER2],
         [tokensAmount, tokensAmount, tokensAmount]
@@ -96,7 +105,7 @@ describe("SystemPoolsRegistry", () => {
     }
 
     await assetParameters.setupAllParameters(assetKey, [
-      [colRatio, reserveFactor, liquidationDiscount, maxUR],
+      [colRatio, colRatio, reserveFactor, liquidationDiscount, maxUR],
       [0, firstSlope, secondSlope, utilizationBreakingPoint],
       [minSupplyDistributionPart, minBorrowDistributionPart],
     ]);
@@ -108,7 +117,13 @@ describe("SystemPoolsRegistry", () => {
     await systemPoolsRegistry.addStablePool(assetAddr, assetKey, ZERO_ADDR);
 
     await assetParameters.setupAnnualBorrowRate(assetKey, annualBorrowRate);
-    await assetParameters.setupMainParameters(assetKey, [colRatio, reserveFactor, liquidationDiscount, maxUR]);
+    await assetParameters.setupMainParameters(assetKey, [
+      colRatio,
+      colRatio,
+      reserveFactor,
+      liquidationDiscount,
+      maxUR,
+    ]);
   }
 
   async function deployRewardsPool(rewardsTokenAddr, symbol) {
@@ -119,11 +134,12 @@ describe("SystemPoolsRegistry", () => {
       rewardsTokenKey,
       chainlinkOracle.address,
       symbol,
+      true,
       true
     );
 
     await assetParameters.setupAllParameters(rewardsTokenKey, [
-      [colRatio, reserveFactor, liquidationDiscount, maxUR],
+      [colRatio, colRatio, reserveFactor, liquidationDiscount, maxUR],
       [0, firstSlope, secondSlope, utilizationBreakingPoint],
       [minSupplyDistributionPart, minBorrowDistributionPart],
     ]);
@@ -150,6 +166,7 @@ describe("SystemPoolsRegistry", () => {
     const _liquidityPoolFactory = await SystemPoolsFactory.new();
     const _liquidityPoolImpl = await LiquidityPool.new();
     const _priceManager = await PriceManager.new();
+    const _prt = await Prt.new();
 
     await registry.__OwnableContractsRegistry_init();
 
@@ -161,6 +178,7 @@ describe("SystemPoolsRegistry", () => {
     await registry.addProxyContract(await registry.SYSTEM_POOLS_REGISTRY_NAME(), _systemPoolsRegistry.address);
     await registry.addProxyContract(await registry.SYSTEM_POOLS_FACTORY_NAME(), _liquidityPoolFactory.address);
     await registry.addProxyContract(await registry.PRICE_MANAGER_NAME(), _priceManager.address);
+    await registry.addProxyContract(await registry.PRT_NAME(), _prt.address);
 
     await registry.addContract(await registry.INTEREST_RATE_LIBRARY_NAME(), interestRateLibrary.address);
 
@@ -179,6 +197,7 @@ describe("SystemPoolsRegistry", () => {
     await registry.injectDependencies(await registry.SYSTEM_POOLS_REGISTRY_NAME());
     await registry.injectDependencies(await registry.SYSTEM_POOLS_FACTORY_NAME());
     await registry.injectDependencies(await registry.PRICE_MANAGER_NAME());
+    await registry.injectDependencies(await registry.PRT_NAME());
 
     await defiCore.defiCoreInitialize();
     await systemPoolsRegistry.systemPoolsRegistryInitialize(_liquidityPoolImpl.address, nativeTokenKey, zeroKey);
@@ -264,6 +283,7 @@ describe("SystemPoolsRegistry", () => {
         daiKey,
         chainlinkOracle.address,
         "DAI",
+        true,
         true
       );
 
@@ -279,7 +299,7 @@ describe("SystemPoolsRegistry", () => {
       const reason = "SystemPoolsRegistry: Unable to add an asset without a key.";
 
       await truffleAssert.reverts(
-        systemPoolsRegistry.addLiquidityPool(TEST_ASSET, toBytes(""), NOTHING, "DAI", false),
+        systemPoolsRegistry.addLiquidityPool(TEST_ASSET, toBytes(""), NOTHING, "DAI", false, false),
         reason
       );
     });
@@ -288,18 +308,18 @@ describe("SystemPoolsRegistry", () => {
       const reason = "SystemPoolsRegistry: Unable to add an asset with a zero address.";
 
       await truffleAssert.reverts(
-        systemPoolsRegistry.addLiquidityPool(ZERO_ADDR, daiKey, NOTHING, "DAI", true),
+        systemPoolsRegistry.addLiquidityPool(ZERO_ADDR, daiKey, NOTHING, "DAI", true, true),
         reason
       );
     });
 
     it("should get exception if try to add a pool to a key that already exists", async () => {
-      await systemPoolsRegistry.addLiquidityPool(TEST_ASSET, daiKey, NOTHING, "DAI", false);
+      await systemPoolsRegistry.addLiquidityPool(TEST_ASSET, daiKey, NOTHING, "DAI", false, false);
 
       const reason = "SystemPoolsRegistry: Liquidity pool with such a key already exists.";
 
       await truffleAssert.reverts(
-        systemPoolsRegistry.addLiquidityPool(TEST_ASSET, daiKey, NOTHING, "DAI", false),
+        systemPoolsRegistry.addLiquidityPool(TEST_ASSET, daiKey, NOTHING, "DAI", false, false),
         reason
       );
     });
@@ -466,7 +486,7 @@ describe("SystemPoolsRegistry", () => {
     });
 
     it("should return correct data", async () => {
-      const liquidityPoolsInfo = await systemPoolsRegistry.getLiquidityPoolsInfo(keys);
+      const liquidityPoolsInfo = await systemPoolsRegistry.getLiquidityPoolsInfo(keys, false);
 
       for (let i = 0; i < liquidityPoolsInfo.length; i++) {
         const currentInfo = liquidityPoolsInfo[i];
@@ -562,7 +582,7 @@ describe("SystemPoolsRegistry", () => {
 
     it("should return correct detailed info", async () => {
       for (let i = 0; i < keys.length; i++) {
-        const detailedInfo = await systemPoolsRegistry.getDetailedLiquidityPoolInfo(keys[i]);
+        const detailedInfo = await systemPoolsRegistry.getDetailedLiquidityPoolInfo(keys[i], false);
 
         const totalBorrowedAmount = borrowAmount.times(i + 1);
         const availableLiquidity = liquidityAmount

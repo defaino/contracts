@@ -4,8 +4,12 @@ const SystemParameters = artifacts.require("SystemParameters");
 const SystemPoolsRegistry = artifacts.require("SystemPoolsRegistry");
 const LiquidityPool = artifacts.require("LiquidityPool");
 const InterestRateLibrary = artifacts.require("InterestRateLibrary");
+const Prt = artifacts.require("PRT");
+
+const { artifacts } = require("hardhat");
 
 const {
+  parsePrtData,
   getAssetKey,
   isStablePoolsAvailable,
   nativeAssetSymbol,
@@ -19,13 +23,17 @@ module.exports = async (deployer, logger) => {
   const systemParameters = await SystemParameters.at(await registry.getSystemParametersContract());
   const systemPoolsRegistry = await SystemPoolsRegistry.at(await registry.getSystemPoolsRegistryContract());
   const interestRateLibrary = await InterestRateLibrary.at(await registry.getInterestRateLibraryContract());
+  const prt = await Prt.at(await registry.getPRTContract());
 
   const rewardsAssetKey = getAssetKey(rewardsAssetSymbol());
   const nativeTokenKey = getAssetKey(nativeAssetSymbol());
 
+  const prtArr = parsePrtData("deploy/data/prtData.json");
+
   console.log();
 
   logger.logTransaction(await defiCore.defiCoreInitialize(), "Init DefiCore");
+  logger.logTransaction(await prt.prtInitialize(prtArr.name, prtArr.symbol, prtArr.prtParams), "Init PRT");
   logger.logTransaction(
     await systemPoolsRegistry.systemPoolsRegistryInitialize(
       (
@@ -66,6 +74,8 @@ module.exports = async (deployer, logger) => {
   );
   logger.logTransaction(await registry.injectDependencies(await registry.PRICE_MANAGER_NAME()), "Inject PriceManager");
 
+  logger.logTransaction(await registry.injectDependencies(await registry.PRT_NAME()), "Inject PRT");
+
   if (isStablePoolsAvailable()) {
     logger.logTransaction(await systemParameters.setupStablePoolsAvailability(true), "Allow add stable pools");
 
@@ -99,7 +109,8 @@ module.exports = async (deployer, logger) => {
     ["SystemPoolsFactory", await registry.getSystemPoolsFactoryContract()],
     ["PriceManager", await registry.getPriceManagerContract()],
     ["InterestRateLibrary", interestRateLibrary.address],
-    ["RewardsToken", rewardsAssetAddress]
+    ["RewardsToken", rewardsAssetAddress],
+    ["PRT", prt.address]
   );
 
   console.log("+--------------------------------------------------------------------------------+");

@@ -21,6 +21,8 @@ contract Registry is IRegistry, OwnableContractsRegistry {
 
     string public constant INTEREST_RATE_LIBRARY_NAME = "INTEREST_RATE_LIBRARY";
 
+    string public constant PRT_NAME = "PLATFORM_REPUTATION_TOKEN";
+
     function transferOwnershipAndInject(
         address newOwner_,
         string[] calldata names_
@@ -76,5 +78,9 @@ contract Registry is IRegistry, OwnableContractsRegistry {
 
     function getInterestRateLibraryContract() external view override returns (address) {
         return getContract(INTEREST_RATE_LIBRARY_NAME);
+    }
+
+    function getPRTContract() external view override returns (address) {
+        return getContract(PRT_NAME);
     }
 }
