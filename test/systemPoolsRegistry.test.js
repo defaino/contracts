@@ -214,6 +214,42 @@ describe("SystemPoolsRegistry", () => {
 
   afterEach("revert", reverter.revert);
 
+  describe("setDependencies()", () => {
+    it("should revert if not called by injector", async () => {
+      let reason = "Dependant: Not an injector";
+      await truffleAssert.reverts(systemPoolsRegistry.setDependencies(registry.address), reason);
+    });
+  });
+
+  describe("systemPoolsRegistryInitialize()", () => {
+    it("should revert if called after the initializing", async () => {
+      const reason = "Initializable: contract is already initialized";
+      const _liquidityPoolImpl = await LiquidityPool.new();
+      await truffleAssert.reverts(
+        systemPoolsRegistry.systemPoolsRegistryInitialize(_liquidityPoolImpl.address, nativeTokenKey, zeroKey),
+        reason
+      );
+    });
+  });
+
+  describe("systemPoolsFactory setDependencies", () => {
+    it("should revert if not called by injector", async () => {
+      let reason = "Dependant: Not an injector";
+      await truffleAssert.reverts(liquidityPoolFactory.setDependencies(registry.address), reason);
+    });
+  });
+
+  describe("systemPoolsFactory newStablePool", () => {
+    it("should revert if not called by SystemPoolsRegistry", async () => {
+      let reason = "SystemPoolsFactory: Caller not a SystemPoolsRegistry.";
+
+      const key = toBytes("NEW_ASSET_KEY");
+      const new_asset = await MockERC20.new("NEW_ASSEY", "NEW_ASSET");
+
+      await truffleAssert.reverts(liquidityPoolFactory.newStablePool(new_asset.address, key), reason);
+    });
+  });
+
   describe("updateRewardsAssetKey", () => {
     it("should correctly update rewards asset key", async () => {
       assert.isTrue(compareKeys(await systemPoolsRegistry.rewardsAssetKey(), zeroKey));
@@ -243,6 +279,23 @@ describe("SystemPoolsRegistry", () => {
       await createLiquidityPool(someKey, "some key", true);
 
       await truffleAssert.reverts(systemPoolsRegistry.updateRewardsAssetKey(someKey), reason);
+    });
+
+    it("should get exception if called by not a system owner", async () => {
+      const reason = "SystemPoolsRegistry: Only system owner can call this function.";
+
+      assert.isTrue(compareKeys(await systemPoolsRegistry.rewardsAssetKey(), zeroKey));
+      assert.equal(await getLiquidityPoolAddr(zeroKey), await systemPoolsRegistry.getRewardsLiquidityPool());
+
+      const newRewardsTokenKey = toBytes("NEWRTK");
+      const newRewardsToken = await createLiquidityPool(newRewardsTokenKey, "NEWRTK", true);
+
+      await systemParameters.setRewardsTokenAddress(newRewardsToken.address);
+
+      await truffleAssert.reverts(
+        systemPoolsRegistry.updateRewardsAssetKey(newRewardsTokenKey, { from: USER1 }),
+        reason
+      );
     });
   });
 
@@ -329,6 +382,17 @@ describe("SystemPoolsRegistry", () => {
 
       await truffleAssert.reverts(liquidityPoolFactory.newLiquidityPool(TEST_ASSET, daiKey, "DAI"), reason);
     });
+
+    it("should get exception if called by not a system owner", async () => {
+      const reason = "SystemPoolsRegistry: Only system owner can call this function.";
+
+      await truffleAssert.reverts(
+        systemPoolsRegistry.addLiquidityPool(TEST_ASSET, daiKey, chainlinkOracle.address, "DAI", true, true, {
+          from: USER1,
+        }),
+        reason
+      );
+    });
   });
 
   describe("addStablePool", () => {
@@ -364,6 +428,15 @@ describe("SystemPoolsRegistry", () => {
       const someKey = toBytes("SOME_KEY");
       await truffleAssert.reverts(systemPoolsRegistry.addStablePool(NOTHING, someKey, NOTHING), reason);
     });
+
+    it("should get exception if called by not a system owner", async () => {
+      const reason = "SystemPoolsRegistry: Only system owner can call this function.";
+
+      await truffleAssert.reverts(
+        systemPoolsRegistry.addStablePool(someToken.address, someKey, NOTHING, { from: USER1 }),
+        reason
+      );
+    });
   });
 
   describe("upgradePoolsImpl", () => {
@@ -392,6 +465,22 @@ describe("SystemPoolsRegistry", () => {
       const reason = "SystemPoolsRegistry: Unsupported pool type.";
 
       await truffleAssert.reverts(systemPoolsRegistry.upgradePoolsImpl(1, NOTHING), reason);
+    });
+    it("should get exception if called by not a system owner", async () => {
+      const reason = "SystemPoolsRegistry: Only system owner can call this function.";
+      await createLiquidityPool(daiKey, "DAI", true);
+      const daiPool = await LiquidityPool.at(await getLiquidityPoolAddr(daiKey));
+
+      const newImplementation = await LiquidityPoolMock.new();
+
+      await truffleAssert.reverts(
+        (await LiquidityPoolMock.at(daiPool.address)).getNormalizedAmount(10, 10, 10, 50, true)
+      );
+
+      await truffleAssert.reverts(
+        systemPoolsRegistry.upgradePoolsImpl(0, newImplementation.address, { from: USER1 }),
+        reason
+      );
     });
   });
 
@@ -454,6 +543,34 @@ describe("SystemPoolsRegistry", () => {
       const reason = "Dependant: Not an injector";
 
       await truffleAssert.reverts(liquidityPools[0].setDependencies(registry.address), reason);
+    });
+
+    it("injectDependenciesToExistingPools() should get exception if called by not a system owner", async () => {
+      const reason = "SystemPoolsRegistry: Only system owner can call this function.";
+
+      const currentPriceManager = await registry.getPriceManagerContract();
+      const newPriceManager = await PriceManager.new();
+
+      for (let i = 0; i < keys.length; i++) {
+        assert.equal(await liquidityPools[i].getPriceManager(), currentPriceManager);
+      }
+
+      await registry.justAddProxyContract(await registry.PRICE_MANAGER_NAME(), newPriceManager.address);
+
+      await truffleAssert.reverts(systemPoolsRegistry.injectDependenciesToExistingPools({ from: USER1 }), reason);
+    });
+    it("injectDependencies() should get exception if called by not a system owner", async () => {
+      const reason = "SystemPoolsRegistry: Only system owner can call this function.";
+      const currentPriceManager = await registry.getPriceManagerContract();
+      const newPriceManager = await PriceManager.new();
+
+      for (let i = 0; i < keys.length; i++) {
+        assert.equal(await liquidityPools[i].getPriceManager(), currentPriceManager);
+      }
+
+      await registry.justAddProxyContract(await registry.PRICE_MANAGER_NAME(), newPriceManager.address);
+
+      await truffleAssert.reverts(systemPoolsRegistry.injectDependencies(2, 5, { from: USER1 }), reason);
     });
   });
 

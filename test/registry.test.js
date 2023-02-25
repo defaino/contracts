@@ -111,6 +111,21 @@ describe("Registry", async () => {
         reason
       );
     });
+
+    it("should get exception if new owner is zero address", async () => {
+      const reason = "Registry: new owner is the zero address";
+
+      await truffleAssert.reverts(
+        registry.transferOwnershipAndInject(ZERO_ADDR, [
+          await registry.ASSET_PARAMETERS_NAME(),
+          await registry.DEFI_CORE_NAME(),
+          await registry.REWARDS_DISTRIBUTION_NAME(),
+          await registry.SYSTEM_PARAMETERS_NAME(),
+          await registry.SYSTEM_POOLS_REGISTRY_NAME(),
+        ]),
+        reason
+      );
+    });
   });
 
   describe("renounceOwnership()", () => {

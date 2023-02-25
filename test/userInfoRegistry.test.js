@@ -264,6 +264,20 @@ describe("UserInfoRegistry", () => {
 
   afterEach("revert", reverter.revert);
 
+  describe("updateUserStatsForPRT()", () => {
+    it("should revert if called direcly and not by defiCore", async () => {
+      let reason = "UserInfoRegistry: Caller not a DefiCore.";
+      await truffleAssert.reverts(userInfoRegistry.updateUserStatsForPRT(USER1, 0, 0, true), reason);
+    });
+  });
+
+  describe("setDependencies", () => {
+    it("should revert if not called by injector", async () => {
+      let reason = "Dependant: Not an injector";
+      await truffleAssert.reverts(userInfoRegistry.setDependencies(registry.address), reason);
+    });
+  });
+
   describe("getUserPRTStats", () => {
     it("PRTStats should be set correctly after suppy, borrow, repay and liqudiation", async () => {
       const liquidityAmount = wei(10000);
@@ -447,6 +461,24 @@ describe("UserInfoRegistry", () => {
       );
       assert.equal(userMainInfo.totalBorrowBalanceInUSD.toString(), totalBorrowBalanceInUSD.toString());
       assert.equal(userMainInfo.borrowLimitInUSD.toString(), borrowLimitInUSD.toString());
+      assert.equal(
+        userMainInfo.borrowLimitUsed.toString(),
+        totalBorrowBalanceInUSD.times(getPercentage100()).idiv(borrowLimitInUSD).toFixed()
+      );
+    });
+
+    it("should return correct user main info if user hasn't borrowed yet", async () => {
+      const maxBorrowAmount = await defiCore.getMaxToBorrow(USER1, daiKey);
+
+      let userMainInfo = await userInfoRegistry.getUserMainInfo(USER1);
+
+      let totalBorrowBalanceInUSD = convertToUSD(maxBorrowAmount);
+      let borrowLimitInUSD = convertToBorrowLimit(liquidityAmount);
+
+      assert.equal(userMainInfo.userCurrencyBalance.toString(), toBN(await web3.eth.getBalance(USER1)).toFixed());
+      assert.equal(userMainInfo.totalSupplyBalanceInUSD.toString(), 0);
+      assert.equal(userMainInfo.totalBorrowBalanceInUSD.toString(), 0);
+      assert.equal(userMainInfo.borrowLimitInUSD.toString(), 0);
       assert.equal(
         userMainInfo.borrowLimitUsed.toString(),
         totalBorrowBalanceInUSD.times(getPercentage100()).idiv(borrowLimitInUSD).toFixed()

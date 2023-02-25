@@ -250,6 +250,7 @@ describe("DefiCore", async () => {
     await createLiquidityPool(nativeTokenKey, tokens[4], "BNB", true);
 
     nativePool = await LiquidityPool.at(await getLiquidityPoolAddr(nativeTokenKey));
+
     daiPool = await LiquidityPool.at(await getLiquidityPoolAddr(daiKey));
     wEthPool = await LiquidityPool.at(await getLiquidityPoolAddr(wEthKey));
     usdtPool = await LiquidityPool.at(await getLiquidityPoolAddr(usdtKey));
@@ -265,6 +266,20 @@ describe("DefiCore", async () => {
   });
 
   afterEach("revert", reverter.revert);
+
+  describe("defiCoreInitialize", () => {
+    it("should revert if called after the initializing", async () => {
+      const reason = "Initializable: contract is already initialized";
+      await truffleAssert.reverts(defiCore.defiCoreInitialize(), reason);
+    });
+  });
+
+  describe("setDependencies", () => {
+    it("should revert if not called by injector", async () => {
+      let reason = "Dependant: Not an injector";
+      await truffleAssert.reverts(defiCore.setDependencies(registry.address), reason);
+    });
+  });
 
   describe("getTotalSupplyBalanceInUSD", () => {
     const liquidityAmount = wei(100);
@@ -659,6 +674,12 @@ describe("DefiCore", async () => {
       const reason = "DefiCore: Asset is blocked for collateral.";
       await truffleAssert.reverts(defiCore.updateCollateral(usdtKey, true, { from: USER1 }), reason);
     });
+
+    it("should get exception if defiCore is paused", async () => {
+      const reason = "Pausable: paused";
+      await defiCore.pause();
+      await truffleAssert.reverts(defiCore.updateCollateral(usdtKey, true, { from: USER1 }), reason);
+    });
   });
 
   describe("addLiquidity", () => {
@@ -739,6 +760,20 @@ describe("DefiCore", async () => {
     const withdrawTime = startTime.times(2);
     const price = toBN(100);
 
+    it("should get an exception if user tries to withdraw liquidity while defiCore is paused", async () => {
+      await setNextBlockTime(startTime.toNumber());
+      await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
+
+      assert.equal((await defiCore.getUserLiquidityAmount(USER1, daiKey)).toString(), liquidityAmount.toString());
+      assert.equal((await tokens[1].balanceOf(USER1)).toString(), tokensAmount.minus(liquidityAmount).toString());
+
+      await setNextBlockTime(withdrawTime.toNumber());
+
+      await defiCore.pause();
+      const reason = "Pausable: paused";
+
+      await truffleAssert.reverts(defiCore.withdrawLiquidity(daiKey, amountToWithdraw, false, { from: USER1 }), reason);
+    });
     it("should correctly withdraw liquidity from the pool", async () => {
       await setNextBlockTime(startTime.toNumber());
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
@@ -1192,6 +1227,20 @@ describe("DefiCore", async () => {
       const reason = "DefiCore: Zero amount cannot be repaid.";
       await truffleAssert.reverts(defiCore.repayBorrow(daiKey, 0, false, { from: USER1 }), reason);
     });
+
+    it("should get exception if defiCore is paused", async () => {
+      const reason = "Pausable: paused";
+
+      await setNextBlockTime(startTime.times(100).toNumber());
+
+      const currentNormalizedAmount = (await wEthPool.borrowInfos(USER1)).normalizedAmount;
+
+      await wEthPool.updateCompoundRate(false);
+
+      await defiCore.pause();
+
+      await truffleAssert.reverts(defiCore.repayBorrow(wEthKey, repayBorrowAmount, false, { from: USER1 }), reason);
+    });
   });
 
   describe("liquidation", () => {
@@ -1381,6 +1430,22 @@ describe("DefiCore", async () => {
         reason
       );
     });
+
+    it("should get exception if defiCore is paused", async () => {
+      const reason = "Pausable: paused";
+
+      await defiCore.addLiquidity(usdtKey, liquidityAmount, { from: USER1 });
+      const price = toBN(46);
+
+      await daiChainlinkOracle.setPrice(price.times(priceDecimals));
+      await usdtChainlinkOracle.setPrice(price.times(priceDecimals));
+
+      await defiCore.pause();
+      await truffleAssert.reverts(
+        defiCore.liquidation(USER1, daiKey, wEthKey, liquidateAmount, { from: USER2 }),
+        reason
+      );
+    });
   });
 
   describe("claimDistributionRewards", () => {
@@ -1517,7 +1582,7 @@ describe("DefiCore", async () => {
     it("should get exception if rewards token doesn't set", async () => {
       const reason = "DefiCore: Unable to claim distribution rewards.";
 
-      await truffleAssert.reverts(defiCore.claimDistributionRewards([], true, { from: USER1 }), reason);
+      await truffleAssert.reverts(defiCore.claimDistributionRewards([rewardsTokenKey], true, { from: USER1 }), reason);
     });
 
     it("should get exception if contract balance less than claim amount", async () => {
@@ -1540,6 +1605,22 @@ describe("DefiCore", async () => {
       await systemPoolsRegistry.updateRewardsAssetKey(rewardsTokenKey);
 
       const reason = "DefiCore: Nothing to claim.";
+
+      await truffleAssert.reverts(defiCore.claimDistributionRewards([], true, { from: USER1 }), reason);
+    });
+
+    it("should get exception if defiCore is paused", async () => {
+      const reason = "Pausable: paused";
+
+      await systemParameters.setRewardsTokenAddress(rewardsToken.address);
+      await systemPoolsRegistry.updateRewardsAssetKey(rewardsTokenKey);
+      await rewardsDistribution.setupRewardsPerBlockBatch([daiKey, wEthKey, usdtKey], [wei(2), oneToken, wei(5)]);
+
+      await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
+
+      await mine(499);
+
+      await defiCore.pause();
 
       await truffleAssert.reverts(defiCore.claimDistributionRewards([], true, { from: USER1 }), reason);
     });
@@ -1579,6 +1660,18 @@ describe("DefiCore", async () => {
 
       await truffleAssert.reverts(
         defiCore.approveToDelegateBorrow(daiKey, borrowAmount, USER2, borrowAmount, { from: USER1 }),
+        reason
+      );
+    });
+
+    it("should get exception if defiCore is paused", async () => {
+      const reason = "Pausable: paused";
+      await defiCore.pause();
+
+      amountToBorrow = wei(100);
+
+      await truffleAssert.reverts(
+        defiCore.approveToDelegateBorrow(wEthKey, amountToBorrow, USER2, 0, { from: USER1 }),
         reason
       );
     });
@@ -1660,6 +1753,18 @@ describe("DefiCore", async () => {
       const reason = "DefiCore: Pool is freeze for borrow operations.";
       await truffleAssert.reverts(defiCore.delegateBorrow(wEthKey, borrowAmount, USER1, { from: USER2 }), reason);
     });
+
+    it("should get exception if defiCore is paused", async () => {
+      const reason = "Pausable: paused";
+
+      await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER2 });
+
+      await wEthPool.updateCompoundRate(false);
+
+      await defiCore.pause();
+
+      await truffleAssert.reverts(defiCore.delegateBorrow(wEthKey, borrowAmount, USER1, { from: USER2 }), reason);
+    });
   });
 
   describe("delegateRepayBorrow", () => {
@@ -1733,6 +1838,23 @@ describe("DefiCore", async () => {
     it("should get exception if repay borrow amount is zero", async () => {
       const reason = "DefiCore: Zero amount cannot be repaid.";
       await truffleAssert.reverts(defiCore.delegateRepayBorrow(wEthKey, 0, USER1, { from: USER2 }), reason);
+    });
+
+    it("should get exception if defiCore is paused", async () => {
+      const reason = "Pausable: paused";
+
+      await setNextBlockTime(startTime.times(100).toNumber());
+
+      const currentNormalizedAmount = toBN((await wEthPool.borrowInfos(USER1)).normalizedAmount);
+
+      await wEthPool.updateCompoundRate(false);
+
+      await defiCore.pause();
+
+      await truffleAssert.reverts(
+        defiCore.delegateRepayBorrow(wEthKey, repayBorrowAmount, USER1, false, { from: USER2 }),
+        reason
+      );
     });
   });
 
@@ -1813,6 +1935,14 @@ describe("DefiCore", async () => {
 
       const reason = "DefiCore: Pool is freeze for borrow operations.";
       await truffleAssert.reverts(defiCore.borrowFor(wEthKey, borrowAmount, USER2, { from: USER1 }), reason);
+    });
+  });
+
+  describe("updateCompoundRate", () => {
+    it("should get exception if defiCore is pausedd", async () => {
+      const reason = "Pausable: paused";
+      await defiCore.pause();
+      await truffleAssert.reverts(defiCore.updateCompoundRate(daiKey, true), reason);
     });
   });
 
@@ -2189,10 +2319,11 @@ describe("DefiCore", async () => {
       await defiCore.borrowFor(daiKey, borrowAmount, USER1, { from: USER1 });
     });
 
-    it("should get exception if call by non system owner", async () => {
+    it("should get exception if called by not a system owner", async () => {
       const reason = "DefiCore: Only system owner can call this function.";
 
       await truffleAssert.reverts(defiCore.pause({ from: USER1 }), reason);
+      await truffleAssert.reverts(defiCore.unpause({ from: USER1 }), reason);
     });
   });
 });

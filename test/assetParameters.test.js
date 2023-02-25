@@ -59,6 +59,7 @@ describe("AssetParameters", () => {
   let USER2;
   let NOTHING;
   let TEST_ASSET;
+  let TEST_ASSET1;
 
   let systemParameters;
   let assetParameters;
@@ -126,6 +127,7 @@ describe("AssetParameters", () => {
     USER2 = await accounts(3);
     NOTHING = await accounts(8);
     TEST_ASSET = await accounts(9);
+    TEST_ASSET1 = await accounts(10);
 
     const interestRateLibrary = await InterestRateLibrary.at(await getInterestRateLibraryAddr());
     rewardsToken = await MockERC20.new("MockRTK", "RTK");
@@ -221,6 +223,14 @@ describe("AssetParameters", () => {
       assert.equal(result2, false);
     });
 
+    it("should correctly return whether the asset is collateral for users with PRT", async () => {
+      const result1 = await assetParameters.isAvailableAsCollateral(daiKey, true);
+      const result2 = await assetParameters.isAvailableAsCollateral(wEthKey, true);
+
+      assert.equal(result1, true);
+      assert.equal(result2, false);
+    });
+
     it("should correctly return is asset collateral after changes", async () => {
       await assetParameters.enableCollateral(wEthKey, false);
       const result2 = await assetParameters.isAvailableAsCollateral(wEthKey, false);
@@ -239,6 +249,61 @@ describe("AssetParameters", () => {
       assert.equal(toBN(params.firstSlope).toString(), firstSlope.toString());
       assert.equal(toBN(params.secondSlope).toString(), secondSlope.toString());
       assert.equal(toBN(params.utilizationBreakingPoint).toString(), utilizationBreakingPoint.toString());
+    });
+  });
+
+  describe("getMainPoolParams", () => {
+    it("should return correct main pool params", async () => {
+      await createLiquidityPool(daiKey, "DAI", true);
+
+      const params = await assetParameters.getMainPoolParams(daiKey);
+
+      assert.equal(toBN(params.collateralizationRatio).toString(), colRatio.toString());
+      assert.equal(toBN(params.collateralizationRatioWithPRT).toString(), colRatio.toString());
+      assert.equal(toBN(params.reserveFactor).toString(), reserveFactor.toString());
+      assert.equal(toBN(params.liquidationDiscount).toString(), liquidationDiscount.toString());
+      assert.equal(toBN(params.maxUtilizationRatio).toString(), maxUR.toString());
+    });
+  });
+
+  describe("setDependencies", () => {
+    it("should revert if not called by injector", async () => {
+      let reason = "Dependant: Not an injector";
+      await truffleAssert.reverts(assetParameters.setDependencies(registry.address), reason);
+    });
+  });
+
+  describe("setupAllParameters", () => {
+    it("should get exception if called not by systemOwner", async () => {
+      const reason = "AssetParameters: Only system owner can call this function.";
+
+      await truffleAssert.reverts(
+        assetParameters.setupAllParameters(
+          stableKey,
+          [
+            [colRatio, colRatio, reserveFactor, liquidationDiscount, maxUR],
+            [0, firstSlope, secondSlope, utilizationBreakingPoint],
+            [minSupplyDistributionPart, minBorrowDistributionPart],
+          ],
+          { from: USER2 }
+        ),
+        reason
+      );
+    });
+
+    it("should get exception if called with a non-existent assetKey", async () => {
+      const stableKey1 = toBytes("NONEXISTENT");
+
+      const reason = "AssetParameters: Asset doesn't exist.";
+
+      await truffleAssert.reverts(
+        assetParameters.setupAllParameters(stableKey1, [
+          [colRatio, colRatio, reserveFactor, liquidationDiscount, maxUR],
+          [0, firstSlope, secondSlope, utilizationBreakingPoint],
+          [minSupplyDistributionPart, minBorrowDistributionPart],
+        ]),
+        reason
+      );
     });
   });
 
@@ -302,7 +367,7 @@ describe("AssetParameters", () => {
       await systemPoolsRegistry.addLiquidityPool(TEST_ASSET, daiKey, NOTHING, "DAI", false, false);
     });
 
-    it("should correctly freeze the asset", async () => {
+    it("should correctly enable the asset as a collateral", async () => {
       const result = await assetParameters.enableCollateral(daiKey, false);
 
       assert.equal(result.receipt.logs[0].event, "CollateralParamUpdated");
@@ -311,8 +376,27 @@ describe("AssetParameters", () => {
       assert.equal(result.receipt.logs[0].args.isCollateral, true);
     });
 
-    it("should get exception if not owner try to change collateral status", async () => {
-      await truffleAssert.reverts(assetParameters.enableCollateral(daiKey, false, { from: SOMEBODY }));
+    it("should correctly enable the asset as a collateral for the user with PRT", async () => {
+      const result = await assetParameters.enableCollateral(daiKey, true);
+
+      assert.equal(result.receipt.logs[0].event, "CollateralParamUpdated");
+
+      assert.equal(fromBytes(result.receipt.logs[0].args.assetKey), "DAI");
+      assert.equal(result.receipt.logs[0].args.isCollateral, true);
+    });
+
+    it("should get exception if called not by systemOwner", async () => {
+      const reason = "AssetParameters: Only system owner can call this function.";
+
+      await truffleAssert.reverts(assetParameters.enableCollateral(daiKey, false, { from: USER2 }), reason);
+    });
+
+    it("should get exception if called with a non-existent assetKey", async () => {
+      const stableKey1 = toBytes("NONEXISTENT");
+
+      const reason = "AssetParameters: Asset doesn't exist.";
+
+      await truffleAssert.reverts(assetParameters.enableCollateral(stableKey1, false), reason);
     });
   });
 
@@ -404,6 +488,28 @@ describe("AssetParameters", () => {
         reason
       );
     });
+
+    it("should get exception if called not by systemOwner", async () => {
+      const reason = "AssetParameters: Only system owner can call this function.";
+
+      await truffleAssert.reverts(
+        assetParameters.setupInterestRateModel(daiKey, [0, firstSlope, secondSlope, utilizationBreakingPoint], {
+          from: USER2,
+        }),
+        reason
+      );
+    });
+
+    it("should get exception if called with a non-existent assetKey", async () => {
+      const stableKey1 = toBytes("NONEXISTENT");
+
+      const reason = "AssetParameters: Asset doesn't exist.";
+
+      await truffleAssert.reverts(
+        assetParameters.setupInterestRateModel(stableKey1, [0, firstSlope, secondSlope, utilizationBreakingPoint]),
+        reason
+      );
+    });
   });
 
   describe("setupMainParameters", () => {
@@ -421,6 +527,7 @@ describe("AssetParameters", () => {
       ]);
 
       assert.equal((await assetParameters.getColRatio(daiKey, false)).toString(), colRatio.toString());
+      assert.equal((await assetParameters.getColRatio(daiKey, true)).toString(), colRatio.toString());
       assert.equal((await assetParameters.getReserveFactor(daiKey)).toString(), reserveFactor.toString());
       assert.equal((await assetParameters.getLiquidationDiscount(daiKey)).toString(), liquidationDiscount.toString());
       assert.equal((await assetParameters.getMaxUtilizationRatio(daiKey)).toString(), maxUR.toString());
@@ -495,6 +602,33 @@ describe("AssetParameters", () => {
         reason
       );
     });
+
+    it("should get exception if called not by systemOwner", async () => {
+      const reason = "AssetParameters: Only system owner can call this function.";
+      await truffleAssert.reverts(
+        assetParameters.setupMainParameters(daiKey, [colRatio, colRatio, reserveFactor, liquidationDiscount, maxUR], {
+          from: USER2,
+        }),
+        reason
+      );
+    });
+
+    it("should get exception if called with a non-existent assetKey", async () => {
+      const stableKey1 = toBytes("NONEXISTENT");
+
+      const reason = "AssetParameters: Asset doesn't exist.";
+
+      await truffleAssert.reverts(
+        assetParameters.setupMainParameters(stableKey1, [
+          colRatio,
+          colRatio,
+          reserveFactor,
+          liquidationDiscount,
+          maxUR,
+        ]),
+        reason
+      );
+    });
   });
 
   describe("setupDistributionsMinimums", () => {
@@ -536,6 +670,28 @@ describe("AssetParameters", () => {
         reason
       );
     });
+
+    it("should get exception if called not by systemOwner", async () => {
+      const reason = "AssetParameters: Only system owner can call this function.";
+
+      await truffleAssert.reverts(
+        assetParameters.setupDistributionsMinimums(daiKey, [minSupplyDistributionPart, minBorrowDistributionPart], {
+          from: USER2,
+        }),
+        reason
+      );
+    });
+
+    it("should get exception if called with a non-existent assetKey", async () => {
+      const stableKey1 = toBytes("NONEXISTENT");
+
+      const reason = "AssetParameters: Asset doesn't exist.";
+
+      await truffleAssert.reverts(
+        assetParameters.setupDistributionsMinimums(stableKey1, [minSupplyDistributionPart, minBorrowDistributionPart]),
+        reason
+      );
+    });
   });
 
   describe("setupAnnualBorrowRate", () => {
@@ -550,6 +706,16 @@ describe("AssetParameters", () => {
       await assetParameters.setupAnnualBorrowRate(stableKey, annualBorrowRate);
 
       assert.equal((await assetParameters.getAnnualBorrowRate(stableKey)).toString(), annualBorrowRate.toString());
+    });
+
+    it("should correctly set annual rate for pool", async () => {
+      const testAssetKey = toBytes("testAsset");
+
+      await systemPoolsRegistry.addStablePool(TEST_ASSET1, testAssetKey, ZERO_ADDR);
+
+      await assetParameters.setupAnnualBorrowRate(testAssetKey, annualBorrowRate);
+
+      assert.equal((await assetParameters.getAnnualBorrowRate(testAssetKey)).toString(), annualBorrowRate.toString());
     });
 
     it("should get exception if stable pools unavailable", async () => {
@@ -572,6 +738,22 @@ describe("AssetParameters", () => {
       const reason = "AssetParameters: Annual borrow rate is higher than possible.";
 
       await truffleAssert.reverts(assetParameters.setupAnnualBorrowRate(stableKey, newRate), reason);
+    });
+
+    it("should get exception if called not by systemOwner", async () => {
+      const reason = "AssetParameters: Only system owner can call this function.";
+
+      await truffleAssert.reverts(
+        assetParameters.setupAnnualBorrowRate(stableKey, annualBorrowRate, { from: USER2 }),
+        reason
+      );
+    });
+
+    it("should get exception if called with a non-existent assetKey", async () => {
+      const stableKey1 = toBytes("NONEXISTENT");
+      const reason = "AssetParameters: Asset doesn't exist.";
+
+      await truffleAssert.reverts(assetParameters.setupAnnualBorrowRate(stableKey1, annualBorrowRate), reason);
     });
   });
 

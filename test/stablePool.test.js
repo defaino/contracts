@@ -3,6 +3,7 @@ const { getCurrentBlockTime, setNextBlockTime } = require("./helpers/block-helpe
 const { getInterestRateLibraryAddr } = require("./helpers/coverage-helper");
 const { toBN, accounts, getPrecision, getPercentage100, wei } = require("../scripts/utils/utils");
 const { ZERO_ADDR } = require("../scripts/utils/constants");
+const truffleAssert = require("truffle-assertions");
 
 const Reverter = require("./helpers/reverter");
 
@@ -228,6 +229,25 @@ describe("StablePool", async () => {
   });
 
   afterEach("revert", reverter.revert);
+
+  describe("StablePermitToken mint()/burn()", () => {
+    it("should revert if called not by a pool", async () => {
+      const reason = "StablePermitToken: Caller not a system pool.";
+      await truffleAssert.reverts(stableToken.mint(USER1, 0), reason);
+    });
+
+    it("should revert if called not by a pool", async () => {
+      const reason = "StablePermitToken: Caller not a system pool.";
+      await truffleAssert.reverts(stableToken.burn(USER1, 0), reason);
+    });
+  });
+
+  describe("stablePoolInitialize", () => {
+    it("should revert if called after the initializing", async () => {
+      const reason = "Initializable: contract is already initialized";
+      await truffleAssert.reverts(stablePool.stablePoolInitialize(stableToken.address, stableKey), reason);
+    });
+  });
 
   describe("getAnnualBorrowRate", () => {
     const liquidityAmount = wei(100);
