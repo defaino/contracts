@@ -7,6 +7,7 @@ const { ZERO_ADDR } = require("../scripts/utils/constants");
 const truffleAssert = require("truffle-assertions");
 const Reverter = require("./helpers/reverter");
 const { assert } = require("chai");
+const { artifacts } = require("hardhat");
 
 const Registry = artifacts.require("Registry");
 const DefiCore = artifacts.require("DefiCore");
@@ -20,6 +21,7 @@ const SystemPoolsFactory = artifacts.require("SystemPoolsFactory");
 const LiquidityPool = artifacts.require("LiquidityPool");
 const StablePool = artifacts.require("StablePool");
 const LiquidityPoolMock = artifacts.require("LiquidityPoolMock");
+const AbstractPool = artifacts.require("AbstractPool");
 const PriceManager = artifacts.require("PriceManager");
 const Prt = artifacts.require("PRT");
 const InterestRateLibrary = artifacts.require("InterestRateLibrary");
@@ -491,6 +493,9 @@ describe("SystemPoolsRegistry", () => {
     const tokens = [];
     const liquidityPools = [];
 
+    const abstractPoolKeys = [toBytes("AbstractPoolKey")];
+    const abstractPools = [];
+
     beforeEach("setup", async () => {
       for (let i = 0; i < keys.length; i++) {
         tokens.push(await createLiquidityPool(keys[i], symbols[i], true));
@@ -498,6 +503,10 @@ describe("SystemPoolsRegistry", () => {
         const currentLiquidityPool = await LiquidityPoolMock.at(await getLiquidityPoolAddr(keys[i]));
         liquidityPools.push(currentLiquidityPool);
       }
+
+      tokens.push(await createLiquidityPool(abstractPoolKeys[0], "ABSTR", true));
+      const currentAbstractPool = await AbstractPool.at(await getLiquidityPoolAddr(abstractPoolKeys[0]));
+      abstractPools.push(currentAbstractPool);
 
       const newImplementation = await LiquidityPoolMock.new();
       await systemPoolsRegistry.upgradePoolsImpl(0, newImplementation.address);
@@ -543,6 +552,12 @@ describe("SystemPoolsRegistry", () => {
       const reason = "Dependant: Not an injector";
 
       await truffleAssert.reverts(liquidityPools[0].setDependencies(registry.address), reason);
+    });
+
+    it("should get exception if try to inject dependencies to abstract pool directly", async () => {
+      const reason = "Dependant: Not an injector";
+
+      await truffleAssert.reverts(abstractPools[0].setDependencies(registry.address, { from: USER2 }), reason);
     });
 
     it("injectDependenciesToExistingPools() should get exception if called by not a system owner", async () => {

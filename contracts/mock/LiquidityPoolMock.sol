@@ -24,4 +24,8 @@ contract LiquidityPoolMock is LiquidityPool {
     function getPriceManager() external view returns (address) {
         return address(_priceManager);
     }
+
+    function abstractPoolInitialize(address assetAddr_, bytes32 assetKey_) external {
+        _abstractPoolInitialize(assetAddr_, assetKey_);
+    }
 }

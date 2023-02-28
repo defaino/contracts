@@ -6,7 +6,7 @@ const { ZERO_ADDR } = require("../scripts/utils/constants");
 
 const truffleAssert = require("truffle-assertions");
 const Reverter = require("./helpers/reverter");
-const { web3, network } = require("hardhat");
+const { web3, network, artifacts } = require("hardhat");
 const { assert } = require("chai");
 
 const Registry = artifacts.require("Registry");
@@ -19,6 +19,7 @@ const SystemPoolsRegistry = artifacts.require("SystemPoolsRegistry");
 const SystemPoolsFactory = artifacts.require("SystemPoolsFactory");
 const LiquidityPool = artifacts.require("LiquidityPool");
 const LiquidityPoolMock = artifacts.require("LiquidityPoolMock");
+const AbstractPool = artifacts.require("AbstractPool");
 const PriceManager = artifacts.require("PriceManager");
 const InterestRateLibrary = artifacts.require("InterestRateLibrary");
 const WETH = artifacts.require("WETH");
@@ -279,7 +280,7 @@ describe("LiquidityPool", () => {
 
   afterEach("revert", reverter.revert);
 
-  describe("nativeToken  depositTo()/withdraw()", () => {
+  describe("nativeToken depositTo()/withdraw()", () => {
     it("should get an exeption if try to deposit/withdraw zero amount, withdrawTo a smart-contract not supporting direct transfers", async () => {
       let reason = "WETH: Zero deposit amount.";
       await truffleAssert.reverts(nativeToken.deposit({ value: 0 }), reason);
@@ -291,6 +292,31 @@ describe("LiquidityPool", () => {
 
       reason = "WETH: Failed to transfer AAA.";
       await truffleAssert.reverts(nativeToken.withdrawTo(registry.address, 1), reason);
+    });
+
+    it("should correctly mint WETH when user directly transfers native currency", async () => {
+      await web3.eth.sendTransaction({
+        to: nativeToken.address,
+        from: USER1,
+        gas: wei(1, 7),
+        value: 1000,
+      });
+
+      assert.equal(await nativeToken.balanceOf(USER1), 1000);
+    });
+  });
+
+  describe("_abstractPoolInitialize()", () => {
+    it("should get an exeption if called after initializing", async () => {
+      const someKey = toBytes("SOME_KEY");
+      let liquidityPoolMock;
+      const chainlinkOracle = await ChainlinkOracleMock.new(wei(100, chainlinkPriceDecimals), chainlinkPriceDecimals);
+      liquidityPoolMock = await LiquidityPoolMock.new(registry.address, chainlinkOracle.address, someKey, "MOCK");
+      let reason = "Initializable: contract is not initializing";
+      await truffleAssert.reverts(
+        liquidityPoolMock.abstractPoolInitialize(nativeToken.address, nativeTokenKey),
+        reason
+      );
     });
   });
 

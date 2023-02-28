@@ -13,7 +13,7 @@ const SystemParameters = artifacts.require("SystemParameters");
 const AssetParameters = artifacts.require("AssetParameters");
 const RewardsDistribution = artifacts.require("RewardsDistributionMock");
 const UserInfoRegistry = artifacts.require("UserInfoRegistry");
-const SystemPoolsRegistry = artifacts.require("SystemPoolsRegistry");
+const SystemPoolsRegistry = artifacts.require("SystemPoolsRegistryMock");
 const SystemPoolsFactory = artifacts.require("SystemPoolsFactory");
 const LiquidityPool = artifacts.require("LiquidityPool");
 const StablePool = artifacts.require("StablePool");
@@ -570,12 +570,36 @@ describe("UserInfoRegistry", () => {
       assert.equal(rewardInfo.userBalanceInUSD.toString(), 0);
     });
 
-    it("should return emtpy structure if rewards token does not set", async () => {
+    it("should return emtpy structure if rewards token was not set", async () => {
       await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
 
       await mine(10);
 
       await defiCore.borrowFor(daiKey, borrowAmount, USER1, { from: USER1 });
+
+      const rewardInfo = await userInfoRegistry.getUserDistributionRewards(USER1);
+
+      assert.equal(rewardInfo.assetAddr, ZERO_ADDR);
+      assert.equal(rewardInfo.distributionReward.toString(), 0);
+      assert.equal(rewardInfo.distributionRewardInUSD.toString(), 0);
+      assert.equal(rewardInfo.userBalance.toString(), 0);
+      assert.equal(rewardInfo.userBalanceInUSD.toString(), 0);
+    });
+
+    it("should return emtpy structure if rewards token pool was not set", async () => {
+      await systemParameters.setRewardsTokenAddress(rewardsToken.address);
+      await systemPoolsRegistry.updateRewardsAssetKey(rewardsTokenKey);
+      await rewardsDistribution.setupRewardsPerBlockBatch([daiKey], [wei(2)]);
+
+      await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
+      await defiCore.borrowFor(daiKey, borrowAmount, USER1, { from: USER1 });
+
+      await mine(500);
+
+      await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
+      await defiCore.borrowFor(daiKey, borrowAmount.idiv(2), USER1, { from: USER1 });
+
+      await systemPoolsRegistry.setRewardsAssetPoolToZero();
 
       const rewardInfo = await userInfoRegistry.getUserDistributionRewards(USER1);
 

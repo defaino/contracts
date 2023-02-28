@@ -31,6 +31,14 @@ contract SystemPoolsRegistryMock is SystemPoolsRegistry {
         poolsInfo[assetKey_] = PoolInfo(assetAddr_, poolType_);
     }
 
+    function setRewardsAssetKeyToZero() external {
+        rewardsAssetKey = bytes32(0);
+    }
+
+    function setRewardsAssetPoolToZero() external {
+        poolsInfo[rewardsAssetKey].poolAddr = address(0);
+    }
+
     function addOracle(bytes32 assetKey_, address assetAddr_, address chainlinkOracle_) external {
         _priceManager.addOracle(assetKey_, assetAddr_, chainlinkOracle_);
     }

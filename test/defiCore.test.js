@@ -15,7 +15,7 @@ const SystemParameters = artifacts.require("SystemParameters");
 const AssetParameters = artifacts.require("AssetParameters");
 const RewardsDistribution = artifacts.require("RewardsDistributionMock");
 const UserInfoRegistry = artifacts.require("UserInfoRegistry");
-const SystemPoolsRegistry = artifacts.require("SystemPoolsRegistry");
+const SystemPoolsRegistry = artifacts.require("SystemPoolsRegistryMock");
 const SystemPoolsFactory = artifacts.require("SystemPoolsFactory");
 const LiquidityPool = artifacts.require("LiquidityPool");
 const StablePool = artifacts.require("StablePool");
@@ -1598,6 +1598,37 @@ describe("DefiCore", async () => {
 
       const reason = "DefiCore: Not enough rewards tokens on the contract.";
       await truffleAssert.reverts(defiCore.claimDistributionRewards([], true, { from: USER1 }), reason);
+    });
+
+    it("should get an exception if rewards asset key is set to zero", async () => {
+      await systemParameters.setRewardsTokenAddress(rewardsToken.address);
+      await systemPoolsRegistry.updateRewardsAssetKey(rewardsTokenKey);
+      await rewardsDistribution.setupRewardsPerBlockBatch([daiKey, wEthKey, usdtKey], [wei(2), oneToken, wei(5)]);
+
+      await systemPoolsRegistry.setRewardsAssetKeyToZero();
+
+      await defiCore.addLiquidity(daiKey, liquidityAmount, { from: USER1 });
+
+      await mine(499);
+
+      const expectedRewards = wei(0);
+
+      const userBalanceBefore = toBN(await rewardsToken.balanceOf(USER1));
+      let reason = "DefiCore: Nothing to claim.";
+      await truffleAssert.reverts(defiCore.claimDistributionRewards([], true, { from: USER1 }), reason);
+
+      const userBalanceAfter = toBN(await rewardsToken.balanceOf(USER1));
+
+      const userInfo = await rewardsDistribution.usersDistributionInfo(daiKey, USER1);
+
+      assert.equal(toBN(userInfo.aggregatedReward).toString(), 0);
+      assert.equal(
+        toBN(userInfo.lastSupplyCumulativeSum).toString(),
+        toBN((await rewardsDistribution.liquidityPoolsInfo(daiKey)).supplyCumulativeSum).toString()
+      );
+      assert.equal(toBN(userInfo.lastBorrowCumulativeSum).toString(), 0);
+
+      assert.equal(userBalanceAfter.toNumber(), userBalanceBefore.toNumber());
     });
 
     it("should get exception if nothing to claim", async () => {
