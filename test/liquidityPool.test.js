@@ -6,7 +6,7 @@ const { ZERO_ADDR } = require("../scripts/utils/constants");
 
 const truffleAssert = require("truffle-assertions");
 const Reverter = require("./helpers/reverter");
-const { web3, network } = require("hardhat");
+const { web3, network, artifacts } = require("hardhat");
 const { assert } = require("chai");
 
 const Registry = artifacts.require("Registry");
@@ -19,6 +19,7 @@ const SystemPoolsRegistry = artifacts.require("SystemPoolsRegistry");
 const SystemPoolsFactory = artifacts.require("SystemPoolsFactory");
 const LiquidityPool = artifacts.require("LiquidityPool");
 const LiquidityPoolMock = artifacts.require("LiquidityPoolMock");
+const AbstractPool = artifacts.require("AbstractPool");
 const PriceManager = artifacts.require("PriceManager");
 const InterestRateLibrary = artifacts.require("InterestRateLibrary");
 const WETH = artifacts.require("WETH");
@@ -279,6 +280,75 @@ describe("LiquidityPool", () => {
 
   afterEach("revert", reverter.revert);
 
+  describe("nativeToken depositTo()/withdraw()", () => {
+    it("should get an exeption if try to deposit/withdraw zero amount, withdrawTo a smart-contract not supporting direct transfers", async () => {
+      let reason = "WETH: Zero deposit amount.";
+      await truffleAssert.reverts(nativeToken.deposit({ value: 0 }), reason);
+
+      reason = "WETH: Zero withdraw amount.";
+      await truffleAssert.reverts(nativeToken.withdraw(0), reason);
+
+      await nativeToken.deposit({ value: 1 });
+
+      reason = "WETH: Failed to transfer AAA.";
+      await truffleAssert.reverts(nativeToken.withdrawTo(registry.address, 1), reason);
+    });
+
+    it("should correctly mint WETH when user directly transfers native currency", async () => {
+      await web3.eth.sendTransaction({
+        to: nativeToken.address,
+        from: USER1,
+        gas: wei(1, 7),
+        value: 1000,
+      });
+
+      assert.equal(await nativeToken.balanceOf(USER1), 1000);
+    });
+  });
+
+  describe("_abstractPoolInitialize()", () => {
+    it("should get an exeption if called after initializing", async () => {
+      const someKey = toBytes("SOME_KEY");
+      let liquidityPoolMock;
+      const chainlinkOracle = await ChainlinkOracleMock.new(wei(100, chainlinkPriceDecimals), chainlinkPriceDecimals);
+      liquidityPoolMock = await LiquidityPoolMock.new(registry.address, chainlinkOracle.address, someKey, "MOCK");
+      let reason = "Initializable: contract is not initializing";
+      await truffleAssert.reverts(
+        liquidityPoolMock.abstractPoolInitialize(nativeToken.address, nativeTokenKey),
+        reason
+      );
+    });
+  });
+
+  describe("approveToBorrow()", () => {
+    it("should get an exeption if called directly not from deficore", async () => {
+      let reason = "AbstractPool: Caller not a DefiCore.";
+      await truffleAssert.reverts(nativePool.approveToBorrow(USER1, 0, USER2, 0), reason);
+    });
+  });
+
+  describe("delegateBorrow()", () => {
+    it("should get an exeption if called directly not from deficore", async () => {
+      let reason = "AbstractPool: Caller not a DefiCore.";
+      await truffleAssert.reverts(nativePool.delegateBorrow(USER1, USER2, 0), reason);
+    });
+  });
+
+  describe("repayBorrowFor()", () => {
+    it("should get an exeption if called directly not from deficore", async () => {
+      let reason = "AbstractPool: Caller not a DefiCore.";
+      await truffleAssert.reverts(nativePool.repayBorrowFor(USER1, USER2, 0, false), reason);
+    });
+  });
+
+  describe("setDependencies", () => {
+    it("should revert if not called by injector", async () => {
+      let reason = "Dependant: Not an injector";
+      await truffleAssert.reverts(nativePool.setDependencies(registry.address, { from: USER2 }), reason);
+      await truffleAssert.reverts(liquidityPool.setDependencies(registry.address, { from: USER2 }), reason);
+    });
+  });
+
   describe("updateCompoundRate", () => {
     const neededTime = toBN(10000000);
     const liquidityAmount = wei(100);
@@ -304,6 +374,13 @@ describe("LiquidityPool", () => {
       await defiCore.addLiquidity(tokenKey, liquidityAmount, { from: USER1 });
 
       assert.equal(toBN(await liquidityPool.getCurrentRate()).toString(), currentRate.toString());
+    });
+  });
+
+  describe("liquidityPoolInitialize", () => {
+    it("should revert if called after the initializing", async () => {
+      const reason = "Initializable: contract is already initialized";
+      await truffleAssert.reverts(liquidityPool.liquidityPoolInitialize(tokens[1].address, tokenKey, "DAI"), reason);
     });
   });
 
@@ -518,6 +595,11 @@ describe("LiquidityPool", () => {
         defiCore.addLiquidity(tokenKey, liquidityAmount, { from: USER2, value: liquidityAmount }),
         reason
       );
+    });
+
+    it("should get exception if a pool called directly, not via the defiCore contract", async () => {
+      const reason = "AbstractPool: Caller not a DefiCore.";
+      await truffleAssert.reverts(liquidityPool.addLiquidity(USER2, liquidityAmount), reason);
     });
   });
 
@@ -770,6 +852,17 @@ describe("LiquidityPool", () => {
       const reason = "LiquidityPool: Not enough lpTokens to withdraw liquidity.";
       await truffleAssert.reverts(
         defiCore.withdrawLiquidity(tokenKey, liquidityAmount.plus(100), false, { from: USER1 }),
+        reason
+      );
+    });
+
+    it("should get exception if a pool called directly, not via the defiCore contract", async () => {
+      const reason = "AbstractPool: Caller not a DefiCore.";
+
+      await setNextBlockTime(withdrawTime.toNumber());
+
+      await truffleAssert.reverts(
+        liquidityPool.withdrawLiquidity(USER1, amountToWithdraw, false, { from: USER1 }),
         reason
       );
     });
@@ -1800,6 +1893,80 @@ describe("LiquidityPool", () => {
         reason
       );
     });
+
+    it("should get exception if called by not a system owner", async () => {
+      const reason = "SystemPoolsRegistry: Only system owner can call this function.";
+
+      await truffleAssert.reverts(
+        systemPoolsRegistry.withdrawReservedFunds(RECIPIENT, tokenKey, 0, true, { from: USER1 }),
+        reason
+      );
+    });
+
+    it("should get exception if called directly and not form systemPoolsregistry", async () => {
+      const reason = "AbstractPool: Caller not a SystemPoolsRegistry.";
+
+      await truffleAssert.reverts(nativePool.withdrawReservedFunds(RECIPIENT, 0, true, { from: USER1 }), reason);
+    });
+
+    it("should get exception if try to withdraw non-existent asset", async () => {
+      const reason = "SystemPoolsRegistry: Pool doesn't exist.";
+
+      const tokenKey1 = toBytes("Token1");
+
+      await truffleAssert.reverts(systemPoolsRegistry.withdrawReservedFunds(RECIPIENT, tokenKey1, 0, true), reason);
+    });
+
+    it("should get exception if try to withdraw zero amount", async () => {
+      const reason = "SystemPoolsRegistry: Amount to withdraw must be greater than zero.";
+
+      await truffleAssert.reverts(systemPoolsRegistry.withdrawReservedFunds(RECIPIENT, tokenKey, 0, false), reason);
+    });
+  });
+
+  describe("withdrawAllReservedFunds", () => {
+    const liquidityAmount = wei(1000);
+    const borrowAmount = wei(850);
+    const someKey = toBytes("SOME_KEY");
+    const startTime = toBN(100000);
+    let RECIPIENT;
+
+    beforeEach("setup", async () => {
+      RECIPIENT = await accounts(5);
+
+      await setNextBlockTime(startTime.toNumber());
+
+      const newTokens = await getTokens(["SOME_KEY"]);
+      await createLiquidityPool(someKey, newTokens[0], "SOME_KEY", true);
+
+      await defiCore.addLiquidity(someKey, liquidityAmount.times(2), { from: USER1 });
+      await defiCore.addLiquidity(tokenKey, liquidityAmount, { from: USER2 });
+
+      await defiCore.borrowFor(tokenKey, borrowAmount, USER1, { from: USER1 });
+
+      await setNextBlockTime(startTime.times(1000).toNumber());
+      await liquidityPool.updateCompoundRate(false);
+
+      await tokens[1].mintArbitrary(USER1, liquidityAmount.times(2), { from: USER1 });
+      await defiCore.repayBorrow(tokenKey, 0, true, { from: USER1 });
+    });
+    it("should correctly withdraw all funds", async () => {
+      const totalReserves = toBN(await liquidityPool.totalReserves());
+
+      await systemPoolsRegistry.withdrawAllReservedFunds(RECIPIENT, 0, 2);
+
+      assert.equal(toBN(await tokens[1].balanceOf(RECIPIENT)).toString(), totalReserves.toString());
+      assert.equal(toBN(await liquidityPool.totalReserves()).toString(), 0);
+    });
+
+    it("should get an exception if called not by systemowner", async () => {
+      const reason = "SystemPoolsRegistry: Only system owner can call this function.";
+
+      await truffleAssert.reverts(
+        systemPoolsRegistry.withdrawAllReservedFunds(RECIPIENT, 0, 2, { from: USER2 }),
+        reason
+      );
+    });
   });
 
   describe("liquidationBorrow", () => {
@@ -2011,6 +2178,15 @@ describe("LiquidityPool", () => {
         liquidityAmount.minus(expectedReceiveAmount).toNumber(),
         oneToken.idiv(1000).toNumber()
       );
+    });
+
+    it("should get exception if a pool called directly, not via the defiCore contract", async () => {
+      const reason = "AbstractPool: Caller not a DefiCore.";
+      const price = toBN(86);
+
+      await tokenChainlinkOracle.setPrice(price.times(priceDecimals));
+
+      await truffleAssert.reverts(liquidityPool.liquidate(USER1, USER2, liquidityAmount), reason);
     });
   });
 

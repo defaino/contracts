@@ -52,6 +52,13 @@ describe("PriceManager", async () => {
 
   afterEach("revert", reverter.revert);
 
+  describe("setDependencies", () => {
+    it("should revert if not called by injector", async () => {
+      let reason = "Dependant: Not an injector";
+      await truffleAssert.reverts(priceManager.setDependencies(registry.address), reason);
+    });
+  });
+
   describe("addOracle", () => {
     it("should correctly add new oracle", async () => {
       await systemPoolsRegistry.setPoolType(wEthKey, 0);

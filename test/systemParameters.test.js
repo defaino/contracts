@@ -1,4 +1,4 @@
-const { accounts, getPrecision } = require("../scripts/utils/utils");
+const { accounts, getPrecision, wei } = require("../scripts/utils/utils");
 const { ZERO_ADDR } = require("../scripts/utils/constants");
 
 const truffleAssert = require("truffle-assertions");
@@ -19,6 +19,7 @@ describe("SystemParameters", () => {
 
   let systemParameters;
   let registry;
+  const minCurrencyAmount = wei(0.1);
 
   before("setup", async () => {
     OWNER = await accounts(0);
@@ -41,6 +42,28 @@ describe("SystemParameters", () => {
 
   afterEach("revert", reverter.revert);
 
+  describe("setDependencies", () => {
+    it("should revert if not called by injector", async () => {
+      let reason = "Dependant: Not an injector";
+      await truffleAssert.reverts(systemParameters.setDependencies(registry.address), reason);
+    });
+  });
+
+  describe("setupMinCurrencyAmount", () => {
+    it("should get exception if called by not a system owner", async () => {
+      const reason = "SystemParameters: Only system owner can call this function.";
+
+      await truffleAssert.reverts(
+        systemParameters.setupMinCurrencyAmount(minCurrencyAmount, { from: SOMEBODY }),
+        reason
+      );
+      await truffleAssert.reverts(
+        systemParameters.setupMinCurrencyAmount(minCurrencyAmount, { from: SOMEBODY }),
+        reason
+      );
+    });
+  });
+
   describe("setRewardsTokenAddress", async () => {
     it("should correctly set rewards token address", async () => {
       const txReceipt = await systemParameters.setRewardsTokenAddress(ZERO_ADDR);
@@ -60,6 +83,13 @@ describe("SystemParameters", () => {
       await systemParameters.setRewardsTokenAddress(NOTHING);
 
       await truffleAssert.reverts(systemParameters.setRewardsTokenAddress(ZERO_ADDR), reason);
+    });
+
+    it("should get exception if called by not a system owner", async () => {
+      const reason = "SystemParameters: Only system owner can call this function.";
+
+      await truffleAssert.reverts(systemParameters.setRewardsTokenAddress(ZERO_ADDR, { from: SOMEBODY }), reason);
+      await truffleAssert.reverts(systemParameters.setRewardsTokenAddress(ZERO_ADDR, { from: SOMEBODY }), reason);
     });
   });
 

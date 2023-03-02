@@ -13,7 +13,7 @@ const SystemParameters = artifacts.require("SystemParameters");
 const AssetParameters = artifacts.require("AssetParameters");
 const RewardsDistribution = artifacts.require("RewardsDistributionMock");
 const UserInfoRegistry = artifacts.require("UserInfoRegistry");
-const SystemPoolsRegistry = artifacts.require("SystemPoolsRegistry");
+const SystemPoolsRegistry = artifacts.require("SystemPoolsRegistryMock");
 const SystemPoolsFactory = artifacts.require("SystemPoolsFactory");
 const LiquidityPool = artifacts.require("LiquidityPool");
 const StablePool = artifacts.require("StablePool");
@@ -281,6 +281,22 @@ describe("RewardsDistribution", () => {
   });
 
   afterEach("revert", reverter.revert);
+
+  describe("setDependencies", () => {
+    it("should revert if not called by injector", async () => {
+      let reason = "Dependant: Not an injector";
+      await truffleAssert.reverts(rewardsDistribution.setDependencies(registry.address), reason);
+    });
+  });
+
+  describe("withdrawUserReward", () => {
+    it("should revert if called directly, not by defiCore or any liquidity pool ", async () => {
+      let reason = "RewardsDistribution: Caller not an eligible contract.";
+
+      daiPool = await LiquidityPool.at(await getLiquidityPoolAddr(daiKey));
+      await truffleAssert.reverts(rewardsDistribution.withdrawUserReward(daiKey, USER1, daiPool.address), reason);
+    });
+  });
 
   describe("getRewardsPerBlock", () => {
     const rewardPerBlock = wei(4);
