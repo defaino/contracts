@@ -344,7 +344,8 @@ describe("LiquidityPool", () => {
   describe("setDependencies", () => {
     it("should revert if not called by injector", async () => {
       let reason = "Dependant: Not an injector";
-      await truffleAssert.reverts(nativePool.setDependencies(registry.address), reason);
+      await truffleAssert.reverts(nativePool.setDependencies(registry.address, { from: USER2 }), reason);
+      await truffleAssert.reverts(liquidityPool.setDependencies(registry.address, { from: USER2 }), reason);
     });
   });
 
