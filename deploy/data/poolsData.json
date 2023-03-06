@@ -1,106 +1,158 @@
 [
-  {
-    "symbol":"RTK",
-    "assetAddr":"0x14e95fEDC5479ebBC936f28659a35db5a8EB0D9F",
-    "chainlinkOracle":"0x0567F2323251f0Aab15c8dFb1967E4e8A7D42aeE",
-    "poolType": "0",
-    "isAvailableAsCollateral":"true",
-    "isAvailableAsCollateralWithPrt":"true",
-    "rewardPerBlock":"0",
-    "mainParams":[
-      "125",
-      "125",
-      "33",
-      "7",
-      "97"
-    ],
-    "interestRateParams":[
-      "0",
-      "5",
-      "100",
-      "70"
-    ],
-    "distributionMinimums":[
-      "10",
-      "10"
-    ]
-  },
-  {
-    "symbol":"WETH",
-    "assetAddr":"0xe1c3bcb66611866060Cd2D4fb2bbA973e62f7789",
-    "chainlinkOracle":"0x9ef1B8c0E4F7dc8bF5719Ea496883DC6401d5b2e",
-    "poolType": "0",
-    "isAvailableAsCollateral":"true",
-    "isAvailableAsCollateralWithPrt":"true",
-    "rewardPerBlock":"0",
-    "mainParams":[
-      "125",
-      "125",
-      "33",
-      "7",
-      "97"
-    ],
-    "interestRateParams":[
-      "0",
-      "5",
-      "100",
-      "70"
-    ],
-    "distributionMinimums":[
-      "10",
-      "10"
-    ]
-  },
-  {
-    "symbol":"DAI",
-    "assetAddr":"0x3203De8408DC9ecC150d52327e53B14d236A6d27",
-    "chainlinkOracle":"0x132d3C0B1D2cEa0BC552588063bdBb210FDeecfA",
-    "poolType": "0",
-    "isAvailableAsCollateral":"true",
-    "isAvailableAsCollateralWithPrt":"true",
-    "rewardPerBlock":"0",
-    "mainParams":[
-      "125",
-      "125",
-      "33",
-      "7",
-      "97"
-    ],
-    "interestRateParams":[
-      "0",
-      "5",
-      "100",
-      "80"
-    ],
-    "distributionMinimums":[
-      "10",
-      "10"
-    ]
-  },
-  {
-    "symbol":"USDC",
-    "assetAddr":"0x07C69a43802298a12b57bA81cF4eEeAAe16FA168",
-    "chainlinkOracle":"0x51597f405303C4377E36123cBc172b13269EA163",
-    "poolType": "0",
-    "isAvailableAsCollateral":"true",
-    "isAvailableAsCollateralWithPrt":"true",
-    "rewardPerBlock":"0",
-    "mainParams":[
-      "125",
-      "125",
-      "33",
-      "7",
-      "97"
-    ],
-    "interestRateParams":[
-      "0",
-      "5",
-      "100",
-      "80"
-    ],
-    "distributionMinimums":[
-      "10",
-      "10"
-    ]
-  }
+    {
+        "symbol": "RTK",
+        "assetAddr": "0x5249CC200Be1AB298c8834EB010a229bB1E9c5cf",
+        "chainlinkOracle": "0xC2AB2FDd21183F75Bff9556c0F5c894F1Fe451C0",
+        "poolType": "0",
+        "isAvailableAsCollateral": "true",
+        "isAvailableAsCollateralWithPrt": "true",
+        "rewardPerBlock": "1",
+        "mainParams": [
+            "125",
+            "125",
+            "10",
+            "7",
+            "97"
+        ],
+        "interestRateParams": [
+            "0",
+            "5",
+            "100",
+            "70"
+        ],
+        "distributionMinimums": [
+            "10",
+            "10"
+        ]
+    },
+    {
+        "symbol": "WETH",
+        "assetAddr": "0x6D3c344dCfE702ad4eE5734085Fe63D6845e5950",
+        "chainlinkOracle": "0xf70051095838E78281cB1f6cAd86EfD169864F65",
+        "poolType": "0",
+        "isAvailableAsCollateral": "true",
+        "isAvailableAsCollateralWithPrt": "true",
+        "rewardPerBlock": "2",
+        "mainParams": [
+            "150",
+            "135",
+            "12",
+            "6",
+            "96"
+        ],
+        "interestRateParams": [
+            "0",
+            "10",
+            "100",
+            "75"
+        ],
+        "distributionMinimums": [
+            "10",
+            "10"
+        ]
+    },
+    {
+        "symbol": "DAI",
+        "assetAddr": "0x14e95fEDC5479ebBC936f28659a35db5a8EB0D9F",
+        "chainlinkOracle": "0xa161127d5A9e3b8fEBabbc3e1BF04367825CB4aa",
+        "poolType": "0",
+        "isAvailableAsCollateral": "true",
+        "isAvailableAsCollateralWithPrt": "true",
+        "rewardPerBlock": "1",
+        "mainParams": [
+            "111",
+            "105",
+            "15",
+            "8",
+            "97"
+        ],
+        "interestRateParams": [
+            "0",
+            "10",
+            "100",
+            "80"
+        ],
+        "distributionMinimums": [
+            "10",
+            "10"
+        ]
+    },
+    {
+        "symbol": "USDC",
+        "assetAddr": "0xe1c3bcb66611866060Cd2D4fb2bbA973e62f7789",
+        "chainlinkOracle": "0x524470E38C42Fd69D0d526EF0668788764d6660C",
+        "poolType": "0",
+        "isAvailableAsCollateral": "true",
+        "isAvailableAsCollateralWithPrt": "true",
+        "rewardPerBlock": "1",
+        "mainParams": [
+            "111",
+            "105",
+            "15",
+            "8",
+            "97"
+        ],
+        "interestRateParams": [
+            "0",
+            "10",
+            "100",
+            "80"
+        ],
+        "distributionMinimums": [
+            "10",
+            "10"
+        ]
+    },
+    {
+        "symbol": "USDT",
+        "assetAddr": "0x07C69a43802298a12b57bA81cF4eEeAAe16FA168",
+        "chainlinkOracle": "0x6945151e6D67658A4Cdf842e04f05a35103d64E3",
+        "poolType": "0",
+        "isAvailableAsCollateral": "false",
+        "isAvailableAsCollateralWithPrt": "true",
+        "rewardPerBlock": "1",
+        "mainParams": [
+            "125",
+            "125",
+            "20",
+            "8",
+            "97"
+        ],
+        "interestRateParams": [
+            "0",
+            "10",
+            "100",
+            "75"
+        ],
+        "distributionMinimums": [
+            "10",
+            "10"
+        ]
+    },
+    {
+        "symbol": "WBTC",
+        "assetAddr": "0x05fB8c1A018142448bC5b994b1A503a48c0b06f3",
+        "chainlinkOracle": "0xd7bF23d3DbeBE82F2FFBc7C899A435A7FFECb06b",
+        "poolType": "0",
+        "isAvailableAsCollateral": "true",
+        "isAvailableAsCollateralWithPrt": "true",
+        "rewardPerBlock": "3",
+        "mainParams": [
+            "150",
+            "145",
+            "12",
+            "6",
+            "96"
+        ],
+        "interestRateParams": [
+            "0",
+            "10",
+            "100",
+            "75"
+        ],
+        "distributionMinimums": [
+            "10",
+            "10"
+        ]
+    }
 ]

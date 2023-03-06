@@ -12,7 +12,6 @@ const UserInfoRegistry = artifacts.require("UserInfoRegistry");
 const PriceManager = artifacts.require("PriceManager");
 const Prt = artifacts.require("PRT");
 
-const { artifacts } = require("hardhat");
 const { isStablePoolsAvailable } = require("./helpers/deployHelper.js");
 
 require("dotenv").config();
@@ -20,7 +19,7 @@ require("dotenv").config();
 module.exports = async (deployer, logger) => {
   let registry;
 
-  if (process.env.REGISTRY === "") {
+  if (!process.env.REGISTRY) {
     await deployer.deploy(Registry);
     registry = await Registry.deployed();
 

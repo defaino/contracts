@@ -6,8 +6,6 @@ const LiquidityPool = artifacts.require("LiquidityPool");
 const InterestRateLibrary = artifacts.require("InterestRateLibrary");
 const Prt = artifacts.require("PRT");
 
-const { artifacts } = require("hardhat");
-
 const {
   parsePrtData,
   getAssetKey,

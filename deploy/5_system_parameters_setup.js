@@ -1,7 +1,7 @@
 const Registry = artifacts.require("Registry");
 const SystemParameters = artifacts.require("SystemParameters");
 
-const { getPrecision, wei } = require("../scripts/utils.js");
+const { getPrecision, wei } = require("../scripts/utils/utils");
 
 module.exports = async (deployer, logger) => {
   const registry = await Registry.deployed();

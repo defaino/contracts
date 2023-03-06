@@ -1,10 +1,14 @@
-[
-    {
-      "name":"Platform Reputation Token",
-      "symbol":"PRT",
-      "prtParams":[
-        [1000000000000, 100],
-        [300000000000, 100]
-      ]
-    }
-]
+{
+  "name": "Platform Reputation Token",
+  "symbol": "PRT",
+  "prtParams": [
+    [
+      "10000000000000000000000",
+      "3600"
+    ],
+    [
+      "3000000000000000000000",
+      "3600"
+    ]
+  ]
+}
