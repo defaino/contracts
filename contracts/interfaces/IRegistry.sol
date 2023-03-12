@@ -6,6 +6,12 @@ pragma solidity 0.8.17;
  * With this contract you can add new contracts, update the implementation of proxy contracts
  */
 interface IRegistry {
+    /// @notice Function for transfeerring the ownership and injecting the dependecies to the contracts
+    /// @dev zero address passed in the newOwner_ argument will trigger the revertion of the function call
+    /// @param newOwner_ new system owner
+    /// @param names_ an array of the contract names to inject dependencies in
+    function transferOwnershipAndInject(address newOwner_, string[] calldata names_) external;
+
     /// @notice Function to get the address of the system owner
     /// @return a system owner address
     function getSystemOwner() external view returns (address);
