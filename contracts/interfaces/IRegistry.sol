@@ -65,4 +65,9 @@ interface IRegistry {
     /// @dev Used in dependency injection mechanism in the system
     /// @return PRT contract address
     function getPRTContract() external view returns (address);
+
+    /// @notice Function to get the address of the RoleManager contract
+    /// @dev Used in dependency injection mechanism in the system
+    /// @return RoleManager contract address
+    function getRoleManagerContract() external view returns (address);
 }

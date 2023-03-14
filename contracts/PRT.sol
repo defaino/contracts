@@ -10,6 +10,7 @@ import "./interfaces/IPRT.sol";
 import "./interfaces/IRegistry.sol";
 import "./interfaces/IDefiCore.sol";
 import "./interfaces/IUserInfoRegistry.sol";
+import "./interfaces/IRoleManager.sol";
 
 import "./common/Globals.sol";
 
@@ -18,11 +19,17 @@ contract PRT is IPRT, ERC721Upgradeable, AbstractDependant, ReentrancyGuardUpgra
     address internal _systemOwnerAddr;
     IDefiCore internal _defiCore;
     IUserInfoRegistry internal _userInfoRegistry;
+    IRoleManager internal _roleManager;
 
     PRTParams internal _prtParams;
 
     modifier onlySystemOwner() {
         require(msg.sender == _systemOwnerAddr, "PRT: Only system owner can call this function");
+        _;
+    }
+
+    modifier onlyHasRoleOrRoleManagerAdmin(bytes32 _role) {
+        _roleManager.hasRoleOrAdmin(_role, msg.sender);
         _;
     }
 
@@ -42,9 +49,12 @@ contract PRT is IPRT, ERC721Upgradeable, AbstractDependant, ReentrancyGuardUpgra
         _systemOwnerAddr = registry_.getSystemOwner();
         _defiCore = IDefiCore(registry_.getDefiCoreContract());
         _userInfoRegistry = IUserInfoRegistry(registry_.getUserInfoRegistryContract());
+        _roleManager = IRoleManager(registry_.getRoleManagerContract());
     }
 
-    function updatePRTParams(PRTParams calldata prtParams_) external override onlySystemOwner {
+    function updatePRTParams(
+        PRTParams calldata prtParams_
+    ) external override onlyHasRoleOrRoleManagerAdmin(PRT_PARAM_UPDATER) {
         _prtParams = prtParams_;
     }
 

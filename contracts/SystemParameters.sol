@@ -5,6 +5,7 @@ import "@dlsl/dev-modules/contracts-registry/AbstractDependant.sol";
 
 import "./interfaces/IRegistry.sol";
 import "./interfaces/ISystemParameters.sol";
+import "./interfaces/IRoleManager.sol";
 
 import "./libraries/PureParameters.sol";
 
@@ -19,6 +20,7 @@ contract SystemParameters is ISystemParameters, AbstractDependant {
     bytes32 public constant MIN_CURRENCY_AMOUNT_KEY = keccak256("MIN_CURRENCY_AMOUNT");
 
     address internal _systemOwnerAddr;
+    IRoleManager internal _roleManager;
 
     mapping(bytes32 => PureParameters.Param) internal _parameters;
 
@@ -30,11 +32,21 @@ contract SystemParameters is ISystemParameters, AbstractDependant {
         _;
     }
 
-    function setDependencies(address contractsRegistry_) external override dependant {
-        _systemOwnerAddr = IRegistry(contractsRegistry_).getSystemOwner();
+    modifier onlyHasRoleOrRoleManagerAdmin(bytes32 _role) {
+        _roleManager.hasRoleOrAdmin(_role, msg.sender);
+        _;
     }
 
-    function setRewardsTokenAddress(address rewardsToken_) external override onlySystemOwner {
+    function setDependencies(address contractsRegistry_) external override dependant {
+        IRegistry registry_ = IRegistry(contractsRegistry_);
+
+        _systemOwnerAddr = registry_.getSystemOwner();
+        _roleManager = IRoleManager(registry_.getRoleManagerContract());
+    }
+
+    function setRewardsTokenAddress(
+        address rewardsToken_
+    ) external override onlyHasRoleOrRoleManagerAdmin(SYSTEM_PARAMETERS_MANAGER) {
         PureParameters.Param memory currentParam_ = _parameters[REWARDS_TOKEN_KEY];
 
         if (PureParameters.paramExists(currentParam_)) {
@@ -49,7 +61,9 @@ contract SystemParameters is ISystemParameters, AbstractDependant {
         emit RewardsTokenUpdated(rewardsToken_);
     }
 
-    function setupLiquidationBoundary(uint256 newValue_) external override onlySystemOwner {
+    function setupLiquidationBoundary(
+        uint256 newValue_
+    ) external override onlyHasRoleOrRoleManagerAdmin(SYSTEM_PARAMETERS_MANAGER) {
         require(
             newValue_ >= PRECISION * 50 && newValue_ <= PRECISION * 80,
             "SystemParameters: The new value of the liquidation boundary is invalid."
@@ -60,7 +74,9 @@ contract SystemParameters is ISystemParameters, AbstractDependant {
         emit LiquidationBoundaryUpdated(newValue_);
     }
 
-    function setupStablePoolsAvailability(bool newValue_) external override onlySystemOwner {
+    function setupStablePoolsAvailability(
+        bool newValue_
+    ) external override onlyHasRoleOrRoleManagerAdmin(SYSTEM_PARAMETERS_MANAGER) {
         _parameters[STABLE_POOLS_AVAILABILITY_KEY] = PureParameters.makeBoolParam(newValue_);
 
         emit StablePoolsAvailabilityUpdated(newValue_);
@@ -68,7 +84,7 @@ contract SystemParameters is ISystemParameters, AbstractDependant {
 
     function setupMinCurrencyAmount(
         uint256 newMinCurrencyAmount_
-    ) external override onlySystemOwner {
+    ) external override onlyHasRoleOrRoleManagerAdmin(SYSTEM_PARAMETERS_MANAGER) {
         _parameters[MIN_CURRENCY_AMOUNT_KEY] = PureParameters.makeUintParam(newMinCurrencyAmount_);
 
         emit MinCurrencyAmountUpdated(newMinCurrencyAmount_);

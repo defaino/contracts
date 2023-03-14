@@ -18,6 +18,9 @@ import "./interfaces/ISystemPoolsRegistry.sol";
 import "./interfaces/IBasicPool.sol";
 import "./interfaces/IPriceManager.sol";
 import "./interfaces/ISystemPoolsFactory.sol";
+import "./interfaces/IRoleManager.sol";
+
+import "./common/Globals.sol";
 
 contract SystemPoolsRegistry is ISystemPoolsRegistry, Initializable, AbstractDependant {
     using Paginator for EnumerableSet.Bytes32Set;
@@ -35,6 +38,7 @@ contract SystemPoolsRegistry is ISystemPoolsRegistry, Initializable, AbstractDep
     IRewardsDistribution internal _rewardsDistribution;
     ISystemPoolsFactory internal _systemPoolsFactory;
     IPriceManager internal _priceManager;
+    IRoleManager internal _roleManager;
     EnumerableSet.Bytes32Set internal _allSupportedAssetKeys;
 
     mapping(bytes32 => PoolInfo) public override poolsInfo;
@@ -46,6 +50,11 @@ contract SystemPoolsRegistry is ISystemPoolsRegistry, Initializable, AbstractDep
             msg.sender == _systemOwnerAddr,
             "SystemPoolsRegistry: Only system owner can call this function."
         );
+        _;
+    }
+
+    modifier onlyHasRoleOrRoleManagerAdmin(bytes32 _role) {
+        _roleManager.hasRoleOrAdmin(_role, msg.sender);
         _;
     }
 
@@ -73,9 +82,12 @@ contract SystemPoolsRegistry is ISystemPoolsRegistry, Initializable, AbstractDep
         _priceManager = IPriceManager(registry_.getPriceManagerContract());
         _rewardsDistribution = IRewardsDistribution(registry_.getRewardsDistributionContract());
         _systemPoolsFactory = ISystemPoolsFactory(registry_.getSystemPoolsFactoryContract());
+        _roleManager = IRoleManager(registry_.getRoleManagerContract());
     }
 
-    function updateRewardsAssetKey(bytes32 newRewardsAssetKey_) external onlySystemOwner {
+    function updateRewardsAssetKey(
+        bytes32 newRewardsAssetKey_
+    ) external onlyHasRoleOrRoleManagerAdmin(SYSTEM_POOLS_MANAGER) {
         require(
             IBasicPool(poolsInfo[newRewardsAssetKey_].poolAddr).assetAddr() ==
                 _systemParameters.getRewardsTokenAddress(),
@@ -88,7 +100,7 @@ contract SystemPoolsRegistry is ISystemPoolsRegistry, Initializable, AbstractDep
     function addPoolsBeacon(
         PoolType poolType_,
         address poolImpl_
-    ) external override onlySystemOwner {
+    ) external override onlyHasRoleOrRoleManagerAdmin(SYSTEM_POOLS_MANAGER) {
         PoolTypeInfo storage _poolTypeInfo = _poolTypesInfo[poolType_];
 
         require(
@@ -106,7 +118,7 @@ contract SystemPoolsRegistry is ISystemPoolsRegistry, Initializable, AbstractDep
         string calldata tokenSymbol_,
         bool isCollateral_,
         bool isCollateralWithPRT_
-    ) external override onlySystemOwner {
+    ) external override onlyHasRoleOrRoleManagerAdmin(SYSTEM_POOLS_MANAGER) {
         _addPool(
             assetAddr_,
             assetKey_,
@@ -122,7 +134,7 @@ contract SystemPoolsRegistry is ISystemPoolsRegistry, Initializable, AbstractDep
         address assetAddr_,
         bytes32 assetKey_,
         address chainlinkOracle_
-    ) external override onlySystemOwner {
+    ) external override onlyHasRoleOrRoleManagerAdmin(SYSTEM_POOLS_MANAGER) {
         require(
             _systemParameters.getStablePoolsAvailability(),
             "SystemPoolsRegistry: Stable pools are unavailable."
@@ -136,7 +148,7 @@ contract SystemPoolsRegistry is ISystemPoolsRegistry, Initializable, AbstractDep
         bytes32 assetKey_,
         uint256 amountToWithdraw_,
         bool isAllFunds_
-    ) external override onlySystemOwner {
+    ) external override onlyHasRoleOrRoleManagerAdmin(SYSTEM_POOLS_RESERVE_FUNDS_MANAGER) {
         require(onlyExistingPool(assetKey_), "SystemPoolsRegistry: Pool doesn't exist.");
 
         if (!isAllFunds_) {
@@ -157,7 +169,7 @@ contract SystemPoolsRegistry is ISystemPoolsRegistry, Initializable, AbstractDep
         address recipientAddr_,
         uint256 offset_,
         uint256 limit_
-    ) external override onlySystemOwner {
+    ) external override onlyHasRoleOrRoleManagerAdmin(SYSTEM_POOLS_RESERVE_FUNDS_MANAGER) {
         bytes32[] memory _assetsKeys = getSupportedAssetKeys(offset_, limit_);
 
         for (uint256 i = 0; i < _assetsKeys.length; i++) {
@@ -172,7 +184,7 @@ contract SystemPoolsRegistry is ISystemPoolsRegistry, Initializable, AbstractDep
     function upgradePoolsImpl(
         PoolType poolType_,
         address newPoolsImpl_
-    ) external override onlySystemOwner {
+    ) external override onlyHasRoleOrRoleManagerAdmin(SYSTEM_POOLS_MANAGER) {
         address poolBeacon_ = _poolTypesInfo[poolType_].poolBeaconAddr;
 
         require(poolBeacon_ != address(0), "SystemPoolsRegistry: Unsupported pool type.");
@@ -180,7 +192,11 @@ contract SystemPoolsRegistry is ISystemPoolsRegistry, Initializable, AbstractDep
         UpgradeableBeacon(poolBeacon_).upgradeTo(newPoolsImpl_);
     }
 
-    function injectDependenciesToExistingPools() external override onlySystemOwner {
+    function injectDependenciesToExistingPools()
+        external
+        override
+        onlyHasRoleOrRoleManagerAdmin(SYSTEM_POOLS_MANAGER)
+    {
         IRegistry registry_ = _registry;
 
         address[] memory allPools_ = getAllPools();
@@ -193,7 +209,7 @@ contract SystemPoolsRegistry is ISystemPoolsRegistry, Initializable, AbstractDep
     function injectDependencies(
         uint256 offset_,
         uint256 limit_
-    ) external override onlySystemOwner {
+    ) external override onlyHasRoleOrRoleManagerAdmin(SYSTEM_POOLS_MANAGER) {
         IRegistry registry_ = _registry;
 
         address[] memory _pools = getPools(offset_, limit_);

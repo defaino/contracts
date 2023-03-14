@@ -1,0 +1,273 @@
+[33mcommit 6ce88979061904e462689ac342e6c6fae0c76847[m[33m ([m[1;36mHEAD -> [m[1;32mfeature/roles[m[33m)[m
+Merge: 38079c0 4aec8b1
+Author: mesowea <versadchikov@gmail.com>
+Date:   Mon Mar 13 15:22:54 2023 +0200
+
+    Merge branch 'main' into feature/roles
+
+[33mcommit 38079c0027351358136aba14ffde73485958a50b[m[33m ([m[1;31morigin/feature/roles[m[33m)[m
+Author: mesowea <versadchikov@gmail.com>
+Date:   Mon Mar 13 14:18:23 2023 +0200
+
+    Add RoleManager contract, add roles constants, public function to check roles and implementation exapmple
+
+[33mcommit b7220a0d250d7f392ad08a95813927726c96a987[m[33m ([m[1;31morigin/feature/PRT[m[33m, [m[1;32mfeature/PRT[m[33m)[m
+Author: mesowea <versadchikov@gmail.com>
+Date:   Mon Mar 13 00:09:19 2023 +0200
+
+    Add comments to IRegistry.sol and IUserInfoRegistry.sol expalining what do the updateUserStatsForPRT and transferOwnershipAndInject functions do
+
+[33mcommit 4aec8b1043d134b2a2ad37367e60327a52bef347[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmain[m[33m)[m
+Merge: 5998c98 088883f
+Author: Oleg Komendant <44612825+Hrom131@users.noreply.github.com>
+Date:   Thu Mar 2 15:50:55 2023 +0200
+
+    Merge pull request #4 from defaino/feature/PRT
+    
+    Coverage Increase
+
+[33mcommit 088883fe54b1bc7a1853d74fdb51f3a71a01a901[m
+Author: mesowea <versadchikov@gmail.com>
+Date:   Thu Mar 2 15:47:59 2023 +0200
+
+    package.json fix
+
+[33mcommit 64fc97516f253641c539f5067466348d3fe3713f[m
+Author: mesowea <versadchikov@gmail.com>
+Date:   Thu Mar 2 14:48:13 2023 +0200
+
+    Add 'modifierWhitelist' to solcover.js  with 'nonReentrant' and 'dependant' modifiers
+
+[33mcommit ad323629142c5ccbf5c3986cd97b8ac2c2784e7b[m
+Author: mesowea <versadchikov@gmail.com>
+Date:   Tue Feb 28 04:30:50 2023 +0200
+
+    Increase AbstractPool, WETH, UserInfoRegistry, RewardsDistribution coverage
+
+[33mcommit 68231d84dfa4df784006a2ecb22d8f1ec34b8d27[m
+Author: mesowea <versadchikov@gmail.com>
+Date:   Sun Feb 26 00:56:54 2023 +0200
+
+    Increase coverage to almost 100%, skip nonReentrant and some unreachable paths
+
+[33mcommit 5998c98dfad7129f14376176c12acbd62f55ade5[m
+Merge: 0f8542b fd0daf1
+Author: Oleg Komendant <44612825+Hrom131@users.noreply.github.com>
+Date:   Mon Feb 20 16:50:35 2023 +0200
+
+    Merge pull request #3 from defaino/feature/PRT
+    
+    PRT feature
+
+[33mcommit fd0daf16cfce87917c084f9203fb88763a8b9655[m
+Author: mesowea <versadchikov@gmail.com>
+Date:   Fri Feb 17 16:16:07 2023 +0200
+
+    Fix style, 'getUsersLiquidiationInfo' test
+
+[33mcommit f1bb9c9870658f0fdb15ced0200b41a3bf01f3fb[m
+Author: mesowea <versadchikov@gmail.com>
+Date:   Wed Feb 15 02:21:00 2023 +0200
+
+    Increase PRT coverage to 100%, add comments in PRT and UserInfoRegistry interfaces
+
+[33mcommit e1ecdbe3353282b597751504febea8d7c1e816f0[m
+Author: mesowea <versadchikov@gmail.com>
+Date:   Tue Feb 14 01:12:40 2023 +0200
+
+    Add PRT tests, edit deploy migration taking into account prt contract and params that differ for users with prt
+
+[33mcommit 84720a466f77cd746549d686aedb86517a65b716[m
+Author: mesowea <versadchikov@gmail.com>
+Date:   Sat Feb 11 15:32:56 2023 +0200
+
+    Add PRT contract, PRT stats calculations and special pool parameters for the users with PRT
+
+[33mcommit 0f8542bf653d21b013d4d03b83b59e0f8fc971c7[m
+Author: Yaroslav Panasenko <yar.panasenko@gmail.com>
+Date:   Thu Feb 9 19:53:40 2023 +0200
+
+    Add license
+
+[33mcommit 192f416804a6d5387758f454c502f56cd6859804[m
+Merge: 8c82564 520a488
+Author: Oleh Komendant <oleg02kom@gmail.com>
+Date:   Mon Jan 30 11:37:19 2023 +0000
+
+    Merge branch 'feature/ownership' into 'main'
+    
+    Add transferOwnershipAndInject, tests and needed mocks
+    
+    See merge request dl-defi-core/contracts!4
+
+[33mcommit 520a4881be4942b92214eb67ac26fea969058fbe[m
+Author: mesowea <versadchikov@gmail.com>
+Date:   Fri Jan 13 18:11:49 2023 +0200
+
+    Fix test for renounceOwnership()
+
+[33mcommit 51ddbea17e6e3f1e46962e03f27b2fddd1258934[m
+Author: mesowea <versadchikov@gmail.com>
+Date:   Fri Jan 13 18:08:28 2023 +0200
+
+    Add a reverting renounceOwnership(), add a check for the address(0) in transferwnershipndnject, fix the tests
+
+[33mcommit c2b9ca77abf0833d528f6271c4599dfb60e5fa5d[m
+Author: mesowea <versadchikov@gmail.com>
+Date:   Thu Jan 12 16:53:20 2023 +0200
+
+    fix missing mocks and test
+
+[33mcommit c91e84765cd7d73c352d96c95405980beedafba7[m
+Author: mesowea <versadchikov@gmail.com>
+Date:   Thu Jan 12 16:48:10 2023 +0200
+
+    Add transferOwnershipAndInject, tests and needed mocks
+
+[33mcommit 8c825640e0ebe169e58dba7087fbbc0abebbf0cc[m
+Merge: 7c1d933 a76c26f
+Author: Oleh Komendant <oleg02kom@gmail.com>
+Date:   Fri Jan 6 12:50:24 2023 +0000
+
+    Merge branch 'feature/global_update' into 'main'
+    
+    Feature/global update
+    
+    See merge request dl-defi-core/contracts!2
+
+[33mcommit a76c26ffe848296d8854f08e0175b63d3f8438c4[m
+Author: oleg.komendant <oleg02kom@gmail.com>
+Date:   Fri Jan 6 14:49:14 2023 +0200
+
+    Fix coverage
+
+[33mcommit f73ab0a367e69d6ae3add3b33247f0a5d03ddf0e[m
+Author: oleg.komendant <oleg02kom@gmail.com>
+Date:   Mon Jan 2 19:47:40 2023 +0200
+
+    Update code style
+
+[33mcommit 22a84eb939ade225fe5a801546baf381302768c6[m
+Author: oleg.komendant <oleg02kom@gmail.com>
+Date:   Tue Dec 27 14:51:51 2022 +0200
+
+    Update deploy scripts
+
+[33mcommit cd8b9adce052908e82c9ea694748bf7e818176f1[m
+Author: oleg.komendant <oleg02kom@gmail.com>
+Date:   Mon Dec 26 16:47:29 2022 +0200
+
+    Update contracts to new version
+
+[33mcommit 7c1d933aa47e6b43874182bae347e8f641a9fd5b[m
+Merge: e4313d5 73457d9
+Author: Oleh Komendant <oleg02kom@gmail.com>
+Date:   Sat Mar 19 15:13:30 2022 +0000
+
+    Merge branch 'fix/contracts_refactoring' into 'main'
+    
+    Fix/contracts refactoring
+    
+    See merge request dl-defi-core/contracts!1
+
+[33mcommit 73457d9ce31d4a166a8058fbefa2eb9f389a13e9[m
+Author: oleg.komendant <oleg02kom@gmail.com>
+Date:   Sat Mar 19 17:09:06 2022 +0200
+
+    Fix bug with liquidation logic
+
+[33mcommit 640bf003708b53ee7314c18dbfb0e78a3795b82f[m
+Author: oleg.komendant <oleg02kom@gmail.com>
+Date:   Sat Mar 19 14:55:14 2022 +0200
+
+    Add SafeERC20 library
+
+[33mcommit 2d59a353f52db00d1233d4731ab48a29dcbd1c3f[m
+Author: oleg.komendant <oleg02kom@gmail.com>
+Date:   Thu Mar 17 23:06:22 2022 +0200
+
+    Refactor and optimize contracts
+
+[33mcommit 09b7da98e8b712a3e6e0ebd432a226cccb3aed42[m
+Author: oleg.komendant <oleg02kom@gmail.com>
+Date:   Thu Mar 17 20:49:02 2022 +0200
+
+    Add new unit tests
+
+[33mcommit 7537d6b791129803854d2be3bea44d3de07182cb[m
+Author: oleg.komendant <oleg02kom@gmail.com>
+Date:   Thu Mar 17 00:10:29 2022 +0200
+
+    Fix InterestRate library and unit tests
+
+[33mcommit 38e6255067f7f75fed769419b21b36ad819bd0d2[m
+Author: oleg.komendant <oleg02kom@gmail.com>
+Date:   Wed Mar 16 22:58:25 2022 +0200
+
+    Add documentation comments; fix functions order; fix some bugs
+
+[33mcommit d775df2589b13dd6dc1f06185216981dba54b732[m
+Author: oleg.komendant <oleg02kom@gmail.com>
+Date:   Mon Mar 14 20:33:04 2022 +0200
+
+    Rewrite migrations and upgrade hardhat files
+
+[33mcommit 0d6d4aefbb6bb2119b459953cc6bc404c58605be[m
+Author: oleg.komendant <oleg02kom@gmail.com>
+Date:   Fri Mar 11 20:29:18 2022 +0200
+
+    Update tests and remove unused files
+
+[33mcommit 233d4ca70a4d0c25ea02657d4c7c13008f766a37[m
+Author: oleg.komendant <oleg02kom@gmail.com>
+Date:   Wed Mar 9 14:15:51 2022 +0200
+
+    Rename N tokens to LP tokens; remove useless test files
+
+[33mcommit 30a14b6c645a35f461a8fca89fc6fad528683421[m
+Author: oleg.komendant <oleg02kom@gmail.com>
+Date:   Tue Mar 8 20:53:30 2022 +0200
+
+    Rewrite contracts for frontend
+
+[33mcommit 63c5141657b718b62e33feb5676d447a34fe83c4[m
+Author: oleg.komendant <oleg02kom@gmail.com>
+Date:   Tue Mar 1 17:00:58 2022 +0200
+
+    Move to Beacon proxy implementation
+
+[33mcommit e2295acca72af5cdef55010f7e6d67397454608d[m
+Author: oleg.komendant <oleg02kom@gmail.com>
+Date:   Tue Mar 1 16:16:29 2022 +0200
+
+    Move AbstractDependant contract to abstract folder
+
+[33mcommit 75237bb6957825e252e56ea2ee92541f12ecd921[m
+Author: oleg.komendant <oleg02kom@gmail.com>
+Date:   Tue Mar 1 16:11:18 2022 +0200
+
+    Remove integration part
+
+[33mcommit 662bb39a30c40c0fe23dfcb9f8cc9ffd1b084939[m
+Author: oleg.komendant <oleg02kom@gmail.com>
+Date:   Mon Feb 28 15:57:30 2022 +0200
+
+    Update to latest version
+
+[33mcommit 773ba8a2e10dd8a5ecd9fa121f9764a64646c446[m
+Author: oleg.komendant <oleg02kom@gmail.com>
+Date:   Mon Feb 28 14:26:45 2022 +0200
+
+    Setup hardhat env
+
+[33mcommit e4313d5c0b3559d7bfeadc58e84cdece6064ddba[m
+Author: oleg.komendant <oleg02kom@gmail.com>
+Date:   Mon Feb 28 12:53:59 2022 +0200
+
+    Initial commit
+
+[33mcommit c1c345073a0a6d7c43eed63e3f3834ef7b3498ee[m
+Author: Oleh Komendant <oleg02kom@gmail.com>
+Date:   Mon Feb 28 10:38:04 2022 +0000
+
+    Initial commit

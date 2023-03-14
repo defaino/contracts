@@ -22,6 +22,8 @@ import "./interfaces/IPRT.sol";
 import "./libraries/AssetsHelperLibrary.sol";
 import "./libraries/MathHelper.sol";
 
+import "./common/Globals.sol";
+
 contract UserInfoRegistry is IUserInfoRegistry, AbstractDependant {
     using EnumerableSet for EnumerableSet.Bytes32Set;
     using AssetsHelperLibrary for bytes32;
