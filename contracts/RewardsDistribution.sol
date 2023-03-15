@@ -36,19 +36,6 @@ contract RewardsDistribution is IRewardsDistribution, AbstractDependant {
         _;
     }
 
-    modifier onlySystemOwner() {
-        require(
-            msg.sender == _systemOwnerAddr,
-            "RewardsDistribution: Only system owner can call this function."
-        );
-        _;
-    }
-
-    modifier onlyHasRoleOrRoleManagerAdmin(bytes32 _role) {
-        _roleManager.hasRoleOrAdmin(_role, msg.sender);
-        _;
-    }
-
     function setDependencies(address contractsRegistry_) external override dependant {
         IRegistry registry_ = IRegistry(contractsRegistry_);
 
@@ -93,7 +80,9 @@ contract RewardsDistribution is IRewardsDistribution, AbstractDependant {
     function setupRewardsPerBlockBatch(
         bytes32[] calldata assetKeys_,
         uint256[] calldata rewardsPerBlock_
-    ) external override onlyHasRoleOrRoleManagerAdmin(REWARDS_DISTRIBUTION_MANAGER) {
+    ) external override {
+        _roleManager.isRewardsDistributionManager(msg.sender);
+
         require(
             _onlyExistingRewardsAssetKey(),
             "RewardsDistributionL Unable to setup rewards per block."

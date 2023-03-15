@@ -48,19 +48,6 @@ contract DefiCore is
 
     mapping(address => mapping(bytes32 => bool)) public override disabledCollateralAssets;
 
-    modifier onlySystemOwner() {
-        require(
-            msg.sender == _systemOwnerAddr,
-            "DefiCore: Only system owner can call this function."
-        );
-        _;
-    }
-
-    modifier onlyHasRoleOrRoleManagerAdmin(bytes32 _role) {
-        _roleManager.hasRoleOrAdmin(_role, msg.sender);
-        _;
-    }
-
     function defiCoreInitialize() external initializer {
         __Pausable_init();
         __ReentrancyGuard_init();
@@ -79,11 +66,15 @@ contract DefiCore is
         _roleManager = IRoleManager(registry_.getRoleManagerContract());
     }
 
-    function pause() external override onlyHasRoleOrRoleManagerAdmin(DEFI_CORE_PAUSER) {
+    function pause() external override {
+        _onlyDefiCorePauser();
+
         _pause();
     }
 
-    function unpause() external override onlyHasRoleOrRoleManagerAdmin(DEFI_CORE_PAUSER) {
+    function unpause() external override {
+        _onlyDefiCorePauser();
+
         _unpause();
     }
 
@@ -651,6 +642,10 @@ contract DefiCore is
         } else {
             return (0, totalBorrowedAmountInUSD_ - borrowLimitInUSD_);
         }
+    }
+
+    function _onlyDefiCorePauser() internal {
+        _roleManager.isDefiCorePauser(msg.sender);
     }
 
     function _borrowInternal(

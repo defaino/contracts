@@ -24,19 +24,6 @@ contract SystemParameters is ISystemParameters, AbstractDependant {
 
     mapping(bytes32 => PureParameters.Param) internal _parameters;
 
-    modifier onlySystemOwner() {
-        require(
-            msg.sender == _systemOwnerAddr,
-            "SystemParameters: Only system owner can call this function."
-        );
-        _;
-    }
-
-    modifier onlyHasRoleOrRoleManagerAdmin(bytes32 _role) {
-        _roleManager.hasRoleOrAdmin(_role, msg.sender);
-        _;
-    }
-
     function setDependencies(address contractsRegistry_) external override dependant {
         IRegistry registry_ = IRegistry(contractsRegistry_);
 
@@ -44,9 +31,9 @@ contract SystemParameters is ISystemParameters, AbstractDependant {
         _roleManager = IRoleManager(registry_.getRoleManagerContract());
     }
 
-    function setRewardsTokenAddress(
-        address rewardsToken_
-    ) external override onlyHasRoleOrRoleManagerAdmin(SYSTEM_PARAMETERS_MANAGER) {
+    function setRewardsTokenAddress(address rewardsToken_) external override {
+        _onlySystemParametersManager();
+
         PureParameters.Param memory currentParam_ = _parameters[REWARDS_TOKEN_KEY];
 
         if (PureParameters.paramExists(currentParam_)) {
@@ -61,9 +48,9 @@ contract SystemParameters is ISystemParameters, AbstractDependant {
         emit RewardsTokenUpdated(rewardsToken_);
     }
 
-    function setupLiquidationBoundary(
-        uint256 newValue_
-    ) external override onlyHasRoleOrRoleManagerAdmin(SYSTEM_PARAMETERS_MANAGER) {
+    function setupLiquidationBoundary(uint256 newValue_) external override {
+        _onlySystemParametersManager();
+
         require(
             newValue_ >= PRECISION * 50 && newValue_ <= PRECISION * 80,
             "SystemParameters: The new value of the liquidation boundary is invalid."
@@ -74,17 +61,17 @@ contract SystemParameters is ISystemParameters, AbstractDependant {
         emit LiquidationBoundaryUpdated(newValue_);
     }
 
-    function setupStablePoolsAvailability(
-        bool newValue_
-    ) external override onlyHasRoleOrRoleManagerAdmin(SYSTEM_PARAMETERS_MANAGER) {
+    function setupStablePoolsAvailability(bool newValue_) external override {
+        _onlySystemParametersManager();
+
         _parameters[STABLE_POOLS_AVAILABILITY_KEY] = PureParameters.makeBoolParam(newValue_);
 
         emit StablePoolsAvailabilityUpdated(newValue_);
     }
 
-    function setupMinCurrencyAmount(
-        uint256 newMinCurrencyAmount_
-    ) external override onlyHasRoleOrRoleManagerAdmin(SYSTEM_PARAMETERS_MANAGER) {
+    function setupMinCurrencyAmount(uint256 newMinCurrencyAmount_) external override {
+        _onlySystemParametersManager();
+
         _parameters[MIN_CURRENCY_AMOUNT_KEY] = PureParameters.makeUintParam(newMinCurrencyAmount_);
 
         emit MinCurrencyAmountUpdated(newMinCurrencyAmount_);
@@ -104,6 +91,10 @@ contract SystemParameters is ISystemParameters, AbstractDependant {
 
     function getMinCurrencyAmount() external view override returns (uint256) {
         return _getParam(MIN_CURRENCY_AMOUNT_KEY).getUintFromParam();
+    }
+
+    function _onlySystemParametersManager() internal {
+        _roleManager.isSystemParametersManager(msg.sender);
     }
 
     function _getParam(bytes32 paramKey_) internal view returns (PureParameters.Param memory) {

@@ -12,8 +12,6 @@ import "./interfaces/IDefiCore.sol";
 import "./interfaces/IUserInfoRegistry.sol";
 import "./interfaces/IRoleManager.sol";
 
-import "./common/Globals.sol";
-
 contract PRT is IPRT, ERC721Upgradeable, AbstractDependant, ReentrancyGuardUpgradeable {
     uint256 internal _tokenIdCounter;
     address internal _systemOwnerAddr;
@@ -22,16 +20,6 @@ contract PRT is IPRT, ERC721Upgradeable, AbstractDependant, ReentrancyGuardUpgra
     IRoleManager internal _roleManager;
 
     PRTParams internal _prtParams;
-
-    modifier onlySystemOwner() {
-        require(msg.sender == _systemOwnerAddr, "PRT: Only system owner can call this function");
-        _;
-    }
-
-    modifier onlyHasRoleOrRoleManagerAdmin(bytes32 _role) {
-        _roleManager.hasRoleOrAdmin(_role, msg.sender);
-        _;
-    }
 
     function prtInitialize(
         string calldata name_,
@@ -52,9 +40,9 @@ contract PRT is IPRT, ERC721Upgradeable, AbstractDependant, ReentrancyGuardUpgra
         _roleManager = IRoleManager(registry_.getRoleManagerContract());
     }
 
-    function updatePRTParams(
-        PRTParams calldata prtParams_
-    ) external override onlyHasRoleOrRoleManagerAdmin(PRT_PARAM_UPDATER) {
+    function updatePRTParams(PRTParams calldata prtParams_) external override {
+        _roleManager.isPRTParamUpdater(msg.sender);
+
         _prtParams = prtParams_;
     }
 

@@ -63,19 +63,6 @@ contract AssetParameters is IAssetParameters, AbstractDependant {
         _;
     }
 
-    modifier onlySystemOwner() {
-        require(
-            msg.sender == _systemOwnerAddr,
-            "AssetParameters: Only system owner can call this function."
-        );
-        _;
-    }
-
-    modifier onlyHasRoleOrRoleManagerAdmin(bytes32 _role) {
-        _roleManager.hasRoleOrAdmin(_role, msg.sender);
-        _;
-    }
-
     function setDependencies(address contractsRegistry_) external override dependant {
         IRegistry registry_ = IRegistry(contractsRegistry_);
 
@@ -111,12 +98,9 @@ contract AssetParameters is IAssetParameters, AbstractDependant {
     function setupAnnualBorrowRate(
         bytes32 assetKey_,
         uint256 newAnnualBorrowRate_
-    )
-        external
-        override
-        onlyHasRoleOrRoleManagerAdmin(ASSET_PARAMETERS_MANAGER)
-        onlyExists(assetKey_)
-    {
+    ) external override onlyExists(assetKey_) {
+        _onlyAssetParametersManager();
+
         require(
             _systemParameters.getStablePoolsAvailability(),
             "AssetParameters: Stable pools unavailable."
@@ -148,61 +132,44 @@ contract AssetParameters is IAssetParameters, AbstractDependant {
     function setupMainParameters(
         bytes32 assetKey_,
         MainPoolParams calldata mainParams_
-    )
-        external
-        override
-        onlyHasRoleOrRoleManagerAdmin(ASSET_PARAMETERS_MANAGER)
-        onlyExists(assetKey_)
-    {
+    ) external override onlyExists(assetKey_) {
+        _onlyAssetParametersManager();
+
         _setupMainParameters(assetKey_, mainParams_);
     }
 
     function setupInterestRateModel(
         bytes32 assetKey_,
         InterestRateParams calldata interestParams_
-    )
-        external
-        override
-        onlyHasRoleOrRoleManagerAdmin(ASSET_PARAMETERS_MANAGER)
-        onlyExists(assetKey_)
-    {
+    ) external override onlyExists(assetKey_) {
+        _onlyAssetParametersManager();
+
         _setupInterestRateParams(assetKey_, interestParams_);
     }
 
     function setupDistributionsMinimums(
         bytes32 assetKey_,
         DistributionMinimums calldata distrMinimums_
-    )
-        external
-        override
-        onlyHasRoleOrRoleManagerAdmin(ASSET_PARAMETERS_MANAGER)
-        onlyExists(assetKey_)
-    {
+    ) external override onlyExists(assetKey_) {
+        _onlyAssetParametersManager();
+
         _setupDistributionsMinimums(assetKey_, distrMinimums_);
     }
 
     function setupAllParameters(
         bytes32 assetKey_,
         AllPoolParams calldata poolParams_
-    )
-        external
-        override
-        onlyHasRoleOrRoleManagerAdmin(ASSET_PARAMETERS_MANAGER)
-        onlyExists(assetKey_)
-    {
+    ) external override onlyExists(assetKey_) {
+        _onlyAssetParametersManager();
+
         _setupInterestRateParams(assetKey_, poolParams_.interestRateParams);
         _setupMainParameters(assetKey_, poolParams_.mainParams);
         _setupDistributionsMinimums(assetKey_, poolParams_.distrMinimums);
     }
 
-    function freeze(
-        bytes32 assetKey_
-    )
-        external
-        override
-        onlyHasRoleOrRoleManagerAdmin(ASSET_PARAMETERS_MANAGER)
-        onlyExists(assetKey_)
-    {
+    function freeze(bytes32 assetKey_) external override onlyExists(assetKey_) {
+        _onlyAssetParametersManager();
+
         _parameters[assetKey_][FREEZE_KEY] = PureParameters.makeBoolParam(true);
 
         emit FreezeParamUpdated(assetKey_, true);
@@ -211,12 +178,9 @@ contract AssetParameters is IAssetParameters, AbstractDependant {
     function enableCollateral(
         bytes32 assetKey_,
         bool forPRT_
-    )
-        external
-        override
-        onlyHasRoleOrRoleManagerAdmin(ASSET_PARAMETERS_MANAGER)
-        onlyExists(assetKey_)
-    {
+    ) external override onlyExists(assetKey_) {
+        _onlyAssetParametersManager();
+
         forPRT_
             ? _parameters[assetKey_][ENABLE_COLLATERAL_WITH_PRT_KEY] = PureParameters
                 .makeBoolParam(true)
@@ -298,6 +262,10 @@ contract AssetParameters is IAssetParameters, AbstractDependant {
 
     function getMaxUtilizationRatio(bytes32 assetKey_) external view override returns (uint256) {
         return _getParam(assetKey_, MAX_UTILIZATION_RATIO_KEY).getUintFromParam();
+    }
+
+    function _onlyAssetParametersManager() internal {
+        _roleManager.isAssetParametersManager(msg.sender);
     }
 
     function _setupInterestRateParams(
