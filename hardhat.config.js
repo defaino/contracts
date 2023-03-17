@@ -1,5 +1,6 @@
 require("@nomiclabs/hardhat-web3");
 require("@nomiclabs/hardhat-truffle5");
+require("@nomiclabs/hardhat-ethers");
 require("@typechain/hardhat");
 require("@dlsl/hardhat-migrate");
 require("hardhat-contract-sizer");

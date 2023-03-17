@@ -12,14 +12,14 @@ async function main() {
   const currentFile = JSON.parse(fs.readFileSync(pathToFile, "utf8"));
 
   const prices = ["2", "1600", "1.0001", "0.99995", "1.0001", "25000"];
-  const priceFeedDecimals = 18;
+  const priceFeedDecimals = 8;
 
   if (dataArr.length != prices.length) {
     throw new Error("Length missmatch");
   }
 
   for (let i = 0; i < prices.length; i++) {
-    const priceFeed = await ChainlinkOracleMock.new(wei(prices[i]), priceFeedDecimals);
+    const priceFeed = await ChainlinkOracleMock.new(wei(prices[i], priceFeedDecimals), priceFeedDecimals);
     currentFile[i].chainlinkOracle = priceFeed.address;
 
     console.log(
