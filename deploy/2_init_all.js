@@ -5,6 +5,7 @@ const SystemPoolsRegistry = artifacts.require("SystemPoolsRegistry");
 const LiquidityPool = artifacts.require("LiquidityPool");
 const InterestRateLibrary = artifacts.require("InterestRateLibrary");
 const Prt = artifacts.require("PRT");
+const RoleManager = artifacts.require("RoleManager");
 
 const { artifacts } = require("hardhat");
 
@@ -24,6 +25,7 @@ module.exports = async (deployer, logger) => {
   const systemPoolsRegistry = await SystemPoolsRegistry.at(await registry.getSystemPoolsRegistryContract());
   const interestRateLibrary = await InterestRateLibrary.at(await registry.getInterestRateLibraryContract());
   const prt = await Prt.at(await registry.getPRTContract());
+  const roleManager = await RoleManager.at(await registry.getRoleManagerContract());
 
   const rewardsAssetKey = getAssetKey(rewardsAssetSymbol());
   const nativeTokenKey = getAssetKey(nativeAssetSymbol());
@@ -34,6 +36,7 @@ module.exports = async (deployer, logger) => {
 
   logger.logTransaction(await defiCore.defiCoreInitialize(), "Init DefiCore");
   logger.logTransaction(await prt.prtInitialize(prtArr.name, prtArr.symbol, prtArr.prtParams), "Init PRT");
+  logger.logTransaction(await roleManager.roleManagerInitialize([], []), "Init RoleManager");
   logger.logTransaction(
     await systemPoolsRegistry.systemPoolsRegistryInitialize(
       (
@@ -110,7 +113,8 @@ module.exports = async (deployer, logger) => {
     ["PriceManager", await registry.getPriceManagerContract()],
     ["InterestRateLibrary", interestRateLibrary.address],
     ["RewardsToken", rewardsAssetAddress],
-    ["PRT", prt.address]
+    ["PRT", prt.address],
+    ["RoleManager", roleManager.address]
   );
 
   console.log("+--------------------------------------------------------------------------------+");

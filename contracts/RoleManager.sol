@@ -28,7 +28,10 @@ contract RoleManager is AccessControlUpgradeable {
         bytes32[] calldata roles_,
         address[] calldata accounts_
     ) external initializer {
-        require(roles_.length == accounts_.length, "RoleManager: arrays are of different sizes");
+        require(
+            roles_.length == accounts_.length,
+            "RoleManager: passed arrays are of different sizes"
+        );
         for (uint256 i = 0; i < roles_.length; ++i) {
             _setupRole(roles_[i], accounts_[i]);
         }

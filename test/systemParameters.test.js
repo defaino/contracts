@@ -3,9 +3,11 @@ const { ZERO_ADDR } = require("../scripts/utils/constants");
 
 const truffleAssert = require("truffle-assertions");
 const Reverter = require("./helpers/reverter");
+const { artifacts } = require("hardhat");
 
 const SystemParameters = artifacts.require("SystemParameters");
 const Registry = artifacts.require("Registry");
+const RoleManager = artifacts.require("RoleManager");
 
 SystemParameters.numberFormat = "BigNumber";
 Registry.numberFormat = "BigNumber";
@@ -19,6 +21,7 @@ describe("SystemParameters", () => {
 
   let systemParameters;
   let registry;
+  let roleManager;
   const minCurrencyAmount = wei(0.1);
 
   before("setup", async () => {
@@ -28,12 +31,17 @@ describe("SystemParameters", () => {
 
     registry = await Registry.new();
     const _systemParameters = await SystemParameters.new();
+    const _roleManager = await RoleManager.new();
 
     await registry.__OwnableContractsRegistry_init();
 
     await registry.addProxyContract(await registry.SYSTEM_PARAMETERS_NAME(), _systemParameters.address);
+    await registry.addProxyContract(await registry.ROLE_MANAGER_NAME(), _roleManager.address);
 
     systemParameters = await SystemParameters.at(await registry.getSystemParametersContract());
+    roleManager = await RoleManager.at(await registry.getRoleManagerContract());
+
+    roleManager.roleManagerInitialize([], []);
 
     await registry.injectDependencies(await registry.SYSTEM_PARAMETERS_NAME());
 
@@ -50,8 +58,9 @@ describe("SystemParameters", () => {
   });
 
   describe("setupMinCurrencyAmount", () => {
-    it("should get exception if called by not a system owner", async () => {
-      const reason = "SystemParameters: Only system owner can call this function.";
+    it("should get exception if called not by an SYSTEM_PARAMETERS_MANAGER/role manager admin", async () => {
+      const reason =
+        "RoleManager: account is missing role 0x5150d4e12a451b0e6f6df3626ccce38a6036b7e6ef17dc4a5038ccfa0cab851a";
 
       await truffleAssert.reverts(
         systemParameters.setupMinCurrencyAmount(minCurrencyAmount, { from: SOMEBODY }),
@@ -85,8 +94,9 @@ describe("SystemParameters", () => {
       await truffleAssert.reverts(systemParameters.setRewardsTokenAddress(ZERO_ADDR), reason);
     });
 
-    it("should get exception if called by not a system owner", async () => {
-      const reason = "SystemParameters: Only system owner can call this function.";
+    it("should get exception if called not by an SYSTEM_PARAMETERS_MANAGER/role manager admin", async () => {
+      const reason =
+        "RoleManager: account is missing role 0x5150d4e12a451b0e6f6df3626ccce38a6036b7e6ef17dc4a5038ccfa0cab851a";
 
       await truffleAssert.reverts(systemParameters.setRewardsTokenAddress(ZERO_ADDR, { from: SOMEBODY }), reason);
       await truffleAssert.reverts(systemParameters.setRewardsTokenAddress(ZERO_ADDR, { from: SOMEBODY }), reason);
@@ -126,9 +136,10 @@ describe("SystemParameters", () => {
   });
 
   describe("onlySystemOwner modifier", () => {
-    it("should get exception if not system owner try to call functions", async () => {
+    it("should get exception if called not by an SYSTEM_PARAMETERS_MANAGER/role manager admin", async () => {
       const newValue = getPrecision().times(50);
-      const reason = "SystemParameters: Only system owner can call this function.";
+      const reason =
+        "RoleManager: account is missing role 0x5150d4e12a451b0e6f6df3626ccce38a6036b7e6ef17dc4a5038ccfa0cab851a";
 
       await truffleAssert.reverts(systemParameters.setupLiquidationBoundary(newValue, { from: SOMEBODY }), reason);
       await truffleAssert.reverts(systemParameters.setupStablePoolsAvailability(true, { from: SOMEBODY }), reason);

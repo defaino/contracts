@@ -4,6 +4,7 @@ const { ZERO_ADDR } = require("../scripts/utils/constants");
 
 const truffleAssert = require("truffle-assertions");
 const Reverter = require("./helpers/reverter");
+const { artifacts } = require("hardhat");
 
 const Registry = artifacts.require("Registry");
 const PriceManager = artifacts.require("PriceManager");
@@ -41,6 +42,7 @@ describe("PriceManager", async () => {
     await registry.addContract(await registry.DEFI_CORE_NAME(), NOTHING);
     await registry.addContract(await registry.REWARDS_DISTRIBUTION_NAME(), NOTHING);
     await registry.addContract(await registry.SYSTEM_POOLS_FACTORY_NAME(), NOTHING);
+    await registry.addContract(await registry.ROLE_MANAGER_NAME(), NOTHING);
 
     priceManager = await PriceManager.at(await registry.getPriceManagerContract());
 

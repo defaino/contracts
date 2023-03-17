@@ -6,6 +6,7 @@ const { ZERO_ADDR } = require("../scripts/utils/constants");
 
 const truffleAssert = require("truffle-assertions");
 const Reverter = require("./helpers/reverter");
+const { artifacts } = require("hardhat");
 
 const Registry = artifacts.require("Registry");
 const DefiCore = artifacts.require("DefiCore");
@@ -20,6 +21,8 @@ const StablePool = artifacts.require("StablePool");
 const PriceManager = artifacts.require("PriceManager");
 const InterestRateLibrary = artifacts.require("InterestRateLibrary");
 const Prt = artifacts.require("PRT");
+const RoleManager = artifacts.require("RoleManager");
+
 const WETH = artifacts.require("WETH");
 const StablePermitToken = artifacts.require("StablePermitTokenMock");
 
@@ -49,6 +52,7 @@ describe("UserInfoRegistry", () => {
   let systemPoolsRegistry;
   let rewardsDistribution;
   let prt;
+  let roleManager;
 
   let nativePool;
   let daiPool;
@@ -186,6 +190,7 @@ describe("UserInfoRegistry", () => {
     const _stablePoolImpl = await StablePool.new();
     const _priceManager = await PriceManager.new();
     const _prt = await Prt.new();
+    const _roleManager = await RoleManager.new();
 
     await registry.__OwnableContractsRegistry_init();
 
@@ -200,6 +205,7 @@ describe("UserInfoRegistry", () => {
     await registry.addProxyContract(await registry.SYSTEM_POOLS_FACTORY_NAME(), _liquidityPoolFactory.address);
     await registry.addProxyContract(await registry.PRICE_MANAGER_NAME(), _priceManager.address);
     await registry.addProxyContract(await registry.PRT_NAME(), _prt.address);
+    await registry.addProxyContract(await registry.ROLE_MANAGER_NAME(), _roleManager.address);
 
     await registry.addContract(await registry.INTEREST_RATE_LIBRARY_NAME(), interestRateLibrary.address);
 
@@ -210,6 +216,7 @@ describe("UserInfoRegistry", () => {
     rewardsDistribution = await RewardsDistribution.at(await registry.getRewardsDistributionContract());
     systemParameters = await SystemParameters.at(await registry.getSystemParametersContract());
     prt = await Prt.at(await registry.getPRTContract());
+    roleManager = await RoleManager.at(await registry.getRoleManagerContract());
 
     await registry.injectDependencies(await registry.DEFI_CORE_NAME());
     await registry.injectDependencies(await registry.SYSTEM_PARAMETERS_NAME());
@@ -226,6 +233,7 @@ describe("UserInfoRegistry", () => {
     tokens.push(nativeToken);
 
     await defiCore.defiCoreInitialize();
+    await roleManager.roleManagerInitialize([], []);
     await systemPoolsRegistry.systemPoolsRegistryInitialize(_liquidityPoolImpl.address, nativeTokenKey, zeroKey);
     await prt.prtInitialize("Platform Reputation Token", "PRT", [
       [1000000000000, 100],

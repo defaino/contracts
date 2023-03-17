@@ -24,6 +24,7 @@ const InterestRateLibrary = artifacts.require("InterestRateLibrary");
 const Prt = artifacts.require("PRT");
 const WETH = artifacts.require("WETH");
 const StablePermitToken = artifacts.require("StablePermitTokenMock");
+const RoleManager = artifacts.require("RoleManager");
 
 const MockERC20 = artifacts.require("MockERC20");
 const ChainlinkOracleMock = artifacts.require("ChainlinkOracleMock");
@@ -51,6 +52,7 @@ describe("PRT", () => {
   let systemPoolsRegistry;
   let rewardsDistribution;
   let prt;
+  let roleManager;
 
   let nativePool;
   let daiPool;
@@ -183,6 +185,7 @@ describe("PRT", () => {
     const _stablePoolImpl = await StablePool.new();
     const _priceManager = await PriceManager.new();
     const _prt = await Prt.new();
+    const _roleManager = await RoleManager.new();
 
     await registry.__OwnableContractsRegistry_init();
 
@@ -196,6 +199,7 @@ describe("PRT", () => {
     await registry.addProxyContract(await registry.SYSTEM_POOLS_FACTORY_NAME(), _liquidityPoolFactory.address);
     await registry.addProxyContract(await registry.PRICE_MANAGER_NAME(), _priceManager.address);
     await registry.addProxyContract(await registry.PRT_NAME(), _prt.address);
+    await registry.addProxyContract(await registry.ROLE_MANAGER_NAME(), _roleManager.address);
 
     await registry.addContract(await registry.INTEREST_RATE_LIBRARY_NAME(), interestRateLibrary.address);
 
@@ -206,6 +210,7 @@ describe("PRT", () => {
     rewardsDistribution = await RewardsDistribution.at(await registry.getRewardsDistributionContract());
     systemParameters = await SystemParameters.at(await registry.getSystemParametersContract());
     prt = await Prt.at(await registry.getPRTContract());
+    roleManager = await RoleManager.at(await registry.getRoleManagerContract());
 
     const _prtReentrancy = await PRTReentrancy.new(
       await registry.getPRTContract(),
@@ -232,6 +237,7 @@ describe("PRT", () => {
     tokens.push(nativeToken);
 
     await defiCore.defiCoreInitialize();
+    await roleManager.roleManagerInitialize([], []);
     await systemPoolsRegistry.systemPoolsRegistryInitialize(_liquidityPoolImpl.address, nativeTokenKey, zeroKey);
     await prt.prtInitialize("Platform Reputation Token", "PRT", [
       [1000000000000, 100],
@@ -568,8 +574,9 @@ describe("PRT", () => {
   });
 
   describe("updatePRTRarams()", () => {
-    it("should revert if not the system owner tries to update the PRT params", async () => {
-      let reason = "PRT: Only system owner can call this function";
+    it("should get exception if called not by an PRT_PARAM_UPDATER/role manager admin", async () => {
+      let reason =
+        "RoleManager: account is missing role 0x2a497a2a3812d7536bf2ddd564e1e7644c23860987ec1d72aa63fa3250b93e25";
       await truffleAssert.reverts(
         prt.updatePRTParams(
           [
@@ -581,7 +588,7 @@ describe("PRT", () => {
         reason
       );
     });
-    it("should pass if the system owner tries to update the PRT params", async () => {
+    it("should pass if the PRT_PARAM_UPDATER tries to update the PRT params", async () => {
       await truffleAssert.passes(
         prt.updatePRTParams([
           [3000000000000, 100],

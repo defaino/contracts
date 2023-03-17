@@ -6,6 +6,7 @@ const { ZERO_ADDR } = require("../scripts/utils/constants");
 const truffleAssert = require("truffle-assertions");
 
 const Reverter = require("./helpers/reverter");
+const { artifacts } = require("hardhat");
 
 const Registry = artifacts.require("Registry");
 const DefiCore = artifacts.require("DefiCore");
@@ -19,6 +20,8 @@ const LiquidityPool = artifacts.require("LiquidityPool");
 const StablePool = artifacts.require("StablePool");
 const PriceManager = artifacts.require("PriceManager");
 const Prt = artifacts.require("PRT");
+const RoleManager = artifacts.require("RoleManager");
+
 const InterestRateLibrary = artifacts.require("InterestRateLibrary");
 const WETH = artifacts.require("WETH");
 const StablePermitToken = artifacts.require("StablePermitTokenMock");
@@ -42,6 +45,7 @@ describe("StablePool", async () => {
   let systemPoolsRegistry;
   let stableToken;
   let prt;
+  let roleManager;
 
   let stablePool;
 
@@ -161,6 +165,7 @@ describe("StablePool", async () => {
     const _stablePoolImpl = await StablePool.new();
     const _priceManager = await PriceManager.new();
     const _prt = await Prt.new();
+    const _roleManager = await RoleManager.new();
 
     await registry.__OwnableContractsRegistry_init();
 
@@ -175,12 +180,14 @@ describe("StablePool", async () => {
     await registry.addProxyContract(await registry.SYSTEM_POOLS_FACTORY_NAME(), _liquidityPoolFactory.address);
     await registry.addProxyContract(await registry.PRICE_MANAGER_NAME(), _priceManager.address);
     await registry.addProxyContract(await registry.PRT_NAME(), _prt.address);
+    await registry.addProxyContract(await registry.ROLE_MANAGER_NAME(), _roleManager.address);
 
     await registry.addContract(await registry.INTEREST_RATE_LIBRARY_NAME(), interestRateLibrary.address);
 
     defiCore = await DefiCore.at(await registry.getDefiCoreContract());
     assetParameters = await AssetParameters.at(await registry.getAssetParametersContract());
     systemPoolsRegistry = await SystemPoolsRegistry.at(await registry.getSystemPoolsRegistryContract());
+    roleManager = await RoleManager.at(await registry.getRoleManagerContract());
     const systemParameters = await SystemParameters.at(await registry.getSystemParametersContract());
     const rewardsDistribution = await RewardsDistribution.at(await registry.getRewardsDistributionContract());
 
@@ -199,6 +206,7 @@ describe("StablePool", async () => {
     tokens.push(nativeToken);
 
     await defiCore.defiCoreInitialize();
+    await roleManager.roleManagerInitialize([], []);
     await systemPoolsRegistry.systemPoolsRegistryInitialize(
       _liquidityPoolImpl.address,
       nativeTokenKey,

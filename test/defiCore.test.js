@@ -6,7 +6,7 @@ const { ZERO_ADDR } = require("../scripts/utils/constants");
 
 const Reverter = require("./helpers/reverter");
 const truffleAssert = require("truffle-assertions");
-const { web3 } = require("hardhat");
+const { web3, artifacts } = require("hardhat");
 const { assert } = require("chai");
 
 const Registry = artifacts.require("Registry");
@@ -24,6 +24,7 @@ const InterestRateLibrary = artifacts.require("InterestRateLibrary");
 const WETH = artifacts.require("WETH");
 const StablePermitToken = artifacts.require("StablePermitTokenMock");
 const Prt = artifacts.require("PRT");
+const RoleManager = artifacts.require("RoleManager");
 
 const MockERC20 = artifacts.require("MockERC20");
 const ChainlinkOracleMock = artifacts.require("ChainlinkOracleMock");
@@ -48,6 +49,7 @@ describe("DefiCore", async () => {
   let userInfoRegistry;
   let systemPoolsRegistry;
   let prt;
+  let roleManager;
 
   let nativePool;
   let daiPool;
@@ -195,6 +197,7 @@ describe("DefiCore", async () => {
     const _stablePoolImpl = await StablePool.new();
     const _priceManager = await PriceManager.new();
     const _prt = await Prt.new();
+    const _roleManager = await RoleManager.new();
 
     await registry.__OwnableContractsRegistry_init();
 
@@ -209,6 +212,7 @@ describe("DefiCore", async () => {
     await registry.addProxyContract(await registry.SYSTEM_POOLS_FACTORY_NAME(), _liquidityPoolFactory.address);
     await registry.addProxyContract(await registry.PRICE_MANAGER_NAME(), _priceManager.address);
     await registry.addProxyContract(await registry.PRT_NAME(), _prt.address);
+    await registry.addProxyContract(await registry.ROLE_MANAGER_NAME(), _roleManager.address);
 
     await registry.addContract(await registry.INTEREST_RATE_LIBRARY_NAME(), interestRateLibrary.address);
 
@@ -218,6 +222,7 @@ describe("DefiCore", async () => {
     systemPoolsRegistry = await SystemPoolsRegistry.at(await registry.getSystemPoolsRegistryContract());
     rewardsDistribution = await RewardsDistribution.at(await registry.getRewardsDistributionContract());
     systemParameters = await SystemParameters.at(await registry.getSystemParametersContract());
+    roleManager = await RoleManager.at(await registry.getRoleManagerContract());
 
     await registry.injectDependencies(await registry.DEFI_CORE_NAME());
     await registry.injectDependencies(await registry.SYSTEM_PARAMETERS_NAME());
@@ -234,6 +239,7 @@ describe("DefiCore", async () => {
     tokens.push(nativeToken);
 
     await defiCore.defiCoreInitialize();
+    await roleManager.roleManagerInitialize([], []);
     await systemPoolsRegistry.systemPoolsRegistryInitialize(_liquidityPoolImpl.address, nativeTokenKey, zeroKey);
 
     await systemPoolsRegistry.addPoolsBeacon(1, _stablePoolImpl.address);
@@ -2350,8 +2356,9 @@ describe("DefiCore", async () => {
       await defiCore.borrowFor(daiKey, borrowAmount, USER1, { from: USER1 });
     });
 
-    it("should get exception if called by not a system owner", async () => {
-      const reason = "DefiCore: Only system owner can call this function.";
+    it("should get exception if called not by an DEFI_CORE_PAUSER/role manager admin", async () => {
+      const reason =
+        "RoleManager: account is missing role 0x8218bbe530296352d0683ccaec4d2919edba0ac7752d8e2243cb95823bb15fd5";
 
       await truffleAssert.reverts(defiCore.pause({ from: USER1 }), reason);
       await truffleAssert.reverts(defiCore.unpause({ from: USER1 }), reason);

@@ -21,6 +21,7 @@ const PriceManager = artifacts.require("PriceManager");
 const ChainlinkOracleMock = artifacts.require("ChainlinkOracleMock");
 const SystemPoolsRegistry = artifacts.require("SystemPoolsRegistry");
 const Prt = artifacts.require("PRT");
+const RoleManager = artifacts.require("RoleManager");
 
 DefiCore.numberFormat = "BigNumber";
 AssetParameters.numberFormat = "BigNumber";
@@ -68,6 +69,7 @@ describe("AssetParameters", () => {
   let systemPoolsRegistry;
   let rewardsToken;
   let prt;
+  let roleManager;
 
   async function createLiquidityPool(assetKey, symbol, isCollateral) {
     const token = await MockERC20.new("Mock" + symbol, symbol);
@@ -144,6 +146,7 @@ describe("AssetParameters", () => {
     const _stablePoolImpl = await StablePool.new();
     const _systemPoolsRegistry = await SystemPoolsRegistry.new();
     const _prt = await Prt.new();
+    const _roleManager = await RoleManager.new();
 
     await registry.__OwnableContractsRegistry_init();
 
@@ -156,6 +159,7 @@ describe("AssetParameters", () => {
     await registry.addProxyContract(await registry.PRICE_MANAGER_NAME(), _priceManager.address);
     await registry.addProxyContract(await registry.SYSTEM_POOLS_REGISTRY_NAME(), _systemPoolsRegistry.address);
     await registry.addProxyContract(await registry.PRT_NAME(), _prt.address);
+    await registry.addProxyContract(await registry.ROLE_MANAGER_NAME(), _roleManager.address);
 
     await registry.addContract(await registry.INTEREST_RATE_LIBRARY_NAME(), interestRateLibrary.address);
 
@@ -163,6 +167,7 @@ describe("AssetParameters", () => {
     assetParameters = await AssetParameters.at(await registry.getAssetParametersContract());
     rewardsDistribution = await RewardsDistribution.at(await registry.getRewardsDistributionContract());
     systemPoolsRegistry = await SystemPoolsRegistry.at(await registry.getSystemPoolsRegistryContract());
+    roleManager = await RoleManager.at(await registry.getRoleManagerContract());
 
     const defiCore = await DefiCore.at(await registry.getDefiCoreContract());
 
@@ -177,6 +182,7 @@ describe("AssetParameters", () => {
     await registry.injectDependencies(await registry.PRT_NAME());
 
     await defiCore.defiCoreInitialize();
+    await roleManager.roleManagerInitialize([], []);
     await systemPoolsRegistry.systemPoolsRegistryInitialize(_liquidityPoolImpl.address, rewardsTokenKey, zeroKey);
 
     await systemPoolsRegistry.addPoolsBeacon(1, _stablePoolImpl.address);
@@ -274,12 +280,13 @@ describe("AssetParameters", () => {
   });
 
   describe("setupAllParameters", () => {
-    it("should get exception if called not by systemOwner", async () => {
-      const reason = "AssetParameters: Only system owner can call this function.";
+    it("should get exception if called not by an asset manager/role manager admin", async () => {
+      const reason =
+        "RoleManager: account is missing role 0x06c492a7eb572cfeccd28edc322064a12cedb3c4e3bddbb1357cd02f3a9f15fc";
 
       await truffleAssert.reverts(
         assetParameters.setupAllParameters(
-          stableKey,
+          rewardsTokenKey,
           [
             [colRatio, colRatio, reserveFactor, liquidationDiscount, maxUR],
             [0, firstSlope, secondSlope, utilizationBreakingPoint],
@@ -385,8 +392,9 @@ describe("AssetParameters", () => {
       assert.equal(result.receipt.logs[0].args.isCollateral, true);
     });
 
-    it("should get exception if called not by systemOwner", async () => {
-      const reason = "AssetParameters: Only system owner can call this function.";
+    it("should get exception if called not by an asset manager/role manager admin", async () => {
+      const reason =
+        "RoleManager: account is missing role 0x06c492a7eb572cfeccd28edc322064a12cedb3c4e3bddbb1357cd02f3a9f15fc";
 
       await truffleAssert.reverts(assetParameters.enableCollateral(daiKey, false, { from: USER2 }), reason);
     });
@@ -489,8 +497,9 @@ describe("AssetParameters", () => {
       );
     });
 
-    it("should get exception if called not by systemOwner", async () => {
-      const reason = "AssetParameters: Only system owner can call this function.";
+    it("should get exception if called not by an asset manager/role manager admin", async () => {
+      const reason =
+        "RoleManager: account is missing role 0x06c492a7eb572cfeccd28edc322064a12cedb3c4e3bddbb1357cd02f3a9f15fc";
 
       await truffleAssert.reverts(
         assetParameters.setupInterestRateModel(daiKey, [0, firstSlope, secondSlope, utilizationBreakingPoint], {
@@ -603,8 +612,9 @@ describe("AssetParameters", () => {
       );
     });
 
-    it("should get exception if called not by systemOwner", async () => {
-      const reason = "AssetParameters: Only system owner can call this function.";
+    it("should get exception if called not by an asset manager/role manager admin", async () => {
+      const reason =
+        "RoleManager: account is missing role 0x06c492a7eb572cfeccd28edc322064a12cedb3c4e3bddbb1357cd02f3a9f15fc";
       await truffleAssert.reverts(
         assetParameters.setupMainParameters(daiKey, [colRatio, colRatio, reserveFactor, liquidationDiscount, maxUR], {
           from: USER2,
@@ -671,8 +681,9 @@ describe("AssetParameters", () => {
       );
     });
 
-    it("should get exception if called not by systemOwner", async () => {
-      const reason = "AssetParameters: Only system owner can call this function.";
+    it("should get exception if called not by an asset manager/role manager admin", async () => {
+      const reason =
+        "RoleManager: account is missing role 0x06c492a7eb572cfeccd28edc322064a12cedb3c4e3bddbb1357cd02f3a9f15fc";
 
       await truffleAssert.reverts(
         assetParameters.setupDistributionsMinimums(daiKey, [minSupplyDistributionPart, minBorrowDistributionPart], {
@@ -740,8 +751,9 @@ describe("AssetParameters", () => {
       await truffleAssert.reverts(assetParameters.setupAnnualBorrowRate(stableKey, newRate), reason);
     });
 
-    it("should get exception if called not by systemOwner", async () => {
-      const reason = "AssetParameters: Only system owner can call this function.";
+    it("should get exception if called not by an asset manager/role manager admin", async () => {
+      const reason =
+        "RoleManager: account is missing role 0x06c492a7eb572cfeccd28edc322064a12cedb3c4e3bddbb1357cd02f3a9f15fc";
 
       await truffleAssert.reverts(
         assetParameters.setupAnnualBorrowRate(stableKey, annualBorrowRate, { from: USER2 }),
