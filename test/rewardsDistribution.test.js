@@ -3,6 +3,7 @@ const { toBytes } = require("./helpers/bytesCompareLibrary");
 const { getInterestRateLibraryAddr } = require("./helpers/coverage-helper");
 const { toBN, accounts, getPrecision, getPercentage100, wei } = require("../scripts/utils/utils");
 const { ZERO_ADDR } = require("../scripts/utils/constants");
+const { utils } = require("ethers");
 
 const Reverter = require("./helpers/reverter");
 const truffleAssert = require("truffle-assertions");
@@ -22,6 +23,7 @@ const Prt = artifacts.require("PRT");
 const InterestRateLibrary = artifacts.require("InterestRateLibrary");
 const WETH = artifacts.require("WETH");
 const StablePermitToken = artifacts.require("StablePermitTokenMock");
+const RoleManager = artifacts.require("RoleManager");
 
 const MockERC20 = artifacts.require("MockERC20");
 const ChainlinkOracleMock = artifacts.require("ChainlinkOracleMock");
@@ -43,6 +45,7 @@ describe("RewardsDistribution", () => {
   let rewardsDistribution;
   let systemPoolsRegistry;
   let prt;
+  let roleManager;
 
   let daiPool;
 
@@ -223,6 +226,7 @@ describe("RewardsDistribution", () => {
     const _stablePoolImpl = await StablePool.new();
     const _priceManager = await PriceManager.new();
     const _prt = await Prt.new();
+    const _roleManager = await RoleManager.new();
 
     await registry.__OwnableContractsRegistry_init();
 
@@ -237,6 +241,7 @@ describe("RewardsDistribution", () => {
     await registry.addProxyContract(await registry.SYSTEM_POOLS_FACTORY_NAME(), _liquidityPoolFactory.address);
     await registry.addProxyContract(await registry.PRICE_MANAGER_NAME(), _priceManager.address);
     await registry.addProxyContract(await registry.PRT_NAME(), _prt.address);
+    await registry.addProxyContract(await registry.ROLE_MANAGER_NAME(), _roleManager.address);
 
     await registry.addContract(await registry.INTEREST_RATE_LIBRARY_NAME(), interestRateLibrary.address);
 
@@ -245,6 +250,7 @@ describe("RewardsDistribution", () => {
     systemPoolsRegistry = await SystemPoolsRegistry.at(await registry.getSystemPoolsRegistryContract());
     rewardsDistribution = await RewardsDistribution.at(await registry.getRewardsDistributionContract());
     systemParameters = await SystemParameters.at(await registry.getSystemParametersContract());
+    roleManager = await RoleManager.at(await registry.getRoleManagerContract());
 
     await registry.injectDependencies(await registry.DEFI_CORE_NAME());
     await registry.injectDependencies(await registry.SYSTEM_PARAMETERS_NAME());
@@ -261,6 +267,7 @@ describe("RewardsDistribution", () => {
     tokens.push(nativeToken);
 
     await defiCore.defiCoreInitialize();
+    await roleManager.roleManagerInitialize([], []);
     await systemPoolsRegistry.systemPoolsRegistryInitialize(_liquidityPoolImpl.address, nativeTokenKey, zeroKey);
 
     await systemPoolsRegistry.addPoolsBeacon(1, _stablePoolImpl.address);
@@ -838,11 +845,12 @@ describe("RewardsDistribution", () => {
       await truffleAssert.reverts(rewardsDistribution.setupRewardsPerBlockBatch(keys, rewardsPerBlock), reason);
     });
 
-    it("should get exception if not system onwer try to call this function", async () => {
+    it("should get exception if called not by an REWARDS_DISTRIBUTION_MANAGER or ROLE_MANAGER_ADMIN", async () => {
       await systemParameters.setRewardsTokenAddress(rewardsToken.address);
       await systemPoolsRegistry.updateRewardsAssetKey(rewardsTokenKey);
 
-      const reason = "RewardsDistribution: Only system owner can call this function.";
+      const REWARDS_DISTRIBUTION_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("REWARDS_DISTRIBUTION_MANAGER"));
+      const reason = `RoleManager: account is missing role ${REWARDS_DISTRIBUTION_MANAGER_ROLE}`;
 
       await truffleAssert.reverts(
         rewardsDistribution.setupRewardsPerBlockBatch([daiKey], [oneToken], { from: USER1 }),

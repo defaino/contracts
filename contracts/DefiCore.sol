@@ -19,6 +19,7 @@ import "./interfaces/ISystemPoolsRegistry.sol";
 import "./interfaces/IRewardsDistribution.sol";
 import "./interfaces/IBasicPool.sol";
 import "./interfaces/IPRT.sol";
+import "./interfaces/IRoleManager.sol";
 
 import "./libraries/AssetsHelperLibrary.sol";
 import "./libraries/MathHelper.sol";
@@ -43,14 +44,12 @@ contract DefiCore is
     ISystemPoolsRegistry internal _systemPoolsRegistry;
     IRewardsDistribution internal _rewardsDistribution;
     IPRT internal _prt;
+    IRoleManager internal _roleManager;
 
     mapping(address => mapping(bytes32 => bool)) public override disabledCollateralAssets;
 
-    modifier onlySystemOwner() {
-        require(
-            msg.sender == _systemOwnerAddr,
-            "DefiCore: Only system owner can call this function."
-        );
+    modifier onlyDefiCorePauser() {
+        _onlyDefiCorePauser();
         _;
     }
 
@@ -69,13 +68,14 @@ contract DefiCore is
         _rewardsDistribution = IRewardsDistribution(registry_.getRewardsDistributionContract());
         _systemPoolsRegistry = ISystemPoolsRegistry(registry_.getSystemPoolsRegistryContract());
         _prt = IPRT(registry_.getPRTContract());
+        _roleManager = IRoleManager(registry_.getRoleManagerContract());
     }
 
-    function pause() external override onlySystemOwner {
+    function pause() external override onlyDefiCorePauser {
         _pause();
     }
 
-    function unpause() external override onlySystemOwner {
+    function unpause() external override onlyDefiCorePauser {
         _unpause();
     }
 
@@ -643,6 +643,10 @@ contract DefiCore is
         } else {
             return (0, totalBorrowedAmountInUSD_ - borrowLimitInUSD_);
         }
+    }
+
+    function _onlyDefiCorePauser() internal {
+        _roleManager.isDefiCorePauser(msg.sender);
     }
 
     function _borrowInternal(

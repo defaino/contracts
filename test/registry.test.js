@@ -16,6 +16,7 @@ const PriceManager = artifacts.require("PriceManager");
 const UserInfoRegistry = artifacts.require("UserInfoRegistry");
 const SystemPoolsFactory = artifacts.require("SystemPoolsFactory");
 const Prt = artifacts.require("PRT");
+const RoleManager = artifacts.require("RoleManager");
 
 describe("Registry", async () => {
   const reverter = new Reverter();
@@ -29,6 +30,7 @@ describe("Registry", async () => {
   let systemParameters;
   let systemPoolsRegistry;
   let prt;
+  let roleManager;
 
   before("setup", async () => {
     LIQUIDITY_POOL_REGISTRY = await accounts(9);
@@ -45,6 +47,7 @@ describe("Registry", async () => {
     const _userInfoRegistry = await UserInfoRegistry.new();
     const _systemPoolsFactory = await SystemPoolsFactory.new();
     const _prt = await Prt.new();
+    const _roleManager = await RoleManager.new();
 
     await registry.__OwnableContractsRegistry_init();
 
@@ -58,12 +61,14 @@ describe("Registry", async () => {
     await registry.addProxyContract(await registry.REWARDS_DISTRIBUTION_NAME(), _rewardsDistribution.address);
     await registry.addProxyContract(await registry.SYSTEM_POOLS_REGISTRY_NAME(), _systemPoolsRegistry.address);
     await registry.addProxyContract(await registry.PRT_NAME(), _prt.address);
+    await registry.addProxyContract(await registry.ROLE_MANAGER_NAME(), _roleManager.address);
 
     defiCore = await DefiCore.at(await registry.getDefiCoreContract());
     assetParameters = await AssetParameters.at(await registry.getAssetParametersContract());
     systemPoolsRegistry = await SystemPoolsRegistry.at(await registry.getSystemPoolsRegistryContract());
     rewardsDistribution = await RewardsDistribution.at(await registry.getRewardsDistributionContract());
     systemParameters = await SystemParameters.at(await registry.getSystemParametersContract());
+    roleManager = await RoleManager.at(await registry.getRoleManagerContract());
 
     await reverter.snapshot();
   });

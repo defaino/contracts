@@ -41,6 +41,7 @@ describe("PriceManager", async () => {
     await registry.addContract(await registry.DEFI_CORE_NAME(), NOTHING);
     await registry.addContract(await registry.REWARDS_DISTRIBUTION_NAME(), NOTHING);
     await registry.addContract(await registry.SYSTEM_POOLS_FACTORY_NAME(), NOTHING);
+    await registry.addContract(await registry.ROLE_MANAGER_NAME(), NOTHING);
 
     priceManager = await PriceManager.at(await registry.getPriceManagerContract());
 

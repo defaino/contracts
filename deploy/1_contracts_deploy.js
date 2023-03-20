@@ -11,8 +11,8 @@ const RewardsDistribution = artifacts.require("RewardsDistribution");
 const UserInfoRegistry = artifacts.require("UserInfoRegistry");
 const PriceManager = artifacts.require("PriceManager");
 const Prt = artifacts.require("PRT");
+const RoleManager = artifacts.require("RoleManager");
 
-const { artifacts } = require("hardhat");
 const { isStablePoolsAvailable } = require("./helpers/deployHelper.js");
 
 require("dotenv").config();
@@ -54,6 +54,9 @@ module.exports = async (deployer, logger) => {
 
   await deployer.deploy(Prt);
   const prt = await Prt.deployed();
+
+  await deployer.deploy(RoleManager);
+  const roleManager = await RoleManager.deployed();
 
   await deployer.deploy(LiquidityPool);
 
@@ -110,6 +113,11 @@ module.exports = async (deployer, logger) => {
   logger.logTransaction(
     await registry.addProxyContract(await registry.PRT_NAME(), prt.address),
     "Add Prt contract proxy to the registry"
+  );
+
+  logger.logTransaction(
+    await registry.addProxyContract(await registry.ROLE_MANAGER_NAME(), roleManager.address),
+    "Add RoleManager contract proxy to the registry"
   );
 
   console.log();

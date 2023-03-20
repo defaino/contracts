@@ -60,7 +60,7 @@ interface IRewardsDistribution {
     ) external returns (uint256 userReward_);
 
     /// @notice Function to update block rewards for desired pools
-    /// @dev Can call only by contract owner. The passed arrays must be of the same length
+    /// @dev Can call only by REWARDS_DISTRIBUTION_MANAGER. The passed arrays must be of the same length
     /// @param assetKeys_ array of pool identifiers
     /// @param rewardsPerBlock_ array of new rewards per block
     function setupRewardsPerBlockBatch(

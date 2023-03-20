@@ -111,19 +111,19 @@ interface IAssetParameters {
     ) external;
 
     /// @notice Function for setting the annual borrow rate of the stable pool
-    /// @dev Only contract owner can call this function. Only for stable pools
+    /// @dev Only ASSET_PARAMETERS_MANAGER can call this function. Only for stable pools
     /// @param assetKey_ pool key for which parameters will be set
     /// @param newAnnualBorrowRate_ new annual borrow rate parameter
     function setupAnnualBorrowRate(bytes32 assetKey_, uint256 newAnnualBorrowRate_) external;
 
     /// @notice Function for setting the main parameters of the pool
-    /// @dev Only contract owner can call this function
+    /// @dev Only ASSET_PARAMETERS_MANAGER can call this function
     /// @param assetKey_ pool key for which parameters will be set
     /// @param mainParams_ structure with the main parameters of the pool
     function setupMainParameters(bytes32 assetKey_, MainPoolParams calldata mainParams_) external;
 
     /// @notice Function for setting the interest rate parameters of the pool
-    /// @dev Only contract owner can call this function
+    /// @dev Only ASSET_PARAMETERS_MANAGER can call this function
     /// @param assetKey_ pool key for which parameters will be set
     /// @param interestParams_ structure with the interest rate parameters of the pool
     function setupInterestRateModel(
@@ -132,7 +132,7 @@ interface IAssetParameters {
     ) external;
 
     /// @notice Function for setting the distribution minimums of the pool
-    /// @dev Only contract owner can call this function
+    /// @dev Only ASSET_PARAMETERS_MANAGER can call this function
     /// @param assetKey_ pool key for which parameters will be set
     /// @param distrMinimums_ structure with the distribution minimums of the pool
     function setupDistributionsMinimums(
@@ -141,18 +141,18 @@ interface IAssetParameters {
     ) external;
 
     /// @notice Function for setting all pool parameters
-    /// @dev Only contract owner can call this function
+    /// @dev Only ASSET_PARAMETERS_MANAGER can call this function
     /// @param assetKey_ pool key for which parameters will be set
     /// @param poolParams_ structure with all pool parameters
     function setupAllParameters(bytes32 assetKey_, AllPoolParams calldata poolParams_) external;
 
     /// @notice Function for freezing the pool
-    /// @dev Only contract owner can call this function
+    /// @dev Only ASSET_PARAMETERS_MANAGER can call this function
     /// @param assetKey_ pool key to be frozen
     function freeze(bytes32 assetKey_) external;
 
     /// @notice Function to enable the pool as a collateral
-    /// @dev Only contract owner can call this function
+    /// @dev Only ASSET_PARAMETERS_MANAGER can call this function
     /// @param assetKey_ the pool key to be enabled as a collateral
     /// @param forPRT_ whether to enable the asset as a collateral for the users with PRT
     function enableCollateral(bytes32 assetKey_, bool forPRT_) external;

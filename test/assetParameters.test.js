@@ -2,6 +2,7 @@ const { toBytes, fromBytes, compareKeys } = require("./helpers/bytesCompareLibra
 const { getInterestRateLibraryAddr } = require("./helpers/coverage-helper");
 const { toBN, accounts, wei, getPrecision, getPercentage100 } = require("../scripts/utils/utils");
 const { ZERO_ADDR } = require("../scripts/utils/constants");
+const { utils } = require("ethers");
 
 const truffleAssert = require("truffle-assertions");
 const Reverter = require("./helpers/reverter");
@@ -21,6 +22,7 @@ const PriceManager = artifacts.require("PriceManager");
 const ChainlinkOracleMock = artifacts.require("ChainlinkOracleMock");
 const SystemPoolsRegistry = artifacts.require("SystemPoolsRegistry");
 const Prt = artifacts.require("PRT");
+const RoleManager = artifacts.require("RoleManager");
 
 DefiCore.numberFormat = "BigNumber";
 AssetParameters.numberFormat = "BigNumber";
@@ -68,6 +70,7 @@ describe("AssetParameters", () => {
   let systemPoolsRegistry;
   let rewardsToken;
   let prt;
+  let roleManager;
 
   async function createLiquidityPool(assetKey, symbol, isCollateral) {
     const token = await MockERC20.new("Mock" + symbol, symbol);
@@ -144,6 +147,7 @@ describe("AssetParameters", () => {
     const _stablePoolImpl = await StablePool.new();
     const _systemPoolsRegistry = await SystemPoolsRegistry.new();
     const _prt = await Prt.new();
+    const _roleManager = await RoleManager.new();
 
     await registry.__OwnableContractsRegistry_init();
 
@@ -156,6 +160,7 @@ describe("AssetParameters", () => {
     await registry.addProxyContract(await registry.PRICE_MANAGER_NAME(), _priceManager.address);
     await registry.addProxyContract(await registry.SYSTEM_POOLS_REGISTRY_NAME(), _systemPoolsRegistry.address);
     await registry.addProxyContract(await registry.PRT_NAME(), _prt.address);
+    await registry.addProxyContract(await registry.ROLE_MANAGER_NAME(), _roleManager.address);
 
     await registry.addContract(await registry.INTEREST_RATE_LIBRARY_NAME(), interestRateLibrary.address);
 
@@ -163,6 +168,7 @@ describe("AssetParameters", () => {
     assetParameters = await AssetParameters.at(await registry.getAssetParametersContract());
     rewardsDistribution = await RewardsDistribution.at(await registry.getRewardsDistributionContract());
     systemPoolsRegistry = await SystemPoolsRegistry.at(await registry.getSystemPoolsRegistryContract());
+    roleManager = await RoleManager.at(await registry.getRoleManagerContract());
 
     const defiCore = await DefiCore.at(await registry.getDefiCoreContract());
 
@@ -177,6 +183,7 @@ describe("AssetParameters", () => {
     await registry.injectDependencies(await registry.PRT_NAME());
 
     await defiCore.defiCoreInitialize();
+    await roleManager.roleManagerInitialize([], []);
     await systemPoolsRegistry.systemPoolsRegistryInitialize(_liquidityPoolImpl.address, rewardsTokenKey, zeroKey);
 
     await systemPoolsRegistry.addPoolsBeacon(1, _stablePoolImpl.address);
@@ -274,12 +281,13 @@ describe("AssetParameters", () => {
   });
 
   describe("setupAllParameters", () => {
-    it("should get exception if called not by systemOwner", async () => {
-      const reason = "AssetParameters: Only system owner can call this function.";
+    it("should get exception if called not by an ASSET_PARAMETERS_MANAGER or ROLE_MANAGER_ADMIN", async () => {
+      const ASSET_PARAMETERS_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("ASSET_PARAMETERS_MANAGER"));
+      const reason = `RoleManager: account is missing role ${ASSET_PARAMETERS_MANAGER_ROLE}`;
 
       await truffleAssert.reverts(
         assetParameters.setupAllParameters(
-          stableKey,
+          rewardsTokenKey,
           [
             [colRatio, colRatio, reserveFactor, liquidationDiscount, maxUR],
             [0, firstSlope, secondSlope, utilizationBreakingPoint],
@@ -353,8 +361,11 @@ describe("AssetParameters", () => {
       assert.equal(result.logs[0].args.newValue, true);
     });
 
-    it("should not access to freeze the pool by not core", async () => {
-      await truffleAssert.reverts(assetParameters.freeze(daiKey, { from: SOMEBODY }));
+    it("should not access to freeze the pool by not an ASSET_PARAMETERS_MANAGER or ROLE_MANAGER_ADMIN", async () => {
+      const ASSET_PARAMETERS_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("ASSET_PARAMETERS_MANAGER"));
+      const reason = `RoleManager: account is missing role ${ASSET_PARAMETERS_MANAGER_ROLE}`;
+
+      await truffleAssert.reverts(assetParameters.freeze(daiKey, { from: SOMEBODY }), reason);
     });
 
     it("should not access to freeze pool of the not exists token", async () => {
@@ -385,8 +396,9 @@ describe("AssetParameters", () => {
       assert.equal(result.receipt.logs[0].args.isCollateral, true);
     });
 
-    it("should get exception if called not by systemOwner", async () => {
-      const reason = "AssetParameters: Only system owner can call this function.";
+    it("should get exception if called not by an ASSET_PARAMETERS_MANAGER or ROLE_MANAGER_ADMIN", async () => {
+      const ASSET_PARAMETERS_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("ASSET_PARAMETERS_MANAGER"));
+      const reason = `RoleManager: account is missing role ${ASSET_PARAMETERS_MANAGER_ROLE}`;
 
       await truffleAssert.reverts(assetParameters.enableCollateral(daiKey, false, { from: USER2 }), reason);
     });
@@ -489,8 +501,9 @@ describe("AssetParameters", () => {
       );
     });
 
-    it("should get exception if called not by systemOwner", async () => {
-      const reason = "AssetParameters: Only system owner can call this function.";
+    it("should get exception if called not by an ASSET_PARAMETERS_MANAGER or ROLE_MANAGER_ADMIN", async () => {
+      const ASSET_PARAMETERS_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("ASSET_PARAMETERS_MANAGER"));
+      const reason = `RoleManager: account is missing role ${ASSET_PARAMETERS_MANAGER_ROLE}`;
 
       await truffleAssert.reverts(
         assetParameters.setupInterestRateModel(daiKey, [0, firstSlope, secondSlope, utilizationBreakingPoint], {
@@ -603,8 +616,10 @@ describe("AssetParameters", () => {
       );
     });
 
-    it("should get exception if called not by systemOwner", async () => {
-      const reason = "AssetParameters: Only system owner can call this function.";
+    it("should get exception if called not by an ASSET_PARAMETERS_MANAGER or ROLE_MANAGER_ADMIN", async () => {
+      const ASSET_PARAMETERS_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("ASSET_PARAMETERS_MANAGER"));
+      const reason = `RoleManager: account is missing role ${ASSET_PARAMETERS_MANAGER_ROLE}`;
+
       await truffleAssert.reverts(
         assetParameters.setupMainParameters(daiKey, [colRatio, colRatio, reserveFactor, liquidationDiscount, maxUR], {
           from: USER2,
@@ -671,8 +686,9 @@ describe("AssetParameters", () => {
       );
     });
 
-    it("should get exception if called not by systemOwner", async () => {
-      const reason = "AssetParameters: Only system owner can call this function.";
+    it("should get exception if called not by an ASSET_PARAMETERS_MANAGER or ROLE_MANAGER_ADMIN", async () => {
+      const ASSET_PARAMETERS_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("ASSET_PARAMETERS_MANAGER"));
+      const reason = `RoleManager: account is missing role ${ASSET_PARAMETERS_MANAGER_ROLE}`;
 
       await truffleAssert.reverts(
         assetParameters.setupDistributionsMinimums(daiKey, [minSupplyDistributionPart, minBorrowDistributionPart], {
@@ -740,8 +756,9 @@ describe("AssetParameters", () => {
       await truffleAssert.reverts(assetParameters.setupAnnualBorrowRate(stableKey, newRate), reason);
     });
 
-    it("should get exception if called not by systemOwner", async () => {
-      const reason = "AssetParameters: Only system owner can call this function.";
+    it("should get exception if called not by an ASSET_PARAMETERS_MANAGER or ROLE_MANAGER_ADMIN", async () => {
+      const ASSET_PARAMETERS_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("ASSET_PARAMETERS_MANAGER"));
+      const reason = `RoleManager: account is missing role ${ASSET_PARAMETERS_MANAGER_ROLE}`;
 
       await truffleAssert.reverts(
         assetParameters.setupAnnualBorrowRate(stableKey, annualBorrowRate, { from: USER2 }),

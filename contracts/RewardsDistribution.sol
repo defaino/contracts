@@ -10,6 +10,7 @@ import "./interfaces/IAssetParameters.sol";
 import "./interfaces/IRewardsDistribution.sol";
 import "./interfaces/ISystemPoolsRegistry.sol";
 import "./interfaces/IBasicPool.sol";
+import "./interfaces/IRoleManager.sol";
 
 import "./libraries/MathHelper.sol";
 
@@ -22,6 +23,7 @@ contract RewardsDistribution is IRewardsDistribution, AbstractDependant {
     address internal _defiCoreAddr;
     IAssetParameters internal _assetParameters;
     ISystemPoolsRegistry internal _systemPoolsRegistry;
+    IRoleManager internal _roleManager;
 
     mapping(bytes32 => LiquidityPoolInfo) public liquidityPoolsInfo;
     mapping(bytes32 => mapping(address => UserDistributionInfo)) public usersDistributionInfo;
@@ -34,11 +36,8 @@ contract RewardsDistribution is IRewardsDistribution, AbstractDependant {
         _;
     }
 
-    modifier onlySystemOwner() {
-        require(
-            msg.sender == _systemOwnerAddr,
-            "RewardsDistribution: Only system owner can call this function."
-        );
+    modifier onlyRewardsDistributionManager() {
+        _onlyRewardsDistributionManager();
         _;
     }
 
@@ -49,6 +48,7 @@ contract RewardsDistribution is IRewardsDistribution, AbstractDependant {
         _defiCoreAddr = registry_.getDefiCoreContract();
         _assetParameters = IAssetParameters(registry_.getAssetParametersContract());
         _systemPoolsRegistry = ISystemPoolsRegistry(registry_.getSystemPoolsRegistryContract());
+        _roleManager = IRoleManager(registry_.getRoleManagerContract());
     }
 
     function updateCumulativeSums(
@@ -85,7 +85,7 @@ contract RewardsDistribution is IRewardsDistribution, AbstractDependant {
     function setupRewardsPerBlockBatch(
         bytes32[] calldata assetKeys_,
         uint256[] calldata rewardsPerBlock_
-    ) external override onlySystemOwner {
+    ) external override onlyRewardsDistributionManager {
         require(
             _onlyExistingRewardsAssetKey(),
             "RewardsDistributionL Unable to setup rewards per block."
@@ -181,6 +181,10 @@ contract RewardsDistribution is IRewardsDistribution, AbstractDependant {
                 poolType_
             );
         }
+    }
+
+    function _onlyRewardsDistributionManager() internal {
+        _roleManager.isRewardsDistributionManager(msg.sender);
     }
 
     function _updateSumsWithUserReward(

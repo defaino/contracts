@@ -2,12 +2,12 @@ const { setNextBlockTime, getCurrentBlockTime } = require("./helpers/block-helpe
 const { toBytes, fromBytes, deepCompareKeys, compareKeys } = require("./helpers/bytesCompareLibrary");
 const { getInterestRateLibraryAddr } = require("./helpers/coverage-helper");
 const { toBN, accounts, getPrecision, getPercentage100, wei } = require("../scripts/utils/utils");
+const { utils } = require("ethers");
 const { ZERO_ADDR } = require("../scripts/utils/constants");
 
 const truffleAssert = require("truffle-assertions");
 const Reverter = require("./helpers/reverter");
 const { assert } = require("chai");
-const { artifacts } = require("hardhat");
 
 const Registry = artifacts.require("Registry");
 const DefiCore = artifacts.require("DefiCore");
@@ -24,6 +24,8 @@ const LiquidityPoolMock = artifacts.require("LiquidityPoolMock");
 const AbstractPool = artifacts.require("AbstractPool");
 const PriceManager = artifacts.require("PriceManager");
 const Prt = artifacts.require("PRT");
+const RoleManager = artifacts.require("RoleManager");
+
 const InterestRateLibrary = artifacts.require("InterestRateLibrary");
 const WETH = artifacts.require("WETH");
 const StablePermitToken = artifacts.require("StablePermitTokenMock");
@@ -71,6 +73,7 @@ describe("SystemPoolsRegistry", () => {
   let systemPoolsRegistry;
   let liquidityPoolFactory;
   let prt;
+  let roleManager;
 
   let rewardsToken;
 
@@ -169,6 +172,7 @@ describe("SystemPoolsRegistry", () => {
     const _liquidityPoolImpl = await LiquidityPool.new();
     const _priceManager = await PriceManager.new();
     const _prt = await Prt.new();
+    const _roleManager = await RoleManager.new();
 
     await registry.__OwnableContractsRegistry_init();
 
@@ -181,6 +185,7 @@ describe("SystemPoolsRegistry", () => {
     await registry.addProxyContract(await registry.SYSTEM_POOLS_FACTORY_NAME(), _liquidityPoolFactory.address);
     await registry.addProxyContract(await registry.PRICE_MANAGER_NAME(), _priceManager.address);
     await registry.addProxyContract(await registry.PRT_NAME(), _prt.address);
+    await registry.addProxyContract(await registry.ROLE_MANAGER_NAME(), _roleManager.address);
 
     await registry.addContract(await registry.INTEREST_RATE_LIBRARY_NAME(), interestRateLibrary.address);
 
@@ -190,6 +195,7 @@ describe("SystemPoolsRegistry", () => {
     rewardsDistribution = await RewardsDistribution.at(await registry.getRewardsDistributionContract());
     systemParameters = await SystemParameters.at(await registry.getSystemParametersContract());
     liquidityPoolFactory = await SystemPoolsFactory.at(await registry.getSystemPoolsFactoryContract());
+    roleManager = await RoleManager.at(await registry.getRoleManagerContract());
 
     await registry.injectDependencies(await registry.DEFI_CORE_NAME());
     await registry.injectDependencies(await registry.SYSTEM_PARAMETERS_NAME());
@@ -202,6 +208,7 @@ describe("SystemPoolsRegistry", () => {
     await registry.injectDependencies(await registry.PRT_NAME());
 
     await defiCore.defiCoreInitialize();
+    await roleManager.roleManagerInitialize([], []);
     await systemPoolsRegistry.systemPoolsRegistryInitialize(_liquidityPoolImpl.address, nativeTokenKey, zeroKey);
 
     await systemParameters.setupStablePoolsAvailability(true);
@@ -283,8 +290,9 @@ describe("SystemPoolsRegistry", () => {
       await truffleAssert.reverts(systemPoolsRegistry.updateRewardsAssetKey(someKey), reason);
     });
 
-    it("should get exception if called by not a system owner", async () => {
-      const reason = "SystemPoolsRegistry: Only system owner can call this function.";
+    it("should get exception if called not by an SYSTEM_POOLS_MANAGER or ROLE_MANAGER_ADMIN", async () => {
+      const SYSTEM_POOLS_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("SYSTEM_POOLS_MANAGER"));
+      const reason = `RoleManager: account is missing role ${SYSTEM_POOLS_MANAGER_ROLE}`;
 
       assert.isTrue(compareKeys(await systemPoolsRegistry.rewardsAssetKey(), zeroKey));
       assert.equal(await getLiquidityPoolAddr(zeroKey), await systemPoolsRegistry.getRewardsLiquidityPool());
@@ -318,8 +326,9 @@ describe("SystemPoolsRegistry", () => {
       await truffleAssert.reverts(systemPoolsRegistry.addPoolsBeacon(0, NOTHING), reason);
     });
 
-    it("should get exception if not system owner try to call this function", async () => {
-      const reason = "SystemPoolsRegistry: Only system owner can call this function.";
+    it("should get exception if called not by an SYSTEM_POOLS_MANAGER or ROLE_MANAGER_ADMIN", async () => {
+      const SYSTEM_POOLS_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("SYSTEM_POOLS_MANAGER"));
+      const reason = `RoleManager: account is missing role ${SYSTEM_POOLS_MANAGER_ROLE}`;
 
       await truffleAssert.reverts(systemPoolsRegistry.addPoolsBeacon(1, NOTHING, { from: USER1 }), reason);
     });
@@ -385,8 +394,9 @@ describe("SystemPoolsRegistry", () => {
       await truffleAssert.reverts(liquidityPoolFactory.newLiquidityPool(TEST_ASSET, daiKey, "DAI"), reason);
     });
 
-    it("should get exception if called by not a system owner", async () => {
-      const reason = "SystemPoolsRegistry: Only system owner can call this function.";
+    it("should get exception if called not by an SYSTEM_POOLS_MANAGER or ROLE_MANAGER_ADMIN", async () => {
+      const SYSTEM_POOLS_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("SYSTEM_POOLS_MANAGER"));
+      const reason = `RoleManager: account is missing role ${SYSTEM_POOLS_MANAGER_ROLE}`;
 
       await truffleAssert.reverts(
         systemPoolsRegistry.addLiquidityPool(TEST_ASSET, daiKey, chainlinkOracle.address, "DAI", true, true, {
@@ -431,8 +441,9 @@ describe("SystemPoolsRegistry", () => {
       await truffleAssert.reverts(systemPoolsRegistry.addStablePool(NOTHING, someKey, NOTHING), reason);
     });
 
-    it("should get exception if called by not a system owner", async () => {
-      const reason = "SystemPoolsRegistry: Only system owner can call this function.";
+    it("should get exception if called not by an SYSTEM_POOLS_MANAGER or ROLE_MANAGER_ADMIN", async () => {
+      const SYSTEM_POOLS_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("SYSTEM_POOLS_MANAGER"));
+      const reason = `RoleManager: account is missing role ${SYSTEM_POOLS_MANAGER_ROLE}`;
 
       await truffleAssert.reverts(
         systemPoolsRegistry.addStablePool(someToken.address, someKey, NOTHING, { from: USER1 }),
@@ -468,8 +479,10 @@ describe("SystemPoolsRegistry", () => {
 
       await truffleAssert.reverts(systemPoolsRegistry.upgradePoolsImpl(1, NOTHING), reason);
     });
-    it("should get exception if called by not a system owner", async () => {
-      const reason = "SystemPoolsRegistry: Only system owner can call this function.";
+    it("should get exception if called not by an SYSTEM_POOLS_MANAGER or ROLE_MANAGER_ADMIN", async () => {
+      const SYSTEM_POOLS_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("SYSTEM_POOLS_MANAGER"));
+      const reason = `RoleManager: account is missing role ${SYSTEM_POOLS_MANAGER_ROLE}`;
+
       await createLiquidityPool(daiKey, "DAI", true);
       const daiPool = await LiquidityPool.at(await getLiquidityPoolAddr(daiKey));
 
@@ -560,8 +573,9 @@ describe("SystemPoolsRegistry", () => {
       await truffleAssert.reverts(abstractPools[0].setDependencies(registry.address, { from: USER2 }), reason);
     });
 
-    it("injectDependenciesToExistingPools() should get exception if called by not a system owner", async () => {
-      const reason = "SystemPoolsRegistry: Only system owner can call this function.";
+    it("injectDependenciesToExistingPools() should get exception if called by not a SYSTEM_POOLS_MANAGER or ROLE_MANAGER_ADMIN", async () => {
+      const SYSTEM_POOLS_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("SYSTEM_POOLS_MANAGER"));
+      const reason = `RoleManager: account is missing role ${SYSTEM_POOLS_MANAGER_ROLE}`;
 
       const currentPriceManager = await registry.getPriceManagerContract();
       const newPriceManager = await PriceManager.new();
@@ -574,8 +588,10 @@ describe("SystemPoolsRegistry", () => {
 
       await truffleAssert.reverts(systemPoolsRegistry.injectDependenciesToExistingPools({ from: USER1 }), reason);
     });
-    it("injectDependencies() should get exception if called by not a system owner", async () => {
-      const reason = "SystemPoolsRegistry: Only system owner can call this function.";
+    it("injectDependencies() should get exception if called by not a SYSTEM_POOLS_MANAGER or ROLE_MANAGER_ADMIN", async () => {
+      const SYSTEM_POOLS_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("SYSTEM_POOLS_MANAGER"));
+      const reason = `RoleManager: account is missing role ${SYSTEM_POOLS_MANAGER_ROLE}`;
+
       const currentPriceManager = await registry.getPriceManagerContract();
       const newPriceManager = await PriceManager.new();
 

@@ -180,6 +180,12 @@ interface IUserInfoRegistry {
         uint256 amount_
     ) external;
 
+    /// @notice A system function that is needed to update users' PRT stats
+    /// @dev Only DefiCore contract can call this function
+    /// @param userAddr_ the user we want to update stats for
+    /// @param repaysCount_ the number of the borrow repays the user did
+    /// @param liquidationsCount_ the number of times user got liquidated
+    /// @param isSupply_ whether we update stats for user supply or borrow
     function updateUserStatsForPRT(
         address userAddr_,
         uint256 repaysCount_,

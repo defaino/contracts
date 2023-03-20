@@ -23,6 +23,8 @@ contract Registry is IRegistry, OwnableContractsRegistry {
 
     string public constant PRT_NAME = "PLATFORM_REPUTATION_TOKEN";
 
+    string public constant ROLE_MANAGER_NAME = "ROLE_MANAGER_NAME";
+
     function transferOwnershipAndInject(
         address newOwner_,
         string[] calldata names_
@@ -82,5 +84,9 @@ contract Registry is IRegistry, OwnableContractsRegistry {
 
     function getPRTContract() external view override returns (address) {
         return getContract(PRT_NAME);
+    }
+
+    function getRoleManagerContract() external view override returns (address) {
+        return getContract(ROLE_MANAGER_NAME);
     }
 }

@@ -101,13 +101,13 @@ interface ISystemPoolsRegistry {
     event PoolAdded(bytes32 assetKey, address assetAddr, address poolAddr, PoolType poolType);
 
     /// @notice Function to add a beacon contract for the desired type of pools
-    /// @dev Only contract owner can call this function
+    /// @dev Only SYSTEM_POOLS_MANAGER can call this function
     /// @param poolType_ the type of pool for which the beacon contract will be added
     /// @param poolImpl_ the implementation address for the desired pool type
     function addPoolsBeacon(PoolType poolType_, address poolImpl_) external;
 
     /// @notice The function is needed to add new liquidity pools
-    /// @dev Only contract owner can call this function
+    /// @dev Only SYSTEM_POOLS_MANAGER call this function
     /// @param assetAddr_ address of the underlying liquidity pool asset
     /// @param assetKey_ pool key of the added liquidity pool
     /// @param chainlinkOracle_ the address of the chainlink oracle for the passed asset
@@ -124,7 +124,7 @@ interface ISystemPoolsRegistry {
     ) external;
 
     /// @notice The function is needed to add new stable pools
-    /// @dev Only contract owner can call this function
+    /// @dev Only SYSTEM_POOLS_MANAGER can call this function
     /// @param assetAddr_ address of the underlying stable pool asset
     /// @param assetKey_ pool key of the added stable pool
     /// @param chainlinkOracle_ the address of the chainlink oracle for the passed asset
@@ -135,7 +135,7 @@ interface ISystemPoolsRegistry {
     ) external;
 
     /// @notice Withdraws a certain amount of reserve funds from a certain pool to a certain recipient
-    /// @dev Only contract owner can call this function
+    /// @dev Only SYSTEM_POOLS_RESERVE_FUNDS_MANAGER can call this function
     /// @param recipientAddr_ the address of the user to whom the withdrawal will be sent
     /// @param assetKey_ key of the required pool
     /// @param amountToWithdraw_ amount for withdrawal of reserve funds
@@ -148,7 +148,7 @@ interface ISystemPoolsRegistry {
     ) external;
 
     /// @notice Withdrawal of all reserve funds from pools with pagination
-    /// @dev Only contract owner can call this function
+    /// @dev Only SYSTEM_POOLS_RESERVE_FUNDS_MANAGER can call this function
     /// @param recipientAddr_ the address of the user to whom the withdrawal will be sent
     /// @param offset_ offset for pagination
     /// @param limit_ maximum number of elements for pagination
@@ -158,18 +158,23 @@ interface ISystemPoolsRegistry {
         uint256 limit_
     ) external;
 
+    /// @notice The function is needed to update the reward asset
+    /// @dev Only SYSTEM_POOLS_MANAGER can call this function
+    /// @param newRewardsAssetKey_ key of the new rewards asset
+    function updateRewardsAssetKey(bytes32 newRewardsAssetKey_) external;
+
     /// @notice The function is needed to update the implementation of the pools
-    /// @dev Only contract owner can call this function
+    /// @dev Only SYSTEM_POOLS_MANAGER can call this function
     /// @param poolType_ needed pool type from PoolType enum
     /// @param newPoolsImpl_ address of the new pools implementation
     function upgradePoolsImpl(PoolType poolType_, address newPoolsImpl_) external;
 
     /// @notice The function inject dependencies to existing liquidity pools
-    /// @dev Only contract owner can call this function
+    /// @dev Only SYSTEM_POOLS_MANAGER can call this function
     function injectDependenciesToExistingPools() external;
 
     /// @notice The function inject dependencies with pagination
-    /// @dev Only contract owner can call this function
+    /// @dev Only SYSTEM_POOLS_MANAGER can call this function
     function injectDependencies(uint256 offset_, uint256 limit_) external;
 
     /// @notice The function returns the native asset key
