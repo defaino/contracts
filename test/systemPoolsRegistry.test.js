@@ -2,12 +2,12 @@ const { setNextBlockTime, getCurrentBlockTime } = require("./helpers/block-helpe
 const { toBytes, fromBytes, deepCompareKeys, compareKeys } = require("./helpers/bytesCompareLibrary");
 const { getInterestRateLibraryAddr } = require("./helpers/coverage-helper");
 const { toBN, accounts, getPrecision, getPercentage100, wei } = require("../scripts/utils/utils");
+const { utils } = require("ethers");
 const { ZERO_ADDR } = require("../scripts/utils/constants");
 
 const truffleAssert = require("truffle-assertions");
 const Reverter = require("./helpers/reverter");
 const { assert } = require("chai");
-const { artifacts } = require("hardhat");
 
 const Registry = artifacts.require("Registry");
 const DefiCore = artifacts.require("DefiCore");
@@ -290,9 +290,9 @@ describe("SystemPoolsRegistry", () => {
       await truffleAssert.reverts(systemPoolsRegistry.updateRewardsAssetKey(someKey), reason);
     });
 
-    it("should get exception if called not by an SYSTEM_POOLS_MANAGER/role manager admin", async () => {
-      const reason =
-        "RoleManager: account is missing role 0xa6422b3c9a6d3dc00d8db23ad51c1008c5e46eaa60434b734a90225deb0e7cb9";
+    it("should get exception if called not by an SYSTEM_POOLS_MANAGER or ROLE_MANAGER_ADMIN", async () => {
+      const SYSTEM_POOLS_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("SYSTEM_POOLS_MANAGER"));
+      const reason = `RoleManager: account is missing role ${SYSTEM_POOLS_MANAGER_ROLE}`;
 
       assert.isTrue(compareKeys(await systemPoolsRegistry.rewardsAssetKey(), zeroKey));
       assert.equal(await getLiquidityPoolAddr(zeroKey), await systemPoolsRegistry.getRewardsLiquidityPool());
@@ -326,9 +326,9 @@ describe("SystemPoolsRegistry", () => {
       await truffleAssert.reverts(systemPoolsRegistry.addPoolsBeacon(0, NOTHING), reason);
     });
 
-    it("should get exception if called not by an SYSTEM_POOLS_MANAGER/role manager admin", async () => {
-      const reason =
-        "RoleManager: account is missing role 0xa6422b3c9a6d3dc00d8db23ad51c1008c5e46eaa60434b734a90225deb0e7cb9";
+    it("should get exception if called not by an SYSTEM_POOLS_MANAGER or ROLE_MANAGER_ADMIN", async () => {
+      const SYSTEM_POOLS_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("SYSTEM_POOLS_MANAGER"));
+      const reason = `RoleManager: account is missing role ${SYSTEM_POOLS_MANAGER_ROLE}`;
 
       await truffleAssert.reverts(systemPoolsRegistry.addPoolsBeacon(1, NOTHING, { from: USER1 }), reason);
     });
@@ -394,9 +394,9 @@ describe("SystemPoolsRegistry", () => {
       await truffleAssert.reverts(liquidityPoolFactory.newLiquidityPool(TEST_ASSET, daiKey, "DAI"), reason);
     });
 
-    it("should get exception if called not by an SYSTEM_POOLS_MANAGER/role manager admin", async () => {
-      const reason =
-        "RoleManager: account is missing role 0xa6422b3c9a6d3dc00d8db23ad51c1008c5e46eaa60434b734a90225deb0e7cb9";
+    it("should get exception if called not by an SYSTEM_POOLS_MANAGER or ROLE_MANAGER_ADMIN", async () => {
+      const SYSTEM_POOLS_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("SYSTEM_POOLS_MANAGER"));
+      const reason = `RoleManager: account is missing role ${SYSTEM_POOLS_MANAGER_ROLE}`;
 
       await truffleAssert.reverts(
         systemPoolsRegistry.addLiquidityPool(TEST_ASSET, daiKey, chainlinkOracle.address, "DAI", true, true, {
@@ -441,9 +441,9 @@ describe("SystemPoolsRegistry", () => {
       await truffleAssert.reverts(systemPoolsRegistry.addStablePool(NOTHING, someKey, NOTHING), reason);
     });
 
-    it("should get exception if called not by an SYSTEM_POOLS_MANAGER/role manager admin", async () => {
-      const reason =
-        "RoleManager: account is missing role 0xa6422b3c9a6d3dc00d8db23ad51c1008c5e46eaa60434b734a90225deb0e7cb9";
+    it("should get exception if called not by an SYSTEM_POOLS_MANAGER or ROLE_MANAGER_ADMIN", async () => {
+      const SYSTEM_POOLS_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("SYSTEM_POOLS_MANAGER"));
+      const reason = `RoleManager: account is missing role ${SYSTEM_POOLS_MANAGER_ROLE}`;
 
       await truffleAssert.reverts(
         systemPoolsRegistry.addStablePool(someToken.address, someKey, NOTHING, { from: USER1 }),
@@ -479,9 +479,10 @@ describe("SystemPoolsRegistry", () => {
 
       await truffleAssert.reverts(systemPoolsRegistry.upgradePoolsImpl(1, NOTHING), reason);
     });
-    it("should get exception if called not by an SYSTEM_POOLS_MANAGER/role manager admin", async () => {
-      const reason =
-        "RoleManager: account is missing role 0xa6422b3c9a6d3dc00d8db23ad51c1008c5e46eaa60434b734a90225deb0e7cb9";
+    it("should get exception if called not by an SYSTEM_POOLS_MANAGER or ROLE_MANAGER_ADMIN", async () => {
+      const SYSTEM_POOLS_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("SYSTEM_POOLS_MANAGER"));
+      const reason = `RoleManager: account is missing role ${SYSTEM_POOLS_MANAGER_ROLE}`;
+
       await createLiquidityPool(daiKey, "DAI", true);
       const daiPool = await LiquidityPool.at(await getLiquidityPoolAddr(daiKey));
 
@@ -572,9 +573,9 @@ describe("SystemPoolsRegistry", () => {
       await truffleAssert.reverts(abstractPools[0].setDependencies(registry.address, { from: USER2 }), reason);
     });
 
-    it("injectDependenciesToExistingPools() should get exception if called by not a SYSTEM_POOLS_MANAGER", async () => {
-      const reason =
-        "RoleManager: account is missing role 0xa6422b3c9a6d3dc00d8db23ad51c1008c5e46eaa60434b734a90225deb0e7cb9";
+    it("injectDependenciesToExistingPools() should get exception if called by not a SYSTEM_POOLS_MANAGER or ROLE_MANAGER_ADMIN", async () => {
+      const SYSTEM_POOLS_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("SYSTEM_POOLS_MANAGER"));
+      const reason = `RoleManager: account is missing role ${SYSTEM_POOLS_MANAGER_ROLE}`;
 
       const currentPriceManager = await registry.getPriceManagerContract();
       const newPriceManager = await PriceManager.new();
@@ -587,9 +588,10 @@ describe("SystemPoolsRegistry", () => {
 
       await truffleAssert.reverts(systemPoolsRegistry.injectDependenciesToExistingPools({ from: USER1 }), reason);
     });
-    it("injectDependencies() should get exception if called by not a SYSTEM_POOLS_MANAGER", async () => {
-      const reason =
-        "RoleManager: account is missing role 0xa6422b3c9a6d3dc00d8db23ad51c1008c5e46eaa60434b734a90225deb0e7cb9";
+    it("injectDependencies() should get exception if called by not a SYSTEM_POOLS_MANAGER or ROLE_MANAGER_ADMIN", async () => {
+      const SYSTEM_POOLS_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("SYSTEM_POOLS_MANAGER"));
+      const reason = `RoleManager: account is missing role ${SYSTEM_POOLS_MANAGER_ROLE}`;
+
       const currentPriceManager = await registry.getPriceManagerContract();
       const newPriceManager = await PriceManager.new();
 

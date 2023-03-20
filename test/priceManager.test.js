@@ -4,7 +4,6 @@ const { ZERO_ADDR } = require("../scripts/utils/constants");
 
 const truffleAssert = require("truffle-assertions");
 const Reverter = require("./helpers/reverter");
-const { artifacts } = require("hardhat");
 
 const Registry = artifacts.require("Registry");
 const PriceManager = artifacts.require("PriceManager");

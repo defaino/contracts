@@ -48,6 +48,11 @@ contract DefiCore is
 
     mapping(address => mapping(bytes32 => bool)) public override disabledCollateralAssets;
 
+    modifier onlyDefiCorePauser() {
+        _onlyDefiCorePauser();
+        _;
+    }
+
     function defiCoreInitialize() external initializer {
         __Pausable_init();
         __ReentrancyGuard_init();
@@ -66,15 +71,11 @@ contract DefiCore is
         _roleManager = IRoleManager(registry_.getRoleManagerContract());
     }
 
-    function pause() external override {
-        _onlyDefiCorePauser();
-
+    function pause() external override onlyDefiCorePauser {
         _pause();
     }
 
-    function unpause() external override {
-        _onlyDefiCorePauser();
-
+    function unpause() external override onlyDefiCorePauser {
         _unpause();
     }
 

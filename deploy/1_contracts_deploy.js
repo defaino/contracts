@@ -13,7 +13,6 @@ const PriceManager = artifacts.require("PriceManager");
 const Prt = artifacts.require("PRT");
 const RoleManager = artifacts.require("RoleManager");
 
-const { artifacts } = require("hardhat");
 const { isStablePoolsAvailable } = require("./helpers/deployHelper.js");
 
 require("dotenv").config();

@@ -7,8 +7,6 @@ const InterestRateLibrary = artifacts.require("InterestRateLibrary");
 const Prt = artifacts.require("PRT");
 const RoleManager = artifacts.require("RoleManager");
 
-const { artifacts } = require("hardhat");
-
 const {
   parsePrtData,
   getAssetKey,

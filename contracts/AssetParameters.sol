@@ -63,6 +63,11 @@ contract AssetParameters is IAssetParameters, AbstractDependant {
         _;
     }
 
+    modifier onlyAssetParametersManager() {
+        _onlyAssetParametersManager();
+        _;
+    }
+
     function setDependencies(address contractsRegistry_) external override dependant {
         IRegistry registry_ = IRegistry(contractsRegistry_);
 
@@ -98,9 +103,7 @@ contract AssetParameters is IAssetParameters, AbstractDependant {
     function setupAnnualBorrowRate(
         bytes32 assetKey_,
         uint256 newAnnualBorrowRate_
-    ) external override onlyExists(assetKey_) {
-        _onlyAssetParametersManager();
-
+    ) external override onlyAssetParametersManager onlyExists(assetKey_) {
         require(
             _systemParameters.getStablePoolsAvailability(),
             "AssetParameters: Stable pools unavailable."
@@ -132,44 +135,36 @@ contract AssetParameters is IAssetParameters, AbstractDependant {
     function setupMainParameters(
         bytes32 assetKey_,
         MainPoolParams calldata mainParams_
-    ) external override onlyExists(assetKey_) {
-        _onlyAssetParametersManager();
-
+    ) external override onlyAssetParametersManager onlyExists(assetKey_) {
         _setupMainParameters(assetKey_, mainParams_);
     }
 
     function setupInterestRateModel(
         bytes32 assetKey_,
         InterestRateParams calldata interestParams_
-    ) external override onlyExists(assetKey_) {
-        _onlyAssetParametersManager();
-
+    ) external override onlyAssetParametersManager onlyExists(assetKey_) {
         _setupInterestRateParams(assetKey_, interestParams_);
     }
 
     function setupDistributionsMinimums(
         bytes32 assetKey_,
         DistributionMinimums calldata distrMinimums_
-    ) external override onlyExists(assetKey_) {
-        _onlyAssetParametersManager();
-
+    ) external override onlyAssetParametersManager onlyExists(assetKey_) {
         _setupDistributionsMinimums(assetKey_, distrMinimums_);
     }
 
     function setupAllParameters(
         bytes32 assetKey_,
         AllPoolParams calldata poolParams_
-    ) external override onlyExists(assetKey_) {
-        _onlyAssetParametersManager();
-
+    ) external override onlyAssetParametersManager onlyExists(assetKey_) {
         _setupInterestRateParams(assetKey_, poolParams_.interestRateParams);
         _setupMainParameters(assetKey_, poolParams_.mainParams);
         _setupDistributionsMinimums(assetKey_, poolParams_.distrMinimums);
     }
 
-    function freeze(bytes32 assetKey_) external override onlyExists(assetKey_) {
-        _onlyAssetParametersManager();
-
+    function freeze(
+        bytes32 assetKey_
+    ) external override onlyAssetParametersManager onlyExists(assetKey_) {
         _parameters[assetKey_][FREEZE_KEY] = PureParameters.makeBoolParam(true);
 
         emit FreezeParamUpdated(assetKey_, true);
@@ -178,9 +173,7 @@ contract AssetParameters is IAssetParameters, AbstractDependant {
     function enableCollateral(
         bytes32 assetKey_,
         bool forPRT_
-    ) external override onlyExists(assetKey_) {
-        _onlyAssetParametersManager();
-
+    ) external override onlyAssetParametersManager onlyExists(assetKey_) {
         forPRT_
             ? _parameters[assetKey_][ENABLE_COLLATERAL_WITH_PRT_KEY] = PureParameters
                 .makeBoolParam(true)

@@ -1,9 +1,9 @@
 const { accounts, getPrecision, wei } = require("../scripts/utils/utils");
 const { ZERO_ADDR } = require("../scripts/utils/constants");
+const { utils } = require("ethers");
 
 const truffleAssert = require("truffle-assertions");
 const Reverter = require("./helpers/reverter");
-const { artifacts } = require("hardhat");
 
 const SystemParameters = artifacts.require("SystemParameters");
 const Registry = artifacts.require("Registry");
@@ -58,9 +58,9 @@ describe("SystemParameters", () => {
   });
 
   describe("setupMinCurrencyAmount", () => {
-    it("should get exception if called not by an SYSTEM_PARAMETERS_MANAGER/role manager admin", async () => {
-      const reason =
-        "RoleManager: account is missing role 0x5150d4e12a451b0e6f6df3626ccce38a6036b7e6ef17dc4a5038ccfa0cab851a";
+    it("should get exception if called not by an SYSTEM_PARAMETERS_MANAGER or ROLE_MANAGER_ADMIN", async () => {
+      const SYSTEM_PARAMETERS_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("SYSTEM_PARAMETERS_MANAGER"));
+      const reason = `RoleManager: account is missing role ${SYSTEM_PARAMETERS_MANAGER_ROLE}`;
 
       await truffleAssert.reverts(
         systemParameters.setupMinCurrencyAmount(minCurrencyAmount, { from: SOMEBODY }),
@@ -94,9 +94,9 @@ describe("SystemParameters", () => {
       await truffleAssert.reverts(systemParameters.setRewardsTokenAddress(ZERO_ADDR), reason);
     });
 
-    it("should get exception if called not by an SYSTEM_PARAMETERS_MANAGER/role manager admin", async () => {
-      const reason =
-        "RoleManager: account is missing role 0x5150d4e12a451b0e6f6df3626ccce38a6036b7e6ef17dc4a5038ccfa0cab851a";
+    it("should get exception if called not by an SYSTEM_PARAMETERS_MANAGER or ROLE_MANAGER_ADMIN", async () => {
+      const SYSTEM_PARAMETERS_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("SYSTEM_PARAMETERS_MANAGER"));
+      const reason = `RoleManager: account is missing role ${SYSTEM_PARAMETERS_MANAGER_ROLE}`;
 
       await truffleAssert.reverts(systemParameters.setRewardsTokenAddress(ZERO_ADDR, { from: SOMEBODY }), reason);
       await truffleAssert.reverts(systemParameters.setRewardsTokenAddress(ZERO_ADDR, { from: SOMEBODY }), reason);
@@ -123,6 +123,16 @@ describe("SystemParameters", () => {
 
       await truffleAssert.reverts(systemParameters.setupLiquidationBoundary(newValue), reason);
     });
+
+    it("should get exception if called not by an SYSTEM_PARAMETERS_MANAGER or ROLE_MANAGER_ADMIN", async () => {
+      const SYSTEM_PARAMETERS_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("SYSTEM_PARAMETERS_MANAGER"));
+      const reason = `RoleManager: account is missing role ${SYSTEM_PARAMETERS_MANAGER_ROLE}`;
+
+      const newValue = getPrecision().times(50);
+
+      await truffleAssert.reverts(systemParameters.setupLiquidationBoundary(newValue, { from: SOMEBODY }), reason);
+      await truffleAssert.reverts(systemParameters.setupLiquidationBoundary(newValue, { from: SOMEBODY }), reason);
+    });
   });
 
   describe("setupStablePoolsAvailability", () => {
@@ -133,13 +143,22 @@ describe("SystemParameters", () => {
       assert.equal(txReceipt.receipt.logs[0].event, "StablePoolsAvailabilityUpdated");
       assert.equal(txReceipt.receipt.logs[0].args.newValue, true);
     });
+
+    it("should get exception if called not by an SYSTEM_PARAMETERS_MANAGER or ROLE_MANAGER_ADMIN", async () => {
+      const SYSTEM_PARAMETERS_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("SYSTEM_PARAMETERS_MANAGER"));
+      const reason = `RoleManager: account is missing role ${SYSTEM_PARAMETERS_MANAGER_ROLE}`;
+
+      await truffleAssert.reverts(systemParameters.setupStablePoolsAvailability(true, { from: SOMEBODY }), reason);
+      await truffleAssert.reverts(systemParameters.setupStablePoolsAvailability(true, { from: SOMEBODY }), reason);
+    });
   });
 
-  describe("onlySystemOwner modifier", () => {
-    it("should get exception if called not by an SYSTEM_PARAMETERS_MANAGER/role manager admin", async () => {
+  describe("onlySystemParametersManager modifier", () => {
+    it("should get exception if called not by an SYSTEM_PARAMETERS_MANAGER or ROLE_MANAGER_ADMIN", async () => {
       const newValue = getPrecision().times(50);
-      const reason =
-        "RoleManager: account is missing role 0x5150d4e12a451b0e6f6df3626ccce38a6036b7e6ef17dc4a5038ccfa0cab851a";
+
+      const SYSTEM_PARAMETERS_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("SYSTEM_PARAMETERS_MANAGER"));
+      const reason = `RoleManager: account is missing role ${SYSTEM_PARAMETERS_MANAGER_ROLE}`;
 
       await truffleAssert.reverts(systemParameters.setupLiquidationBoundary(newValue, { from: SOMEBODY }), reason);
       await truffleAssert.reverts(systemParameters.setupStablePoolsAvailability(true, { from: SOMEBODY }), reason);

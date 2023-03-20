@@ -24,6 +24,11 @@ contract SystemParameters is ISystemParameters, AbstractDependant {
 
     mapping(bytes32 => PureParameters.Param) internal _parameters;
 
+    modifier onlySystemParametersManager() {
+        _onlySystemParametersManager();
+        _;
+    }
+
     function setDependencies(address contractsRegistry_) external override dependant {
         IRegistry registry_ = IRegistry(contractsRegistry_);
 
@@ -31,9 +36,9 @@ contract SystemParameters is ISystemParameters, AbstractDependant {
         _roleManager = IRoleManager(registry_.getRoleManagerContract());
     }
 
-    function setRewardsTokenAddress(address rewardsToken_) external override {
-        _onlySystemParametersManager();
-
+    function setRewardsTokenAddress(
+        address rewardsToken_
+    ) external override onlySystemParametersManager {
         PureParameters.Param memory currentParam_ = _parameters[REWARDS_TOKEN_KEY];
 
         if (PureParameters.paramExists(currentParam_)) {
@@ -48,9 +53,9 @@ contract SystemParameters is ISystemParameters, AbstractDependant {
         emit RewardsTokenUpdated(rewardsToken_);
     }
 
-    function setupLiquidationBoundary(uint256 newValue_) external override {
-        _onlySystemParametersManager();
-
+    function setupLiquidationBoundary(
+        uint256 newValue_
+    ) external override onlySystemParametersManager {
         require(
             newValue_ >= PRECISION * 50 && newValue_ <= PRECISION * 80,
             "SystemParameters: The new value of the liquidation boundary is invalid."
@@ -61,17 +66,17 @@ contract SystemParameters is ISystemParameters, AbstractDependant {
         emit LiquidationBoundaryUpdated(newValue_);
     }
 
-    function setupStablePoolsAvailability(bool newValue_) external override {
-        _onlySystemParametersManager();
-
+    function setupStablePoolsAvailability(
+        bool newValue_
+    ) external override onlySystemParametersManager {
         _parameters[STABLE_POOLS_AVAILABILITY_KEY] = PureParameters.makeBoolParam(newValue_);
 
         emit StablePoolsAvailabilityUpdated(newValue_);
     }
 
-    function setupMinCurrencyAmount(uint256 newMinCurrencyAmount_) external override {
-        _onlySystemParametersManager();
-
+    function setupMinCurrencyAmount(
+        uint256 newMinCurrencyAmount_
+    ) external override onlySystemParametersManager {
         _parameters[MIN_CURRENCY_AMOUNT_KEY] = PureParameters.makeUintParam(newMinCurrencyAmount_);
 
         emit MinCurrencyAmountUpdated(newMinCurrencyAmount_);

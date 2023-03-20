@@ -1,6 +1,7 @@
 const { toBytes, compareKeys, deepCompareKeys } = require("./helpers/bytesCompareLibrary");
 const { getInterestRateLibraryAddr } = require("./helpers/coverage-helper");
 const { toBN, accounts, getPrecision, getPercentage100, wei } = require("../scripts/utils/utils");
+const { utils } = require("ethers");
 const { ZERO_ADDR } = require("../scripts/utils/constants");
 
 const { setNextBlockTime, setTime, mine, getCurrentBlockTime } = require("./helpers/block-helper");
@@ -574,9 +575,10 @@ describe("PRT", () => {
   });
 
   describe("updatePRTRarams()", () => {
-    it("should get exception if called not by an PRT_PARAM_UPDATER/role manager admin", async () => {
-      let reason =
-        "RoleManager: account is missing role 0x2a497a2a3812d7536bf2ddd564e1e7644c23860987ec1d72aa63fa3250b93e25";
+    it("should get exception if called not by an PRT_PARAM_UPDATER or ROLE_MANAGER_ADMIN", async () => {
+      const PRT_PARAM_UPDATER_ROLE = utils.keccak256(utils.toUtf8Bytes("PRT_PARAM_UPDATER"));
+      const reason = `RoleManager: account is missing role ${PRT_PARAM_UPDATER_ROLE}`;
+
       await truffleAssert.reverts(
         prt.updatePRTParams(
           [

@@ -21,6 +21,11 @@ contract PRT is IPRT, ERC721Upgradeable, AbstractDependant, ReentrancyGuardUpgra
 
     PRTParams internal _prtParams;
 
+    modifier onlyPRTParamUpdater() {
+        _onlyPRTParamUpdater();
+        _;
+    }
+
     function prtInitialize(
         string calldata name_,
         string calldata symbol_,
@@ -40,9 +45,7 @@ contract PRT is IPRT, ERC721Upgradeable, AbstractDependant, ReentrancyGuardUpgra
         _roleManager = IRoleManager(registry_.getRoleManagerContract());
     }
 
-    function updatePRTParams(PRTParams calldata prtParams_) external override {
-        _roleManager.isPRTParamUpdater(msg.sender);
-
+    function updatePRTParams(PRTParams calldata prtParams_) external override onlyPRTParamUpdater {
         _prtParams = prtParams_;
     }
 
@@ -96,6 +99,10 @@ contract PRT is IPRT, ERC721Upgradeable, AbstractDependant, ReentrancyGuardUpgra
             "PRT: the caller isn't an owner of the token with a such id"
         );
         _burn(tokenId_);
+    }
+
+    function _onlyPRTParamUpdater() internal {
+        _roleManager.isPRTParamUpdater(msg.sender);
     }
 
     function _checkUserPRTStats(

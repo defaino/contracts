@@ -3,10 +3,10 @@ const { toBytes } = require("./helpers/bytesCompareLibrary");
 const { getInterestRateLibraryAddr } = require("./helpers/coverage-helper");
 const { toBN, accounts, getPrecision, getPercentage100, wei } = require("../scripts/utils/utils");
 const { ZERO_ADDR } = require("../scripts/utils/constants");
+const { utils } = require("ethers");
 
 const Reverter = require("./helpers/reverter");
 const truffleAssert = require("truffle-assertions");
-const { artifacts } = require("hardhat");
 
 const Registry = artifacts.require("Registry");
 const DefiCore = artifacts.require("DefiCore");
@@ -845,12 +845,12 @@ describe("RewardsDistribution", () => {
       await truffleAssert.reverts(rewardsDistribution.setupRewardsPerBlockBatch(keys, rewardsPerBlock), reason);
     });
 
-    it("should get exception if called not by an REWARDS_DISTRIBUTION_MANAGER/role manager admin", async () => {
+    it("should get exception if called not by an REWARDS_DISTRIBUTION_MANAGER or ROLE_MANAGER_ADMIN", async () => {
       await systemParameters.setRewardsTokenAddress(rewardsToken.address);
       await systemPoolsRegistry.updateRewardsAssetKey(rewardsTokenKey);
 
-      const reason =
-        "RoleManager: account is missing role 0x850ebe1af891c28af526a1ab7de2aec67dea6bf3e98038a47ffc67205e96ea7e";
+      const REWARDS_DISTRIBUTION_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("REWARDS_DISTRIBUTION_MANAGER"));
+      const reason = `RoleManager: account is missing role ${REWARDS_DISTRIBUTION_MANAGER_ROLE}`;
 
       await truffleAssert.reverts(
         rewardsDistribution.setupRewardsPerBlockBatch([daiKey], [oneToken], { from: USER1 }),

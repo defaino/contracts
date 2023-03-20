@@ -3,6 +3,7 @@ const { toBytes, compareKeys, deepCompareKeys } = require("./helpers/bytesCompar
 const { getInterestRateLibraryAddr } = require("./helpers/coverage-helper");
 const { toBN, accounts, getPrecision, getPercentage100, wei } = require("../scripts/utils/utils");
 const { ZERO_ADDR } = require("../scripts/utils/constants");
+const { utils } = require("ethers");
 
 const Reverter = require("./helpers/reverter");
 const truffleAssert = require("truffle-assertions");
@@ -2356,9 +2357,9 @@ describe("DefiCore", async () => {
       await defiCore.borrowFor(daiKey, borrowAmount, USER1, { from: USER1 });
     });
 
-    it("should get exception if called not by an DEFI_CORE_PAUSER/role manager admin", async () => {
-      const reason =
-        "RoleManager: account is missing role 0x8218bbe530296352d0683ccaec4d2919edba0ac7752d8e2243cb95823bb15fd5";
+    it("should get exception if called not by an DEFI_CORE_PAUSER or ROLE_MANAGER_ADMIN", async () => {
+      const DEFI_CORE_PAUSER_ROLE = utils.keccak256(utils.toUtf8Bytes("DEFI_CORE_PAUSER"));
+      const reason = `RoleManager: account is missing role ${DEFI_CORE_PAUSER_ROLE}`;
 
       await truffleAssert.reverts(defiCore.pause({ from: USER1 }), reason);
       await truffleAssert.reverts(defiCore.unpause({ from: USER1 }), reason);

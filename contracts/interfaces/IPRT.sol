@@ -25,7 +25,7 @@ interface IPRT {
     }
 
     /// @notice A system function that is needed to update the requirements for PRT
-    /// @dev Only the system owner can call this function
+    /// @dev Only the PRT_PARAM_UPDATER can call this function
     /// @param prtParams_ element type PRTParams structure with the new requirements
     function updatePRTParams(PRTParams calldata prtParams_) external;
 

@@ -2,6 +2,7 @@ const { setNextBlockTime, mine, getCurrentBlockNumber } = require("./helpers/blo
 const { toBytes, deepCompareKeys } = require("./helpers/bytesCompareLibrary");
 const { getInterestRateLibraryAddr } = require("./helpers/coverage-helper");
 const { toBN, accounts, getPrecision, getPercentage100, wei } = require("../scripts/utils/utils");
+const { utils } = require("ethers");
 const { ZERO_ADDR } = require("../scripts/utils/constants");
 
 const truffleAssert = require("truffle-assertions");
@@ -1900,9 +1901,11 @@ describe("LiquidityPool", () => {
       );
     });
 
-    it("should get exception if called not by an SYSTEM_POOLS_RESERVE_FUNDS_MANAGER/role manager admin", async () => {
-      const reason =
-        "RoleManager: account is missing role 0xd0b4cd1a8528008585d67ae3c0cc016d46e0ae3dfe660512aad856820ce86b94";
+    it("should get exception if called not by an SYSTEM_POOLS_RESERVE_FUNDS_MANAGER or ROLE_MANAGER_ADMIN", async () => {
+      const SYSTEM_POOLS_RESERVE_FUNDS_MANAGER_ROLE = utils.keccak256(
+        utils.toUtf8Bytes("SYSTEM_POOLS_RESERVE_FUNDS_MANAGER")
+      );
+      const reason = `RoleManager: account is missing role ${SYSTEM_POOLS_RESERVE_FUNDS_MANAGER_ROLE}`;
 
       await truffleAssert.reverts(
         systemPoolsRegistry.withdrawReservedFunds(RECIPIENT, tokenKey, 0, true, { from: USER1 }),
@@ -1966,9 +1969,11 @@ describe("LiquidityPool", () => {
       assert.equal(toBN(await liquidityPool.totalReserves()).toString(), 0);
     });
 
-    it("should get exception if called not by an SYSTEM_POOLS_RESERVE_FUNDS_MANAGER/role manager admin", async () => {
-      const reason =
-        "RoleManager: account is missing role 0xd0b4cd1a8528008585d67ae3c0cc016d46e0ae3dfe660512aad856820ce86b94";
+    it("should get exception if called not by an SYSTEM_POOLS_RESERVE_FUNDS_MANAGER or ROLE_MANAGER_ADMIN", async () => {
+      const SYSTEM_POOLS_RESERVE_FUNDS_MANAGER_ROLE = utils.keccak256(
+        utils.toUtf8Bytes("SYSTEM_POOLS_RESERVE_FUNDS_MANAGER")
+      );
+      const reason = `RoleManager: account is missing role ${SYSTEM_POOLS_RESERVE_FUNDS_MANAGER_ROLE}`;
 
       await truffleAssert.reverts(
         systemPoolsRegistry.withdrawAllReservedFunds(RECIPIENT, 0, 2, { from: USER2 }),

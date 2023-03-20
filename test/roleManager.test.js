@@ -1,20 +1,11 @@
 const truffleAssert = require("truffle-assertions");
 const Reverter = require("./helpers/reverter");
 
-const { artifacts } = require("hardhat");
 const { utils } = require("ethers");
 const { accounts } = require("../scripts/utils/utils");
 const { assert } = require("chai");
 
 const RoleManager = artifacts.require("RoleManager");
-
-if (!String.prototype.format) {
-  String.prototype.format = function (...args) {
-    return this.replace(/(\{\d+\})/g, function (a) {
-      return args[+a.substr(1, a.length - 2) || 0];
-    });
-  };
-}
 
 describe("RoleManager", () => {
   const reverter = new Reverter();
@@ -126,7 +117,8 @@ describe("RoleManager", () => {
 
     it("should revert if the account has neither ROLE_MANAGER_ADMIN nor ASSET_PARAMETERS_MANAGER role", async () => {
       const ASSET_PARAMETERS_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("ASSET_PARAMETERS_MANAGER"));
-      let reason = "RoleManager: account is missing role {0}".format(ASSET_PARAMETERS_MANAGER_ROLE);
+      const reason = `RoleManager: account is missing role ${ASSET_PARAMETERS_MANAGER_ROLE}`;
+
       await truffleAssert.reverts(roleManager.isAssetParametersManager(ANOTHER_ACCOUNT), reason);
     });
   });
@@ -143,7 +135,8 @@ describe("RoleManager", () => {
 
     it("should revert if the account has neither ROLE_MANAGER_ADMIN nor DEFI_CORE_PAUSER role", async () => {
       const DEFI_CORE_PAUSER_ROLE = utils.keccak256(utils.toUtf8Bytes("DEFI_CORE_PAUSER"));
-      let reason = "RoleManager: account is missing role {0}".format(DEFI_CORE_PAUSER_ROLE);
+      const reason = `RoleManager: account is missing role ${DEFI_CORE_PAUSER_ROLE}`;
+
       await truffleAssert.reverts(roleManager.isDefiCorePauser(ANOTHER_ACCOUNT), reason);
     });
   });
@@ -160,7 +153,8 @@ describe("RoleManager", () => {
 
     it("should revert if the account has neither ROLE_MANAGER_ADMIN nor PRT_PARAM_UPDATER role", async () => {
       const PRT_PARAM_UPDATER_ROLE = utils.keccak256(utils.toUtf8Bytes("PRT_PARAM_UPDATER"));
-      let reason = "RoleManager: account is missing role {0}".format(PRT_PARAM_UPDATER_ROLE);
+      const reason = `RoleManager: account is missing role ${PRT_PARAM_UPDATER_ROLE}`;
+
       await truffleAssert.reverts(roleManager.isPRTParamUpdater(ANOTHER_ACCOUNT), reason);
     });
   });
@@ -177,7 +171,8 @@ describe("RoleManager", () => {
 
     it("should revert if the account has neither ROLE_MANAGER_ADMIN nor REWARDS_DISTRIBUTION_MANAGER role", async () => {
       const REWARDS_DISTRIBUTION_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("REWARDS_DISTRIBUTION_MANAGER"));
-      let reason = "RoleManager: account is missing role {0}".format(REWARDS_DISTRIBUTION_MANAGER_ROLE);
+      const reason = `RoleManager: account is missing role ${REWARDS_DISTRIBUTION_MANAGER_ROLE}`;
+
       await truffleAssert.reverts(roleManager.isRewardsDistributionManager(ANOTHER_ACCOUNT), reason);
     });
   });
@@ -194,7 +189,8 @@ describe("RoleManager", () => {
 
     it("should revert if the account has neither ROLE_MANAGER_ADMIN nor SYSTEM_PARAMETERS_MANAGER role", async () => {
       const SYSTEM_PARAMETERS_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("SYSTEM_PARAMETERS_MANAGER"));
-      let reason = "RoleManager: account is missing role {0}".format(SYSTEM_PARAMETERS_MANAGER_ROLE);
+      const reason = `RoleManager: account is missing role ${SYSTEM_PARAMETERS_MANAGER_ROLE}`;
+
       await truffleAssert.reverts(roleManager.isSystemParametersManager(ANOTHER_ACCOUNT), reason);
     });
   });
@@ -211,7 +207,8 @@ describe("RoleManager", () => {
 
     it("should revert if the account has neither ROLE_MANAGER_ADMIN nor SYSTEM_POOLS_MANAGER role", async () => {
       const SYSTEM_POOLS_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("SYSTEM_POOLS_MANAGER"));
-      let reason = "RoleManager: account is missing role {0}".format(SYSTEM_POOLS_MANAGER_ROLE);
+      const reason = `RoleManager: account is missing role ${SYSTEM_POOLS_MANAGER_ROLE}`;
+
       await truffleAssert.reverts(roleManager.isSystemPoolsManager(ANOTHER_ACCOUNT), reason);
     });
   });
@@ -232,7 +229,8 @@ describe("RoleManager", () => {
       const SYSTEM_POOLS_RESERVE_FUNDS_MANAGER_ROLE = utils.keccak256(
         utils.toUtf8Bytes("SYSTEM_POOLS_RESERVE_FUNDS_MANAGER")
       );
-      let reason = "RoleManager: account is missing role {0}".format(SYSTEM_POOLS_RESERVE_FUNDS_MANAGER_ROLE);
+      const reason = `RoleManager: account is missing role ${SYSTEM_POOLS_RESERVE_FUNDS_MANAGER_ROLE}`;
+
       await truffleAssert.reverts(roleManager.isSystemPoolsReserveFundsManager(ANOTHER_ACCOUNT), reason);
     });
   });
@@ -251,7 +249,7 @@ describe("RoleManager", () => {
 
     it("should revert if the account has neither ROLE_MANAGER_ADMIN nor ROLE_MANAGER_ROLE_GOVERNOR role", async () => {
       const ROLE_MANAGER_ROLE_GOVERNOR_ROLE = utils.keccak256(utils.toUtf8Bytes("ROLE_MANAGER_ROLE_GOVERNOR"));
-      let reason = "RoleManager: account is missing role {0}".format(ROLE_MANAGER_ROLE_GOVERNOR_ROLE);
+      const reason = `RoleManager: account is missing role ${ROLE_MANAGER_ROLE_GOVERNOR_ROLE}`;
 
       const ROLE_TO_GRANT = utils.keccak256(utils.toUtf8Bytes("ASSET_PARAMETERS_MANAGER"));
 
@@ -300,7 +298,7 @@ describe("RoleManager", () => {
 
     it("should revert if the account has neither ROLE_MANAGER_ADMIN nor ROLE_MANAGER_ROLE_GOVERNOR role", async () => {
       const ROLE_MANAGER_ROLE_GOVERNOR_ROLE = utils.keccak256(utils.toUtf8Bytes("ROLE_MANAGER_ROLE_GOVERNOR"));
-      let reason = "RoleManager: account is missing role {0}".format(ROLE_MANAGER_ROLE_GOVERNOR_ROLE);
+      const reason = `RoleManager: account is missing role ${ROLE_MANAGER_ROLE_GOVERNOR_ROLE}`;
 
       await roleManager.roleManagerInitialize([], []);
 

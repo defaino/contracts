@@ -75,11 +75,11 @@ interface IDefiCore {
     event DistributionRewardWithdrawn(address indexed userAddr, uint256 rewardAmount);
 
     /// @notice Function for pausing all user interactions with the system
-    /// @dev Only contract owner can call this function
+    /// @dev Only DEFI_CORE_PAUSER can call this function
     function pause() external;
 
     /// @notice Function for unpausing all user interactions with the system
-    /// @dev Only contract owner can call this function
+    /// @dev Only DEFI_CORE_PAUSER can call this function
     function unpause() external;
 
     /// @notice With this function you can change the value of the disabled of the asset as a collateral

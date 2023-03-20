@@ -5,7 +5,6 @@ const { getInterestRateLibraryAddr } = require("./helpers/coverage-helper");
 const truffleAssert = require("truffle-assertions");
 const Reverter = require("./helpers/reverter");
 const { Assertion } = require("chai");
-const { artifacts } = require("hardhat");
 
 const Registry = artifacts.require("Registry");
 const AssetParameters = artifacts.require("AssetParametersMock");

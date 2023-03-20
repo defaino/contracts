@@ -36,6 +36,11 @@ contract RewardsDistribution is IRewardsDistribution, AbstractDependant {
         _;
     }
 
+    modifier onlyRewardsDistributionManager() {
+        _onlyRewardsDistributionManager();
+        _;
+    }
+
     function setDependencies(address contractsRegistry_) external override dependant {
         IRegistry registry_ = IRegistry(contractsRegistry_);
 
@@ -80,9 +85,7 @@ contract RewardsDistribution is IRewardsDistribution, AbstractDependant {
     function setupRewardsPerBlockBatch(
         bytes32[] calldata assetKeys_,
         uint256[] calldata rewardsPerBlock_
-    ) external override {
-        _roleManager.isRewardsDistributionManager(msg.sender);
-
+    ) external override onlyRewardsDistributionManager {
         require(
             _onlyExistingRewardsAssetKey(),
             "RewardsDistributionL Unable to setup rewards per block."
@@ -178,6 +181,10 @@ contract RewardsDistribution is IRewardsDistribution, AbstractDependant {
                 poolType_
             );
         }
+    }
+
+    function _onlyRewardsDistributionManager() internal {
+        _roleManager.isRewardsDistributionManager(msg.sender);
     }
 
     function _updateSumsWithUserReward(

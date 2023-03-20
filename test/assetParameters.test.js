@@ -2,6 +2,7 @@ const { toBytes, fromBytes, compareKeys } = require("./helpers/bytesCompareLibra
 const { getInterestRateLibraryAddr } = require("./helpers/coverage-helper");
 const { toBN, accounts, wei, getPrecision, getPercentage100 } = require("../scripts/utils/utils");
 const { ZERO_ADDR } = require("../scripts/utils/constants");
+const { utils } = require("ethers");
 
 const truffleAssert = require("truffle-assertions");
 const Reverter = require("./helpers/reverter");
@@ -280,9 +281,9 @@ describe("AssetParameters", () => {
   });
 
   describe("setupAllParameters", () => {
-    it("should get exception if called not by an asset manager/role manager admin", async () => {
-      const reason =
-        "RoleManager: account is missing role 0x06c492a7eb572cfeccd28edc322064a12cedb3c4e3bddbb1357cd02f3a9f15fc";
+    it("should get exception if called not by an ASSET_PARAMETERS_MANAGER or ROLE_MANAGER_ADMIN", async () => {
+      const ASSET_PARAMETERS_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("ASSET_PARAMETERS_MANAGER"));
+      const reason = `RoleManager: account is missing role ${ASSET_PARAMETERS_MANAGER_ROLE}`;
 
       await truffleAssert.reverts(
         assetParameters.setupAllParameters(
@@ -360,8 +361,11 @@ describe("AssetParameters", () => {
       assert.equal(result.logs[0].args.newValue, true);
     });
 
-    it("should not access to freeze the pool by not core", async () => {
-      await truffleAssert.reverts(assetParameters.freeze(daiKey, { from: SOMEBODY }));
+    it("should not access to freeze the pool by not an ASSET_PARAMETERS_MANAGER or ROLE_MANAGER_ADMIN", async () => {
+      const ASSET_PARAMETERS_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("ASSET_PARAMETERS_MANAGER"));
+      const reason = `RoleManager: account is missing role ${ASSET_PARAMETERS_MANAGER_ROLE}`;
+
+      await truffleAssert.reverts(assetParameters.freeze(daiKey, { from: SOMEBODY }), reason);
     });
 
     it("should not access to freeze pool of the not exists token", async () => {
@@ -392,9 +396,9 @@ describe("AssetParameters", () => {
       assert.equal(result.receipt.logs[0].args.isCollateral, true);
     });
 
-    it("should get exception if called not by an asset manager/role manager admin", async () => {
-      const reason =
-        "RoleManager: account is missing role 0x06c492a7eb572cfeccd28edc322064a12cedb3c4e3bddbb1357cd02f3a9f15fc";
+    it("should get exception if called not by an ASSET_PARAMETERS_MANAGER or ROLE_MANAGER_ADMIN", async () => {
+      const ASSET_PARAMETERS_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("ASSET_PARAMETERS_MANAGER"));
+      const reason = `RoleManager: account is missing role ${ASSET_PARAMETERS_MANAGER_ROLE}`;
 
       await truffleAssert.reverts(assetParameters.enableCollateral(daiKey, false, { from: USER2 }), reason);
     });
@@ -497,9 +501,9 @@ describe("AssetParameters", () => {
       );
     });
 
-    it("should get exception if called not by an asset manager/role manager admin", async () => {
-      const reason =
-        "RoleManager: account is missing role 0x06c492a7eb572cfeccd28edc322064a12cedb3c4e3bddbb1357cd02f3a9f15fc";
+    it("should get exception if called not by an ASSET_PARAMETERS_MANAGER or ROLE_MANAGER_ADMIN", async () => {
+      const ASSET_PARAMETERS_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("ASSET_PARAMETERS_MANAGER"));
+      const reason = `RoleManager: account is missing role ${ASSET_PARAMETERS_MANAGER_ROLE}`;
 
       await truffleAssert.reverts(
         assetParameters.setupInterestRateModel(daiKey, [0, firstSlope, secondSlope, utilizationBreakingPoint], {
@@ -612,9 +616,10 @@ describe("AssetParameters", () => {
       );
     });
 
-    it("should get exception if called not by an asset manager/role manager admin", async () => {
-      const reason =
-        "RoleManager: account is missing role 0x06c492a7eb572cfeccd28edc322064a12cedb3c4e3bddbb1357cd02f3a9f15fc";
+    it("should get exception if called not by an ASSET_PARAMETERS_MANAGER or ROLE_MANAGER_ADMIN", async () => {
+      const ASSET_PARAMETERS_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("ASSET_PARAMETERS_MANAGER"));
+      const reason = `RoleManager: account is missing role ${ASSET_PARAMETERS_MANAGER_ROLE}`;
+
       await truffleAssert.reverts(
         assetParameters.setupMainParameters(daiKey, [colRatio, colRatio, reserveFactor, liquidationDiscount, maxUR], {
           from: USER2,
@@ -681,9 +686,9 @@ describe("AssetParameters", () => {
       );
     });
 
-    it("should get exception if called not by an asset manager/role manager admin", async () => {
-      const reason =
-        "RoleManager: account is missing role 0x06c492a7eb572cfeccd28edc322064a12cedb3c4e3bddbb1357cd02f3a9f15fc";
+    it("should get exception if called not by an ASSET_PARAMETERS_MANAGER or ROLE_MANAGER_ADMIN", async () => {
+      const ASSET_PARAMETERS_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("ASSET_PARAMETERS_MANAGER"));
+      const reason = `RoleManager: account is missing role ${ASSET_PARAMETERS_MANAGER_ROLE}`;
 
       await truffleAssert.reverts(
         assetParameters.setupDistributionsMinimums(daiKey, [minSupplyDistributionPart, minBorrowDistributionPart], {
@@ -751,9 +756,9 @@ describe("AssetParameters", () => {
       await truffleAssert.reverts(assetParameters.setupAnnualBorrowRate(stableKey, newRate), reason);
     });
 
-    it("should get exception if called not by an asset manager/role manager admin", async () => {
-      const reason =
-        "RoleManager: account is missing role 0x06c492a7eb572cfeccd28edc322064a12cedb3c4e3bddbb1357cd02f3a9f15fc";
+    it("should get exception if called not by an ASSET_PARAMETERS_MANAGER or ROLE_MANAGER_ADMIN", async () => {
+      const ASSET_PARAMETERS_MANAGER_ROLE = utils.keccak256(utils.toUtf8Bytes("ASSET_PARAMETERS_MANAGER"));
+      const reason = `RoleManager: account is missing role ${ASSET_PARAMETERS_MANAGER_ROLE}`;
 
       await truffleAssert.reverts(
         assetParameters.setupAnnualBorrowRate(stableKey, annualBorrowRate, { from: USER2 }),
