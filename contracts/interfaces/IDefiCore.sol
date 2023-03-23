@@ -297,4 +297,12 @@ interface IDefiCore {
     /// @param userAddr_ address of the user for whom you want to get information
     /// @return first parameter is available user liquidity is dollarse, second is a user debt
     function getAvailableLiquidity(address userAddr_) external view returns (uint256, uint256);
+
+    /// @notice Batch function for obtaining available liquidity of the users and they debts
+    /// @param usersArr_ array with user addresses
+    /// @return availableArr_ the array with users available liquidity
+    /// @return debtsArr_ the array with users debts
+    function getAvailableLiquidityBatch(
+        address[] calldata usersArr_
+    ) external view returns (uint256[] memory availableArr_, uint256[] memory debtsArr_);
 }

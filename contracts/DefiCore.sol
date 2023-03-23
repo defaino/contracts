@@ -661,6 +661,17 @@ contract DefiCore is
         }
     }
 
+    function getAvailableLiquidityBatch(
+        address[] calldata usersArr_
+    ) external view override returns (uint256[] memory availableArr_, uint256[] memory debtsArr_) {
+        availableArr_ = new uint256[](usersArr_.length);
+        debtsArr_ = new uint256[](usersArr_.length);
+
+        for (uint256 i = 0; i < usersArr_.length; i++) {
+            (availableArr_[i], debtsArr_[i]) = getAvailableLiquidity(usersArr_[i]);
+        }
+    }
+
     function _borrowInternal(
         bytes32 assetKey_,
         uint256 borrowAmount_,

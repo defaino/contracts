@@ -2,7 +2,7 @@ const { setNextBlockTime, setTime, mine, getCurrentBlockTime } = require("./help
 const { toBytes, compareKeys, deepCompareKeys } = require("./helpers/bytesCompareLibrary");
 const { getInterestRateLibraryAddr } = require("./helpers/coverage-helper");
 const { toBN, accounts, getPrecision, getPercentage100, wei } = require("../scripts/utils/utils");
-const { ZERO_ADDR } = require("../scripts/utils/constants");
+const { ZERO_ADDR, PERCENTAGE_100 } = require("../scripts/utils/constants");
 
 const Reverter = require("./helpers/reverter");
 const truffleAssert = require("truffle-assertions");
@@ -605,6 +605,42 @@ describe("DefiCore", async () => {
       result = await defiCore.getAvailableLiquidity(USER1);
       assert.closeTo(result[0].toNumber(), borrowLimit.minus(totalBorrowedAmount).toNumber(), 10);
       assert.equal(result[1], 0);
+    });
+  });
+
+  describe("getAvailableLiquidityBatch", () => {
+    const liquidityAmount = wei(100);
+    const amountToBorrow = wei(75);
+    const newPrice = wei(85, chainlinkPriceDecimals);
+
+    beforeEach("setup", async () => {
+      await defiCore.addLiquidity(daiKey, liquidityAmount, { from: OWNER });
+      await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER1 });
+      await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER2 });
+
+      await defiCore.borrowFor(daiKey, amountToBorrow, USER2, { from: USER2 });
+
+      await wEthChainlinkOracle.setPrice(newPrice);
+    });
+
+    it("should correctly get available liquidity for addresses arr", async () => {
+      const result = await defiCore.getAvailableLiquidityBatch([USER1, USER2]);
+
+      const expectedLiquidity = newPrice
+        .times(PERCENTAGE_100)
+        .idiv(standardColRatio)
+        .times(liquidityAmount)
+        .idiv(oneToken);
+      const expectedUser2Debt = wei(100, chainlinkPriceDecimals)
+        .times(amountToBorrow)
+        .idiv(oneToken)
+        .minus(expectedLiquidity);
+
+      assert.equal(toBN(result[0][0]).toFixed(), expectedLiquidity.toFixed());
+      assert.equal(toBN(result[0][1]).toFixed(), 0);
+
+      assert.equal(toBN(result[1][0]).toFixed(), 0);
+      assert.equal(toBN(result[1][1]).toFixed(), expectedUser2Debt.toFixed());
     });
   });
 
