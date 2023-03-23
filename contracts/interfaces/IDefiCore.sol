@@ -12,7 +12,7 @@ interface IDefiCore {
     /// @param newValue a new collateral value
     event CollateralUpdated(address indexed userAddr, bytes32 indexed assetKey, bool newValue);
 
-    event Liquidation(
+    event Liquidated(
         address userAddr_,
         bytes32 supplyAssetKey_,
         bytes32 borrowAssetKey_,
@@ -44,18 +44,26 @@ interface IDefiCore {
     /// @param recipient the address of the user to which the taken tokens will be sent
     /// @param assetKey the key of the pool, the tokens of which will be taken on credit
     /// @param borrowedAmount number of tokens to be taken on credit
+    /// @param borrowedAmountInUSD the equivalent of borrowedAmount param in dollars
     event Borrowed(
         address indexed borrower,
         address recipient,
         bytes32 indexed assetKey,
-        uint256 borrowedAmount
+        uint256 borrowedAmount,
+        uint256 borrowedAmountInUSD
     );
 
     /// @notice This event is emitted during the repayment of credit by the user
     /// @param userAddr address of the user whose credit will be repaid
     /// @param assetKey key of the pool in which the loan will be repaid
     /// @param repaidAmount the amount of tokens for which the loan will be repaid
-    event BorrowRepaid(address indexed userAddr, bytes32 indexed assetKey, uint256 repaidAmount);
+    /// @param repaidAmountInUSD the equivalent of repaidAmount param in dollars
+    event BorrowRepaid(
+        address indexed userAddr,
+        bytes32 indexed assetKey,
+        uint256 repaidAmount,
+        uint256 repaidAmountInUSD
+    );
 
     /// @notice This event is emitted during the approve for delegated credit
     /// @param userAddr address of the user who approved delegated borrow

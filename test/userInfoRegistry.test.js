@@ -845,7 +845,7 @@ describe("UserInfoRegistry", () => {
 
       for (let i = 0; i < result[0].borrowPoolsInfo.length; i++) {
         validMainPoolInfo(result[0].borrowPoolsInfo[i], expectedMainInfos[i]);
-        validMainPoolInfo(result[0].sypplyPoolsInfo[i], expectedMainInfos[i]);
+        validMainPoolInfo(result[0].supplyPoolsInfo[i], expectedMainInfos[i]);
       }
 
       assert.equal(result[0].totalBorrowedAmount.toString(), convertToUSD(borrowAmount).toString());
@@ -855,7 +855,7 @@ describe("UserInfoRegistry", () => {
       expectedMainInfos = [[wEthKey, tokens[2].address]];
 
       validMainPoolInfo(result[1].borrowPoolsInfo[0], expectedMainInfos[0]);
-      validMainPoolInfo(result[1].sypplyPoolsInfo[0], expectedMainInfos[0]);
+      validMainPoolInfo(result[1].supplyPoolsInfo[0], expectedMainInfos[0]);
 
       assert.equal(toBN(result[1].totalBorrowedAmount).toString(), convertToUSD(borrowAmount.idiv(2)).toString());
     });
@@ -879,8 +879,8 @@ describe("UserInfoRegistry", () => {
         [wEthKey, tokens[2].address],
       ];
 
-      for (let i = 0; i < result[0].sypplyPoolsInfo.length; i++) {
-        validMainPoolInfo(result[0].sypplyPoolsInfo[i], expectedMainInfos[i]);
+      for (let i = 0; i < result[0].supplyPoolsInfo.length; i++) {
+        validMainPoolInfo(result[0].supplyPoolsInfo[i], expectedMainInfos[i]);
       }
 
       expectedMainInfos = [
@@ -889,8 +889,8 @@ describe("UserInfoRegistry", () => {
         ["0x0", ZERO_ADDR],
       ];
 
-      for (let i = 0; i < result[1].sypplyPoolsInfo.length; i++) {
-        validMainPoolInfo(result[1].sypplyPoolsInfo[i], expectedMainInfos[i]);
+      for (let i = 0; i < result[1].supplyPoolsInfo.length; i++) {
+        validMainPoolInfo(result[1].supplyPoolsInfo[i], expectedMainInfos[i]);
       }
     });
   });

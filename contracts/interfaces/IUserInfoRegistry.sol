@@ -147,7 +147,7 @@ interface IUserInfoRegistry {
     struct UserLiquidationInfo {
         address userAddr;
         MainPoolInfo[] borrowPoolsInfo;
-        MainPoolInfo[] sypplyPoolsInfo;
+        MainPoolInfo[] supplyPoolsInfo;
         uint256 totalBorrowedAmount;
     }
 
