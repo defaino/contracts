@@ -209,19 +209,22 @@ contract DefiCore is
         uint256 borrowAmount_,
         address recipientAddr_
     ) external override whenNotPaused nonReentrant {
-        _borrowInternal(assetKey_, borrowAmount_, msg.sender);
+        ILiquidityPool assetLiquidityPool_ = assetKey_.getAssetLiquidityPool(_systemPoolsRegistry);
 
-        assetKey_.getAssetLiquidityPool(_systemPoolsRegistry).borrowFor(
+        uint256 borrowedAmountInUSD_ = _borrowInternal(
+            assetKey_,
+            borrowAmount_,
             msg.sender,
-            recipientAddr_,
-            borrowAmount_
+            assetLiquidityPool_
         );
+
+        assetLiquidityPool_.borrowFor(msg.sender, recipientAddr_, borrowAmount_);
 
         _userInfoRegistry.updateUserAssets(msg.sender, assetKey_, false);
 
         _userInfoRegistry.updateUserStatsForPRT(msg.sender, 0, 0, false);
 
-        emit Borrowed(msg.sender, recipientAddr_, assetKey_, borrowAmount_);
+        emit Borrowed(msg.sender, recipientAddr_, assetKey_, borrowAmount_, borrowedAmountInUSD_);
     }
 
     function delegateBorrow(
@@ -229,19 +232,22 @@ contract DefiCore is
         uint256 borrowAmount_,
         address borrowerAddr_
     ) external override whenNotPaused nonReentrant {
-        _borrowInternal(assetKey_, borrowAmount_, borrowerAddr_);
+        ILiquidityPool assetLiquidityPool_ = assetKey_.getAssetLiquidityPool(_systemPoolsRegistry);
 
-        assetKey_.getAssetLiquidityPool(_systemPoolsRegistry).delegateBorrow(
+        uint256 borrowedAmountInUSD_ = _borrowInternal(
+            assetKey_,
+            borrowAmount_,
             borrowerAddr_,
-            msg.sender,
-            borrowAmount_
+            assetLiquidityPool_
         );
+
+        assetLiquidityPool_.delegateBorrow(borrowerAddr_, msg.sender, borrowAmount_);
 
         _userInfoRegistry.updateUserAssets(borrowerAddr_, assetKey_, false);
 
         _userInfoRegistry.updateUserStatsForPRT(borrowerAddr_, 0, 0, false);
 
-        emit Borrowed(borrowerAddr_, msg.sender, assetKey_, borrowAmount_);
+        emit Borrowed(borrowerAddr_, msg.sender, assetKey_, borrowAmount_, borrowedAmountInUSD_);
     }
 
     function repayBorrow(
@@ -268,7 +274,12 @@ contract DefiCore is
 
         _userInfoRegistry.updateUserStatsForPRT(msg.sender, 1, 0, false);
 
-        emit BorrowRepaid(msg.sender, assetKey_, repayAmount_);
+        emit BorrowRepaid(
+            msg.sender,
+            assetKey_,
+            repayAmount_,
+            assetLiquidityPool_.getAmountInUSD(repayAmount_)
+        );
     }
 
     function delegateRepayBorrow(
@@ -294,7 +305,12 @@ contract DefiCore is
 
         _userInfoRegistry.updateUserStatsForPRT(recipientAddr_, 1, 0, false);
 
-        emit BorrowRepaid(recipientAddr_, assetKey_, repayAmount_);
+        emit BorrowRepaid(
+            recipientAddr_,
+            assetKey_,
+            repayAmount_,
+            assetLiquidityPool_.getAmountInUSD(repayAmount_)
+        );
     }
 
     function liquidation(
@@ -315,7 +331,7 @@ contract DefiCore is
             "DefiCore: Not enough dept for liquidation."
         );
 
-        require(liquidationAmount_ > 0, "DefiCore: Liquidation amount should be more than zero.");
+        require(liquidationAmount_ > 0, "DefiCore: Liquidated amount should be more than zero.");
 
         ISystemPoolsRegistry poolsRegistry_ = _systemPoolsRegistry;
         IAssetParameters assetParameters_ = _assetParameters;
@@ -330,7 +346,7 @@ contract DefiCore is
                     supplyAssetKey_,
                     borrowAssetKey_
                 ),
-            "DefiCore: Liquidation amount should be less than max quantity."
+            "DefiCore: Liquidated amount should be less than max quantity."
         );
 
         IRewardsDistribution rewardsDistribution_ = _rewardsDistribution;
@@ -363,7 +379,7 @@ contract DefiCore is
         _userInfoRegistry.updateUserStatsForPRT(userAddr_, 0, 1, true);
         _userInfoRegistry.updateUserStatsForPRT(userAddr_, 0, 0, false);
 
-        emit Liquidation(userAddr_, supplyAssetKey_, borrowAssetKey_, liquidationAmount_);
+        emit Liquidated(userAddr_, supplyAssetKey_, borrowAssetKey_, liquidationAmount_);
     }
 
     function claimDistributionRewards(
@@ -645,11 +661,23 @@ contract DefiCore is
         }
     }
 
+    function getAvailableLiquidityBatch(
+        address[] calldata usersArr_
+    ) external view override returns (uint256[] memory availableArr_, uint256[] memory debtsArr_) {
+        availableArr_ = new uint256[](usersArr_.length);
+        debtsArr_ = new uint256[](usersArr_.length);
+
+        for (uint256 i = 0; i < usersArr_.length; i++) {
+            (availableArr_[i], debtsArr_[i]) = getAvailableLiquidity(usersArr_[i]);
+        }
+    }
+
     function _borrowInternal(
         bytes32 assetKey_,
         uint256 borrowAmount_,
-        address borrowerAddr_
-    ) internal {
+        address borrowerAddr_,
+        ILiquidityPool assetLiquidityPool_
+    ) internal returns (uint256) {
         require(
             !_assetParameters.isPoolFrozen(assetKey_),
             "DefiCore: Pool is freeze for borrow operations."
@@ -661,13 +689,15 @@ contract DefiCore is
 
         require(debtAmount_ == 0, "DefiCore: Unable to borrow because the account is in arrears.");
 
-        ILiquidityPool assetLiquidityPool_ = assetKey_.getAssetLiquidityPool(_systemPoolsRegistry);
+        uint256 borrowedAmountInUSD_ = assetLiquidityPool_.getAmountInUSD(borrowAmount_);
 
         require(
-            availableLiquidity_ >= assetLiquidityPool_.getAmountInUSD(borrowAmount_),
+            availableLiquidity_ >= borrowedAmountInUSD_,
             "DefiCore: Not enough available liquidity."
         );
 
         _rewardsDistribution.updateCumulativeSums(borrowerAddr_, address(assetLiquidityPool_));
+
+        return borrowedAmountInUSD_;
     }
 }
