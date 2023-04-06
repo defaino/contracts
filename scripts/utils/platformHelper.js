@@ -32,10 +32,12 @@ class PlatformHelper {
 
       console.log(`Sending ${nativeAmount} ETH to ${currentPublicKey}...`);
 
-      await defSigner.sendTransaction({
+      const tx = await defSigner.sendTransaction({
         to: currentPublicKey,
         value: wei(nativeAmount).toFixed(),
       });
+
+      await tx.wait();
     }
   }
 
@@ -53,15 +55,21 @@ class PlatformHelper {
       const mintAmount = wei(depositAmounts[i], await currentToken.decimals());
 
       console.log(`\nMinting ${mintAmount.toFixed()} (wei) ${currentSymbol} for ${signerPublicKey}`);
-      await currentToken.connect(signer).mintArbitrary(signerPublicKey, mintAmount.toFixed());
+      let tx = await currentToken.connect(signer).mintArbitrary(signerPublicKey, mintAmount.toFixed());
+
+      await tx.wait();
 
       console.log(
         `Aproving ${mintAmount.toFixed()} amount (wei) from ${signerPublicKey} to ${currentSymbol} pool address (${currentPoolAddr})`
       );
-      await currentToken.connect(signer).approve(currentPoolAddr, mintAmount.toFixed());
+      tx = await currentToken.connect(signer).approve(currentPoolAddr, mintAmount.toFixed());
+
+      await tx.wait();
 
       console.log(`Adding liquidity to the ${currentSymbol} pool`);
-      await this.defiCore.connect(signer).addLiquidity(currentKey, wei(depositAmounts[i]).toFixed());
+      tx = await this.defiCore.connect(signer).addLiquidity(currentKey, wei(depositAmounts[i]).toFixed());
+
+      await tx.wait();
     }
 
     console.log(
@@ -81,7 +89,9 @@ class PlatformHelper {
       const borrowAmount = wei(borrowAmounts[i]).toFixed();
 
       console.log(`\nBorrowing liquidity from the ${currentSymbol} pool`);
-      await this.defiCore.connect(signer).borrowFor(currentKey, borrowAmount, signerPublicKey);
+      const tx = await this.defiCore.connect(signer).borrowFor(currentKey, borrowAmount, signerPublicKey);
+
+      await tx.wait();
 
       console.log(
         `TotalBorrowBalance of the ${signerPublicKey} - ${await this.defiCore.getTotalBorrowBalanceInUSD(
@@ -106,11 +116,15 @@ class PlatformHelper {
       );
 
       console.log(`\nSetting ${newPrice} (wei) price for ${currentSymbol} price feed...`);
-      await priceFeed.setPrice(newPrice);
+      let tx = await priceFeed.setPrice(newPrice);
+
+      await tx.wait();
 
       if ((await priceFeed.decimals()) != priceDecimals) {
         console.log(`Setting ${priceDecimals} decimals for ${currentSymbol} price feed...`);
-        await priceFeed.setDecimals(priceDecimals);
+        tx = await priceFeed.setDecimals(priceDecimals);
+
+        await tx.wait();
       }
     }
   }
