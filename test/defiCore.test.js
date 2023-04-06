@@ -2,7 +2,7 @@ const { setNextBlockTime, setTime, mine, getCurrentBlockTime } = require("./help
 const { toBytes, compareKeys, deepCompareKeys } = require("./helpers/bytesCompareLibrary");
 const { getInterestRateLibraryAddr } = require("./helpers/coverage-helper");
 const { toBN, accounts, getPrecision, getPercentage100, wei } = require("../scripts/utils/utils");
-const { ZERO_ADDR } = require("../scripts/utils/constants");
+const { ZERO_ADDR, PERCENTAGE_100 } = require("../scripts/utils/constants");
 
 const Reverter = require("./helpers/reverter");
 const truffleAssert = require("truffle-assertions");
@@ -79,6 +79,7 @@ describe("DefiCore", async () => {
 
   const priceDecimals = wei(1, 8);
   const chainlinkPriceDecimals = toBN(8);
+  const tokensPrice = wei(100, chainlinkPriceDecimals);
 
   const minSupplyDistributionPart = getPrecision().times(10);
   const minBorrowDistributionPart = getPrecision().times(10);
@@ -105,7 +106,7 @@ describe("DefiCore", async () => {
   }
 
   async function createLiquidityPool(assetKey, asset, symbol, isCollateral) {
-    const chainlinkOracle = await ChainlinkOracleMock.new(wei(100, chainlinkPriceDecimals), chainlinkPriceDecimals);
+    const chainlinkOracle = await ChainlinkOracleMock.new(tokensPrice, chainlinkPriceDecimals);
 
     await systemPoolsRegistry.addLiquidityPool(
       asset.address,
@@ -147,7 +148,7 @@ describe("DefiCore", async () => {
   }
 
   async function deployRewardsPool(rewardsTokenAddr, symbol) {
-    const chainlinkOracle = await ChainlinkOracleMock.new(wei(100, chainlinkPriceDecimals), chainlinkPriceDecimals);
+    const chainlinkOracle = await ChainlinkOracleMock.new(tokensPrice, chainlinkPriceDecimals);
 
     await systemPoolsRegistry.addLiquidityPool(
       rewardsTokenAddr,
@@ -604,6 +605,42 @@ describe("DefiCore", async () => {
       result = await defiCore.getAvailableLiquidity(USER1);
       assert.closeTo(result[0].toNumber(), borrowLimit.minus(totalBorrowedAmount).toNumber(), 10);
       assert.equal(result[1], 0);
+    });
+  });
+
+  describe("getAvailableLiquidityBatch", () => {
+    const liquidityAmount = wei(100);
+    const amountToBorrow = wei(75);
+    const newPrice = wei(85, chainlinkPriceDecimals);
+
+    beforeEach("setup", async () => {
+      await defiCore.addLiquidity(daiKey, liquidityAmount, { from: OWNER });
+      await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER1 });
+      await defiCore.addLiquidity(wEthKey, liquidityAmount, { from: USER2 });
+
+      await defiCore.borrowFor(daiKey, amountToBorrow, USER2, { from: USER2 });
+
+      await wEthChainlinkOracle.setPrice(newPrice);
+    });
+
+    it("should correctly get available liquidity for addresses arr", async () => {
+      const result = await defiCore.getAvailableLiquidityBatch([USER1, USER2]);
+
+      const expectedLiquidity = newPrice
+        .times(PERCENTAGE_100)
+        .idiv(standardColRatio)
+        .times(liquidityAmount)
+        .idiv(oneToken);
+      const expectedUser2Debt = wei(100, chainlinkPriceDecimals)
+        .times(amountToBorrow)
+        .idiv(oneToken)
+        .minus(expectedLiquidity);
+
+      assert.equal(toBN(result[0][0]).toFixed(), expectedLiquidity.toFixed());
+      assert.equal(toBN(result[0][1]).toFixed(), 0);
+
+      assert.equal(toBN(result[1][0]).toFixed(), 0);
+      assert.equal(toBN(result[1][1]).toFixed(), expectedUser2Debt.toFixed());
     });
   });
 
@@ -1098,6 +1135,10 @@ describe("DefiCore", async () => {
       assert.equal(txReceipt.receipt.logs[0].args.borrower, USER1);
       assert.isTrue(compareKeys(txReceipt.receipt.logs[0].args.assetKey, wEthKey));
       assert.equal(toBN(txReceipt.receipt.logs[0].args.borrowedAmount).toString(), borrowAmount.toString());
+      assert.equal(
+        toBN(txReceipt.receipt.logs[0].args.borrowedAmountInUSD).toString(),
+        tokensPrice.times(borrowAmount).idiv(oneToken).toFixed()
+      );
 
       const currentRate = await wEthPool.getCurrentRate();
       const expectedNormalizedAmount = getNormalizedAmount(toBN(0), borrowAmount, currentRate, true);
@@ -1121,7 +1162,7 @@ describe("DefiCore", async () => {
 
     it("should get exception if asset does not exists", async () => {
       const someAssetKey = toBytes("SOME_ASSET");
-      const reason = "AssetParameters: Param for this asset doesn't exist.";
+      const reason = "AssetsHelperLibrary: LiquidityPool doesn't exists.";
       await truffleAssert.reverts(defiCore.borrowFor(someAssetKey, liquidityAmount, USER1, { from: USER1 }), reason);
     });
 
@@ -1179,6 +1220,10 @@ describe("DefiCore", async () => {
       assert.equal(txReceipt.receipt.logs[0].args.userAddr, USER1);
       assert.isTrue(compareKeys(txReceipt.receipt.logs[0].args.assetKey, wEthKey));
       assert.equal(toBN(txReceipt.receipt.logs[0].args.repaidAmount).toString(), repayBorrowAmount.toString());
+      assert.equal(
+        toBN(txReceipt.receipt.logs[0].args.repaidAmountInUSD).toString(),
+        tokensPrice.times(repayBorrowAmount).idiv(oneToken).toFixed()
+      );
 
       assert.equal(
         (await wEthPool.borrowInfos(USER1)).normalizedAmount.toString(),
@@ -1393,7 +1438,7 @@ describe("DefiCore", async () => {
       const price = toBN(82).times(priceDecimals);
       await daiChainlinkOracle.setPrice(price);
 
-      const reason = "DefiCore: Liquidation amount should be more than zero.";
+      const reason = "DefiCore: Liquidated amount should be more than zero.";
       await truffleAssert.reverts(defiCore.liquidation(USER1, daiKey, daiKey, 0, { from: USER2 }), reason);
     });
 
@@ -1414,7 +1459,7 @@ describe("DefiCore", async () => {
     it("should get exception if try to liquidate more then posible", async () => {
       await daiChainlinkOracle.setPrice(toBN(92).times(priceDecimals));
 
-      const reason = "DefiCore: Liquidation amount should be less than max quantity.";
+      const reason = "DefiCore: Liquidated amount should be less than max quantity.";
       await truffleAssert.reverts(
         defiCore.liquidation(USER1, daiKey, wEthKey, liquidateAmount.times(4), { from: USER2 }),
         reason
@@ -1730,6 +1775,10 @@ describe("DefiCore", async () => {
       assert.equal(txReceipt.receipt.logs[0].args.borrower, USER1);
       assert.isTrue(compareKeys(txReceipt.receipt.logs[0].args.assetKey, wEthKey));
       assert.equal(toBN(txReceipt.receipt.logs[0].args.borrowedAmount).toString(), borrowAmount.toString());
+      assert.equal(
+        toBN(txReceipt.receipt.logs[0].args.borrowedAmountInUSD).toString(),
+        tokensPrice.times(borrowAmount).idiv(oneToken).toFixed()
+      );
 
       const currentRate = toBN(await wEthPool.getCurrentRate());
       const expectedNormalizedAmount = getNormalizedAmount(toBN(0), borrowAmount, currentRate, true);
@@ -1766,7 +1815,7 @@ describe("DefiCore", async () => {
 
     it("should get exception if asset does not exists", async () => {
       const someAssetKey = toBytes("SOME_ASSET");
-      const reason = "AssetParameters: Param for this asset doesn't exist.";
+      const reason = "AssetsHelperLibrary: LiquidityPool doesn't exists.";
       await truffleAssert.reverts(defiCore.delegateBorrow(someAssetKey, borrowAmount, USER1, { from: USER2 }), reason);
     });
 
@@ -1840,6 +1889,10 @@ describe("DefiCore", async () => {
       assert.equal(txReceipt.receipt.logs[0].args.userAddr, USER1);
       assert.isTrue(compareKeys(txReceipt.receipt.logs[0].args.assetKey, wEthKey));
       assert.equal(toBN(txReceipt.receipt.logs[0].args.repaidAmount).toString(), repayBorrowAmount.toString());
+      assert.equal(
+        toBN(txReceipt.receipt.logs[0].args.repaidAmountInUSD).toString(),
+        tokensPrice.times(repayBorrowAmount).idiv(oneToken).toFixed()
+      );
 
       assert.equal(
         (await wEthPool.borrowInfos(USER1)).normalizedAmount.toString(),
@@ -1909,6 +1962,10 @@ describe("DefiCore", async () => {
       assert.equal(txReceipt.receipt.logs[0].args.borrower, USER1);
       assert.isTrue(compareKeys(txReceipt.receipt.logs[0].args.assetKey, wEthKey));
       assert.equal(toBN(txReceipt.receipt.logs[0].args.borrowedAmount).toString(), borrowAmount.toString());
+      assert.equal(
+        toBN(txReceipt.receipt.logs[0].args.borrowedAmountInUSD).toString(),
+        tokensPrice.times(borrowAmount).idiv(oneToken).toFixed()
+      );
 
       const currentRate = toBN(await wEthPool.getCurrentRate());
       const expectedNormalizedAmount = getNormalizedAmount(toBN(0), borrowAmount, currentRate, true);
@@ -1949,7 +2006,7 @@ describe("DefiCore", async () => {
 
     it("should get exception if asset does not exists", async () => {
       const someAssetKey = toBytes("SOME_ASSET");
-      const reason = "AssetParameters: Param for this asset doesn't exist.";
+      const reason = "AssetsHelperLibrary: LiquidityPool doesn't exists.";
       await truffleAssert.reverts(defiCore.borrowFor(someAssetKey, borrowAmount, USER2, { from: USER1 }), reason);
     });
 
