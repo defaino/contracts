@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity 0.8.17;
+pragma solidity ^0.8.17;
 
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 
-import "@dlsl/dev-modules/contracts-registry/AbstractDependant.sol";
-import "@dlsl/dev-modules/libs/decimals/DecimalsConverter.sol";
+import "@solarity/solidity-lib/contracts-registry/AbstractDependant.sol";
+import "@solarity/solidity-lib/libs/utils/DecimalsConverter.sol";
 
 import "../interfaces/IDefiCore.sol";
 import "../interfaces/IAssetParameters.sol";
@@ -62,7 +62,10 @@ abstract contract AbstractPool is IBasicPool, Initializable, AbstractDependant {
         _;
     }
 
-    function setDependencies(address contractsRegistry_) public virtual override dependant {
+    function setDependencies(
+        address contractsRegistry_,
+        bytes memory
+    ) public virtual override dependant {
         IRegistry registry_ = IRegistry(contractsRegistry_);
 
         _defiCore = IDefiCore(registry_.getDefiCoreContract());

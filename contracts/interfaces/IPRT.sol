@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity 0.8.17;
+pragma solidity ^0.8.17;
 
 /**
  * This is a Platform Reputation Token (PRT) contract. The token grants special conditions for its owner: wider range of collateral assets, higher collateralization ratios.

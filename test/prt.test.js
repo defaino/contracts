@@ -664,8 +664,8 @@ describe("PRT", () => {
 
   describe("setDependencies()", () => {
     it("should fail if called not by an injector", async () => {
-      let reason = "Dependant: Not an injector";
-      await truffleAssert.reverts(prt.setDependencies(registry.address), reason);
+      let reason = "Dependant: not an injector";
+      await truffleAssert.reverts(prt.setDependencies(registry.address, "0x"), reason);
     });
   });
 });

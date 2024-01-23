@@ -1,8 +1,8 @@
-# New DeFi
+# DeFaino contracts
 
 ### Setup
 
-- To configure the system, you need to run the command - `yarn install`
+- To configure the system, you need to run the command - `npm install`
 
 ### Helpful information
 

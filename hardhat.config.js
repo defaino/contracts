@@ -1,10 +1,13 @@
 require("@nomiclabs/hardhat-web3");
 require("@nomiclabs/hardhat-truffle5");
+require("@nomiclabs/hardhat-ethers");
+require("@nomicfoundation/hardhat-chai-matchers");
 require("@typechain/hardhat");
-require("@dlsl/hardhat-migrate");
+require("@solarity/hardhat-migrate");
 require("hardhat-contract-sizer");
 require("hardhat-gas-reporter");
 require("solidity-coverage");
+require("tsconfig-paths/register");
 
 const dotenv = require("dotenv");
 dotenv.config();
@@ -17,10 +20,6 @@ function typechainTarget() {
   const target = process.env.TYPECHAIN_TARGET;
 
   return target == "" || target == undefined ? "ethers-v5" : target;
-}
-
-function forceTypechain() {
-  return process.env.TYPECHAIN_FORCE == "true";
 }
 
 module.exports = {
@@ -97,6 +96,5 @@ module.exports = {
     target: typechainTarget(),
     alwaysGenerateOverloads: true,
     discriminateTypes: true,
-    dontOverrideCompile: true & !forceTypechain(),
   },
 };

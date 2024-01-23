@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity 0.8.17;
+pragma solidity ^0.8.17;
 
-import "@dlsl/dev-modules/contracts-registry/AbstractDependant.sol";
-import "@dlsl/dev-modules/pool-contracts-registry/pool-factory/PublicBeaconProxy.sol";
+import "@solarity/solidity-lib/contracts-registry/AbstractDependant.sol";
+import "@solarity/solidity-lib/proxy/beacon/PublicBeaconProxy.sol";
 
 import "./interfaces/IRegistry.sol";
 import "./interfaces/ISystemPoolsRegistry.sol";
@@ -21,7 +21,7 @@ contract SystemPoolsFactory is ISystemPoolsFactory, AbstractDependant {
         _;
     }
 
-    function setDependencies(address _contractsRegistry) external override dependant {
+    function setDependencies(address _contractsRegistry, bytes memory) public override dependant {
         _registry = IRegistry(_contractsRegistry);
 
         _systemPoolsRegistry = ISystemPoolsRegistry(_registry.getSystemPoolsRegistryContract());
@@ -57,7 +57,7 @@ contract SystemPoolsFactory is ISystemPoolsFactory, AbstractDependant {
             new PublicBeaconProxy(_poolsRegistry.getPoolsBeacon(poolType_), "")
         );
 
-        AbstractDependant(proxyAddr_).setDependencies(address(_registry));
+        AbstractDependant(proxyAddr_).setDependencies(address(_registry), "");
         AbstractDependant(proxyAddr_).setInjector(address(_poolsRegistry));
 
         return proxyAddr_;

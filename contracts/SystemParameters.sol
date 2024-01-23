@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity 0.8.17;
+pragma solidity ^0.8.17;
 
-import "@dlsl/dev-modules/contracts-registry/AbstractDependant.sol";
+import "@solarity/solidity-lib/contracts-registry/AbstractDependant.sol";
 
 import "./interfaces/IRegistry.sol";
 import "./interfaces/ISystemParameters.sol";
@@ -30,7 +30,7 @@ contract SystemParameters is ISystemParameters, AbstractDependant {
         _;
     }
 
-    function setDependencies(address contractsRegistry_) external override dependant {
+    function setDependencies(address contractsRegistry_, bytes memory) public override dependant {
         _systemOwnerAddr = IRegistry(contractsRegistry_).getSystemOwner();
     }
 

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity 0.8.17;
+pragma solidity ^0.8.17;
 
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 
@@ -31,8 +31,11 @@ contract LiquidityPool is ILiquidityPool, AbstractPool, ERC20Upgradeable {
         _abstractPoolInitialize(assetAddr_, assetKey_);
     }
 
-    function setDependencies(address contractsRegistry_) public virtual override dependant {
-        super.setDependencies(contractsRegistry_);
+    function setDependencies(
+        address contractsRegistry_,
+        bytes memory data_
+    ) public virtual override dependant {
+        super.setDependencies(contractsRegistry_, data_);
 
         _rewardsDistribution = IRewardsDistribution(
             IRegistry(contractsRegistry_).getRewardsDistributionContract()

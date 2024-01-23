@@ -290,7 +290,7 @@ describe("LiquidityPool", () => {
 
       await nativeToken.deposit({ value: 1 });
 
-      reason = "WETH: Failed to transfer AAA.";
+      reason = "WETH: Failed to transfer ETH.";
       await truffleAssert.reverts(nativeToken.withdrawTo(registry.address, 1), reason);
     });
 
@@ -343,9 +343,9 @@ describe("LiquidityPool", () => {
 
   describe("setDependencies", () => {
     it("should revert if not called by injector", async () => {
-      let reason = "Dependant: Not an injector";
-      await truffleAssert.reverts(nativePool.setDependencies(registry.address, { from: USER2 }), reason);
-      await truffleAssert.reverts(liquidityPool.setDependencies(registry.address, { from: USER2 }), reason);
+      let reason = "Dependant: not an injector";
+      await truffleAssert.reverts(nativePool.setDependencies(registry.address, "0x", { from: USER2 }), reason);
+      await truffleAssert.reverts(liquidityPool.setDependencies(registry.address, "0x", { from: USER2 }), reason);
     });
   });
 
