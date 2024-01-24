@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.17;
+pragma solidity ^0.8.17;
 
-import "@dlsl/dev-modules/utils/Globals.sol";
+import "@solarity/solidity-lib/utils/Globals.sol";
 
 uint256 constant BLOCKS_PER_DAY = 4900;
 uint256 constant BLOCKS_PER_YEAR = BLOCKS_PER_DAY * 365;

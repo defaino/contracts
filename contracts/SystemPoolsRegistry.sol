@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity 0.8.17;
+pragma solidity ^0.8.17;
 
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 
-import "@dlsl/dev-modules/contracts-registry/AbstractDependant.sol";
-import "@dlsl/dev-modules/libs/arrays/Paginator.sol";
+import "@solarity/solidity-lib/contracts-registry/AbstractDependant.sol";
+import "@solarity/solidity-lib/libs/arrays/Paginator.sol";
 
 import "./interfaces/IRegistry.sol";
 import "./interfaces/ISystemParameters.sol";
@@ -62,7 +62,7 @@ contract SystemPoolsRegistry is ISystemPoolsRegistry, Initializable, AbstractDep
         rewardsAssetKey = rewardsAssetKey_;
     }
 
-    function setDependencies(address contractsRegistry_) external override dependant {
+    function setDependencies(address contractsRegistry_, bytes memory) public override dependant {
         IRegistry registry_ = IRegistry(contractsRegistry_);
 
         _registry = registry_;
@@ -186,7 +186,7 @@ contract SystemPoolsRegistry is ISystemPoolsRegistry, Initializable, AbstractDep
         address[] memory allPools_ = getAllPools();
 
         for (uint256 i = 0; i < allPools_.length; i++) {
-            AbstractDependant(allPools_[i]).setDependencies(address(registry_));
+            AbstractDependant(allPools_[i]).setDependencies(address(registry_), "");
         }
     }
 
@@ -199,7 +199,7 @@ contract SystemPoolsRegistry is ISystemPoolsRegistry, Initializable, AbstractDep
         address[] memory _pools = getPools(offset_, limit_);
 
         for (uint256 i = 0; i < _pools.length; i++) {
-            AbstractDependant(_pools[i]).setDependencies(address(registry_));
+            AbstractDependant(_pools[i]).setDependencies(address(registry_), "");
         }
     }
 

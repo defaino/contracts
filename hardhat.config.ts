@@ -1,12 +1,17 @@
-require("@nomiclabs/hardhat-web3");
-require("@nomiclabs/hardhat-truffle5");
-require("@typechain/hardhat");
-require("@dlsl/hardhat-migrate");
-require("hardhat-contract-sizer");
-require("hardhat-gas-reporter");
-require("solidity-coverage");
+import "@nomiclabs/hardhat-web3";
+import "@nomiclabs/hardhat-truffle5";
+import "@nomiclabs/hardhat-ethers";
+import "@nomicfoundation/hardhat-chai-matchers";
+import "@typechain/hardhat";
+import "@solarity/hardhat-migrate";
+import "hardhat-contract-sizer";
+import "hardhat-gas-reporter";
+import "solidity-coverage";
+import "tsconfig-paths/register";
 
-const dotenv = require("dotenv");
+import { HardhatUserConfig } from "hardhat/config";
+
+import * as dotenv from "dotenv";
 dotenv.config();
 
 function privateKey() {
@@ -19,17 +24,14 @@ function typechainTarget() {
   return target == "" || target == undefined ? "ethers-v5" : target;
 }
 
-function forceTypechain() {
-  return process.env.TYPECHAIN_FORCE == "true";
-}
-
-module.exports = {
+const config: HardhatUserConfig = {
   networks: {
     hardhat: {
       initialDate: "1970-01-01T00:00:00Z",
       chainId: 1,
       accounts: {
-        mnemonic: "portion judge ancient salon bamboo prevent hole mix book wall crack innocent",
+        mnemonic:
+          "portion judge ancient salon bamboo prevent hole mix book wall crack innocent",
         accountsBalance: "100000000000000000000000",
       },
     },
@@ -43,14 +45,18 @@ module.exports = {
       accounts: privateKey(),
       gasMultiplier: 1.2,
     },
-    chapel: {
-      url: "https://data-seed-prebsc-1-s1.binance.org:8545",
+    sepolia: {
+      url: `https://sepolia.infura.io/v3/${process.env.INFURA_KEY}`,
       accounts: privateKey(),
       gasMultiplier: 1.2,
-      timeout: 60000,
     },
-    bsc: {
-      url: "https://bsc-dataseed.binance.org/",
+    mumbai: {
+      url: `https://rpc-mumbai.maticvigil.com/`,
+      accounts: privateKey(),
+      gasMultiplier: 1.2,
+    },
+    fuji: {
+      url: `https://avalanche-fuji.infura.io/v3/${process.env.INFURA_KEY}`,
       accounts: privateKey(),
       gasMultiplier: 1.2,
     },
@@ -58,6 +64,17 @@ module.exports = {
       url: `https://mainnet.infura.io/v3/${process.env.INFURA_KEY}`,
       accounts: privateKey(),
       gasMultiplier: 1.2,
+    },
+    polygon: {
+      url: `https://matic-mainnet.chainstacklabs.com`,
+      accounts: privateKey(),
+      gasMultiplier: 1.2,
+    },
+    avalanche: {
+      url: `https://api.avax.network/ext/bc/C/rpc`,
+      accounts: privateKey(),
+      gasMultiplier: 1.2,
+      timeout: 60000,
     },
   },
   solidity: {
@@ -97,6 +114,7 @@ module.exports = {
     target: typechainTarget(),
     alwaysGenerateOverloads: true,
     discriminateTypes: true,
-    dontOverrideCompile: true & !forceTypechain(),
   },
 };
+
+export default config;

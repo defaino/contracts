@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity 0.8.17;
+pragma solidity ^0.8.17;
 
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 
-import "@dlsl/dev-modules/contracts-registry/AbstractDependant.sol";
-import "@dlsl/dev-modules/libs/decimals/DecimalsConverter.sol";
+import "@solarity/solidity-lib/contracts-registry/AbstractDependant.sol";
+import "@solarity/solidity-lib/libs/utils/DecimalsConverter.sol";
 
 import "./interfaces/IRegistry.sol";
 import "./interfaces/IDefiCore.sol";
@@ -53,7 +53,7 @@ contract UserInfoRegistry is IUserInfoRegistry, AbstractDependant {
         _;
     }
 
-    function setDependencies(address contractsRegistry_) external override dependant {
+    function setDependencies(address contractsRegistry_, bytes memory) public override dependant {
         IRegistry registry_ = IRegistry(contractsRegistry_);
 
         _defiCore = IDefiCore(registry_.getDefiCoreContract());

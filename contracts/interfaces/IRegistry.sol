@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity 0.8.17;
+pragma solidity ^0.8.17;
 
 /**
  * This is the main register of the system, which stores the addresses of all the necessary contracts of the system.

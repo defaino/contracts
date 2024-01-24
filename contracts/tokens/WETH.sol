@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity 0.8.17;
+pragma solidity ^0.8.17;
 
 import "@openzeppelin/contracts/token/ERC20/extensions/draft-ERC20Permit.sol";
 
 import "../interfaces/tokens/IWETH.sol";
 
 contract WETH is IWETH, ERC20Permit {
-    constructor() ERC20Permit("DL DeFi Core WETH") ERC20("DL DeFi Core WETH", "WETH") {}
+    constructor() ERC20Permit("DeFaino WETH") ERC20("DeFaino WETH", "WETH") {}
 
     receive() external payable {
         _depositTo(msg.sender);
@@ -40,6 +40,6 @@ contract WETH is IWETH, ERC20Permit {
         _burn(msg.sender, amount_);
 
         (bool success_, ) = recipient_.call{value: amount_}("");
-        require(success_, "WETH: Failed to transfer AAA.");
+        require(success_, "WETH: Failed to transfer ETH.");
     }
 }

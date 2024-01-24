@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity 0.8.17;
+pragma solidity ^0.8.17;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-import "@dlsl/dev-modules/libs/math/DSMath.sol";
+import "./libraries/DSMath.sol";
 
 import "./common/Globals.sol";
 

@@ -25,7 +25,6 @@ const AbstractPool = artifacts.require("AbstractPool");
 const PriceManager = artifacts.require("PriceManager");
 const Prt = artifacts.require("PRT");
 const InterestRateLibrary = artifacts.require("InterestRateLibrary");
-const WETH = artifacts.require("WETH");
 const StablePermitToken = artifacts.require("StablePermitTokenMock");
 const PublicBeaconProxy = artifacts.require("PublicBeaconProxy");
 
@@ -218,8 +217,8 @@ describe("SystemPoolsRegistry", () => {
 
   describe("setDependencies()", () => {
     it("should revert if not called by injector", async () => {
-      let reason = "Dependant: Not an injector";
-      await truffleAssert.reverts(systemPoolsRegistry.setDependencies(registry.address), reason);
+      let reason = "Dependant: not an injector";
+      await truffleAssert.reverts(systemPoolsRegistry.setDependencies(registry.address, "0x"), reason);
     });
   });
 
@@ -236,8 +235,8 @@ describe("SystemPoolsRegistry", () => {
 
   describe("systemPoolsFactory setDependencies", () => {
     it("should revert if not called by injector", async () => {
-      let reason = "Dependant: Not an injector";
-      await truffleAssert.reverts(liquidityPoolFactory.setDependencies(registry.address), reason);
+      let reason = "Dependant: not an injector";
+      await truffleAssert.reverts(liquidityPoolFactory.setDependencies(registry.address, "0x"), reason);
     });
   });
 
@@ -520,7 +519,7 @@ describe("SystemPoolsRegistry", () => {
         assert.equal(await liquidityPools[i].getPriceManager(), currentPriceManager);
       }
 
-      await registry.justAddProxyContract(await registry.PRICE_MANAGER_NAME(), newPriceManager.address);
+      await registry.addContract(await registry.PRICE_MANAGER_NAME(), newPriceManager.address);
 
       await systemPoolsRegistry.injectDependenciesToExistingPools();
 
@@ -537,7 +536,7 @@ describe("SystemPoolsRegistry", () => {
         assert.equal(await liquidityPools[i].getPriceManager(), currentPriceManager);
       }
 
-      await registry.justAddProxyContract(await registry.PRICE_MANAGER_NAME(), newPriceManager.address);
+      await registry.addContract(await registry.PRICE_MANAGER_NAME(), newPriceManager.address);
 
       await systemPoolsRegistry.injectDependencies(2, 5);
 
@@ -549,15 +548,15 @@ describe("SystemPoolsRegistry", () => {
     });
 
     it("should get exception if try to inject dependencies directly", async () => {
-      const reason = "Dependant: Not an injector";
+      const reason = "Dependant: not an injector";
 
-      await truffleAssert.reverts(liquidityPools[0].setDependencies(registry.address), reason);
+      await truffleAssert.reverts(liquidityPools[0].setDependencies(registry.address, "0x"), reason);
     });
 
     it("should get exception if try to inject dependencies to abstract pool directly", async () => {
-      const reason = "Dependant: Not an injector";
+      const reason = "Dependant: not an injector";
 
-      await truffleAssert.reverts(abstractPools[0].setDependencies(registry.address, { from: USER2 }), reason);
+      await truffleAssert.reverts(abstractPools[0].setDependencies(registry.address, "0x", { from: USER2 }), reason);
     });
 
     it("injectDependenciesToExistingPools() should get exception if called by not a system owner", async () => {
@@ -570,7 +569,7 @@ describe("SystemPoolsRegistry", () => {
         assert.equal(await liquidityPools[i].getPriceManager(), currentPriceManager);
       }
 
-      await registry.justAddProxyContract(await registry.PRICE_MANAGER_NAME(), newPriceManager.address);
+      await registry.addContract(await registry.PRICE_MANAGER_NAME(), newPriceManager.address);
 
       await truffleAssert.reverts(systemPoolsRegistry.injectDependenciesToExistingPools({ from: USER1 }), reason);
     });
@@ -583,7 +582,7 @@ describe("SystemPoolsRegistry", () => {
         assert.equal(await liquidityPools[i].getPriceManager(), currentPriceManager);
       }
 
-      await registry.justAddProxyContract(await registry.PRICE_MANAGER_NAME(), newPriceManager.address);
+      await registry.addContract(await registry.PRICE_MANAGER_NAME(), newPriceManager.address);
 
       await truffleAssert.reverts(systemPoolsRegistry.injectDependencies(2, 5, { from: USER1 }), reason);
     });

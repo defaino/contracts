@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity 0.8.17;
+pragma solidity ^0.8.17;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-import "@dlsl/dev-modules/contracts-registry/AbstractDependant.sol";
+import "@solarity/solidity-lib/contracts-registry/AbstractDependant.sol";
 
 import "./interfaces/IRegistry.sol";
 import "./interfaces/IAssetParameters.sol";
@@ -42,7 +42,7 @@ contract RewardsDistribution is IRewardsDistribution, AbstractDependant {
         _;
     }
 
-    function setDependencies(address contractsRegistry_) external override dependant {
+    function setDependencies(address contractsRegistry_, bytes memory) public override dependant {
         IRegistry registry_ = IRegistry(contractsRegistry_);
 
         _systemOwnerAddr = registry_.getSystemOwner();

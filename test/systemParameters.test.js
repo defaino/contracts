@@ -44,8 +44,8 @@ describe("SystemParameters", () => {
 
   describe("setDependencies", () => {
     it("should revert if not called by injector", async () => {
-      let reason = "Dependant: Not an injector";
-      await truffleAssert.reverts(systemParameters.setDependencies(registry.address), reason);
+      let reason = "Dependant: not an injector";
+      await truffleAssert.reverts(systemParameters.setDependencies(registry.address, "0x"), reason);
     });
   });
 
