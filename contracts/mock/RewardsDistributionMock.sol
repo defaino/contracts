@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.17;
 
-import "../RewardsDistribution.sol";
+import "../core/RewardsDistribution.sol";
 
 contract RewardsDistributionMock is RewardsDistribution {
     function getRewardsPerBlock(

@@ -3,11 +3,11 @@ pragma solidity ^0.8.17;
 
 import "@solarity/solidity-lib/contracts-registry/AbstractDependant.sol";
 
-import "./interfaces/IRegistry.sol";
-import "./interfaces/IPriceManager.sol";
-import "./interfaces/ISystemPoolsRegistry.sol";
+import "../interfaces/IRegistry.sol";
+import "../interfaces/IPriceManager.sol";
+import "../interfaces/ISystemPoolsRegistry.sol";
 
-import "./common/Globals.sol";
+import "../common/Globals.sol";
 
 contract PriceManager is IPriceManager, AbstractDependant {
     ISystemPoolsRegistry internal _systemPoolsRegistry;

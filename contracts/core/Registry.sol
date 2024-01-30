@@ -3,7 +3,7 @@ pragma solidity ^0.8.17;
 
 import "@solarity/solidity-lib/contracts-registry/presets/OwnableContractsRegistry.sol";
 
-import "./interfaces/IRegistry.sol";
+import "../interfaces/IRegistry.sol";
 
 contract Registry is IRegistry, OwnableContractsRegistry {
     string public constant DEFI_CORE_NAME = "DEFI_CORE";

@@ -2,7 +2,7 @@
 
 # DeFaino contracts
 
-## Setup project and helpfull scripts
+## Setup project and helpful scripts
 
 - Initially, all packages and dependencies must be installed - `npm run install`
 - To compile contracts - `npm run compile`

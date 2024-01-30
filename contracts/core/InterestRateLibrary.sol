@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.17;
 
-import "./interfaces/IInterestRateLibrary.sol";
+import "../interfaces/IInterestRateLibrary.sol";
 
 /// @dev The contract stores the values of the second rates,
 /// which were calculated by the formula ((1 + x) ^ (1/31536000) - 1)

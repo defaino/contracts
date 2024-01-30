@@ -1,0 +1,30 @@
+{
+  "name": "@defaino/contracts",
+  "version": "1.0.0",
+  "license": "GPL-3.0",
+  "author": "Distributed Lab",
+  "readme": "README.md",
+  "description": "DeFaino lending protocol by Distributed Lab",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/defaino/contracts"
+  },
+  "keywords": [
+    "solidity",
+    "ethereum",
+    "smart-contracts",
+    "distributedlab",
+    "defaino",
+    "DeFi"
+  ],
+  "files": [
+    "**/*.sol",
+    "!mock/**/*"
+  ],
+  "dependencies": {
+    "@chainlink/contracts": "^0.4.0",
+    "@openzeppelin/contracts": "4.9.5",
+    "@openzeppelin/contracts-upgradeable": "4.9.5",
+    "@solarity/solidity-lib": "2.6.13"
+  }
+}

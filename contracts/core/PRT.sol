@@ -6,12 +6,12 @@ import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.
 
 import "@solarity/solidity-lib/contracts-registry/AbstractDependant.sol";
 
-import "./interfaces/IPRT.sol";
-import "./interfaces/IRegistry.sol";
-import "./interfaces/IDefiCore.sol";
-import "./interfaces/IUserInfoRegistry.sol";
+import "../interfaces/IPRT.sol";
+import "../interfaces/IRegistry.sol";
+import "../interfaces/IDefiCore.sol";
+import "../interfaces/IUserInfoRegistry.sol";
 
-import "./common/Globals.sol";
+import "../common/Globals.sol";
 
 contract PRT is IPRT, ERC721Upgradeable, AbstractDependant, ReentrancyGuardUpgradeable {
     uint256 internal _tokenIdCounter;

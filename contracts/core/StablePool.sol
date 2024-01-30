@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.17;
 
-import "./interfaces/IBasicPool.sol";
-import "./interfaces/tokens/IStablePermitToken.sol";
+import "../interfaces/IBasicPool.sol";
+import "../interfaces/tokens/IStablePermitToken.sol";
 
-import "./abstract/AbstractPool.sol";
-import "./common/Globals.sol";
+import "../abstract/AbstractPool.sol";
+import "../common/Globals.sol";
 
 contract StablePool is IStablePool, AbstractPool {
     function stablePoolInitialize(

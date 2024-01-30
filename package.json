@@ -22,7 +22,8 @@
     "lint-fix": "npm run lint-sol-fix && npm run lint-ts-js-fix && npm run lint-json-fix",
     "lint-json-fix": "prettier --write \"./**/*.json\"",
     "lint-ts-js-fix": "prettier --write \"./**/*.(ts|js)\"",
-    "lint-sol-fix": "prettier --write \"contracts/**/*.sol\""
+    "lint-sol-fix": "prettier --write \"contracts/**/*.sol\"",
+    "publish-to-npm": "npm run lint-fix && npm publish contracts/ --access public"
   },
   "author": "Distributed Lab",
   "license": "GPL-3.0",

@@ -9,15 +9,15 @@ import "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import "@solarity/solidity-lib/contracts-registry/AbstractDependant.sol";
 import "@solarity/solidity-lib/libs/arrays/Paginator.sol";
 
-import "./interfaces/IRegistry.sol";
-import "./interfaces/ISystemParameters.sol";
-import "./interfaces/IAssetParameters.sol";
-import "./interfaces/IDefiCore.sol";
-import "./interfaces/IRewardsDistribution.sol";
-import "./interfaces/ISystemPoolsRegistry.sol";
-import "./interfaces/IBasicPool.sol";
-import "./interfaces/IPriceManager.sol";
-import "./interfaces/ISystemPoolsFactory.sol";
+import "../interfaces/IRegistry.sol";
+import "../interfaces/ISystemParameters.sol";
+import "../interfaces/IAssetParameters.sol";
+import "../interfaces/IDefiCore.sol";
+import "../interfaces/IRewardsDistribution.sol";
+import "../interfaces/ISystemPoolsRegistry.sol";
+import "../interfaces/IBasicPool.sol";
+import "../interfaces/IPriceManager.sol";
+import "../interfaces/ISystemPoolsFactory.sol";
 
 contract SystemPoolsRegistry is ISystemPoolsRegistry, Initializable, AbstractDependant {
     using Paginator for EnumerableSet.Bytes32Set;

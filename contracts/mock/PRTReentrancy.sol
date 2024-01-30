@@ -2,11 +2,10 @@
 pragma solidity ^0.8.17;
 
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
-import "../interfaces/IPRT.sol";
-import "../interfaces/IDefiCore.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-pragma solidity ^0.8.4;
+import "../interfaces/IPRT.sol";
+import "../interfaces/IDefiCore.sol";
 
 contract PRTReentrancy is IERC721Receiver {
     IPRT private _prt;
