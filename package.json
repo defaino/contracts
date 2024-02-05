@@ -1,7 +1,13 @@
 {
-  "name": "defaino-contracts",
-  "version": "1.0.0",
-  "description": "",
+  "name": "@defaino/contracts",
+  "version": "1.0.1",
+  "license": "GPL-3.0",
+  "author": "Distributed Lab",
+  "description": "DeFaino lending protocol by Distributed Lab",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/defaino/contracts"
+  },
   "scripts": {
     "install": "npx husky install",
     "compile": "npx hardhat compile --force",
@@ -25,10 +31,8 @@
     "lint-sol-fix": "prettier --write \"contracts/**/*.sol\"",
     "publish-to-npm": "npm run lint-fix && npm publish contracts/ --access public"
   },
-  "author": "Distributed Lab",
-  "license": "GPL-3.0",
   "dependencies": {
-    "@chainlink/contracts": "^0.4.0",
+    "@chainlink/contracts": "0.4.2",
     "@openzeppelin/contracts": "4.9.5",
     "@openzeppelin/contracts-upgradeable": "4.9.5",
     "@solarity/solidity-lib": "2.6.13"
