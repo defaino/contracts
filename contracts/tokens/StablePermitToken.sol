@@ -8,7 +8,7 @@ import "../interfaces/ISystemPoolsRegistry.sol";
 import "../interfaces/IBasicPool.sol";
 import "../interfaces/tokens/IStablePermitToken.sol";
 
-import "../Registry.sol";
+import "../core/Registry.sol";
 
 contract StablePermitToken is IStablePermitToken, ERC20Permit {
     IRegistry public immutable registry;

@@ -3,11 +3,11 @@ pragma solidity ^0.8.17;
 
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 
-import "./interfaces/IRewardsDistribution.sol";
-import "./interfaces/IUserInfoRegistry.sol";
-import "./interfaces/tokens/IWETH.sol";
+import "../interfaces/IRewardsDistribution.sol";
+import "../interfaces/IUserInfoRegistry.sol";
+import "../interfaces/tokens/IWETH.sol";
 
-import "./abstract/AbstractPool.sol";
+import "../abstract/AbstractPool.sol";
 
 contract LiquidityPool is ILiquidityPool, AbstractPool, ERC20Upgradeable {
     using SafeERC20 for IERC20;

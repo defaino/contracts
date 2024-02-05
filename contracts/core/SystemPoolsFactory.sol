@@ -4,10 +4,10 @@ pragma solidity ^0.8.17;
 import "@solarity/solidity-lib/contracts-registry/AbstractDependant.sol";
 import "@solarity/solidity-lib/proxy/beacon/PublicBeaconProxy.sol";
 
-import "./interfaces/IRegistry.sol";
-import "./interfaces/ISystemPoolsRegistry.sol";
-import "./interfaces/ISystemPoolsFactory.sol";
-import "./interfaces/IBasicPool.sol";
+import "../interfaces/IRegistry.sol";
+import "../interfaces/ISystemPoolsRegistry.sol";
+import "../interfaces/ISystemPoolsFactory.sol";
+import "../interfaces/IBasicPool.sol";
 
 contract SystemPoolsFactory is ISystemPoolsFactory, AbstractDependant {
     IRegistry internal _registry;

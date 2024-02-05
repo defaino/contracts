@@ -6,16 +6,16 @@ import "@openzeppelin/contracts-upgradeable/utils/math/MathUpgradeable.sol";
 
 import "@solarity/solidity-lib/contracts-registry/AbstractDependant.sol";
 
-import "./interfaces/IRegistry.sol";
-import "./interfaces/ISystemParameters.sol";
-import "./interfaces/IAssetParameters.sol";
-import "./interfaces/ISystemPoolsRegistry.sol";
-import "./interfaces/IBasicPool.sol";
-import "./interfaces/IPriceManager.sol";
+import "../interfaces/IRegistry.sol";
+import "../interfaces/ISystemParameters.sol";
+import "../interfaces/IAssetParameters.sol";
+import "../interfaces/ISystemPoolsRegistry.sol";
+import "../interfaces/IBasicPool.sol";
+import "../interfaces/IPriceManager.sol";
 
-import "./libraries/PureParameters.sol";
+import "../libraries/PureParameters.sol";
 
-import "./common/Globals.sol";
+import "../common/Globals.sol";
 
 contract AssetParameters is IAssetParameters, AbstractDependant {
     using PureParameters for PureParameters.Param;

@@ -5,15 +5,15 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 import "@solarity/solidity-lib/contracts-registry/AbstractDependant.sol";
 
-import "./interfaces/IRegistry.sol";
-import "./interfaces/IAssetParameters.sol";
-import "./interfaces/IRewardsDistribution.sol";
-import "./interfaces/ISystemPoolsRegistry.sol";
-import "./interfaces/IBasicPool.sol";
+import "../interfaces/IRegistry.sol";
+import "../interfaces/IAssetParameters.sol";
+import "../interfaces/IRewardsDistribution.sol";
+import "../interfaces/ISystemPoolsRegistry.sol";
+import "../interfaces/IBasicPool.sol";
 
-import "./libraries/MathHelper.sol";
+import "../libraries/MathHelper.sol";
 
-import "./common/Globals.sol";
+import "../common/Globals.sol";
 
 contract RewardsDistribution is IRewardsDistribution, AbstractDependant {
     using MathHelper for uint256;

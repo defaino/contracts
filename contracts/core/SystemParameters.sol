@@ -3,12 +3,12 @@ pragma solidity ^0.8.17;
 
 import "@solarity/solidity-lib/contracts-registry/AbstractDependant.sol";
 
-import "./interfaces/IRegistry.sol";
-import "./interfaces/ISystemParameters.sol";
+import "../interfaces/IRegistry.sol";
+import "../interfaces/ISystemParameters.sol";
 
-import "./libraries/PureParameters.sol";
+import "../libraries/PureParameters.sol";
 
-import "./common/Globals.sol";
+import "../common/Globals.sol";
 
 contract SystemParameters is ISystemParameters, AbstractDependant {
     using PureParameters for PureParameters.Param;

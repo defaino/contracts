@@ -3,9 +3,9 @@ pragma solidity ^0.8.17;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-import "./libraries/DSMath.sol";
+import "../libraries/DSMath.sol";
 
-import "./common/Globals.sol";
+import "../common/Globals.sol";
 
 contract CompoundRateKeeper is Ownable {
     struct CompoundRate {

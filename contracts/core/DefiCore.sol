@@ -10,20 +10,20 @@ import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.
 import "@solarity/solidity-lib/contracts-registry/AbstractDependant.sol";
 import "@solarity/solidity-lib/libs/utils/DecimalsConverter.sol";
 
-import "./interfaces/IRegistry.sol";
-import "./interfaces/IDefiCore.sol";
-import "./interfaces/ISystemParameters.sol";
-import "./interfaces/IAssetParameters.sol";
-import "./interfaces/IUserInfoRegistry.sol";
-import "./interfaces/ISystemPoolsRegistry.sol";
-import "./interfaces/IRewardsDistribution.sol";
-import "./interfaces/IBasicPool.sol";
-import "./interfaces/IPRT.sol";
+import "../interfaces/IRegistry.sol";
+import "../interfaces/IDefiCore.sol";
+import "../interfaces/ISystemParameters.sol";
+import "../interfaces/IAssetParameters.sol";
+import "../interfaces/IUserInfoRegistry.sol";
+import "../interfaces/ISystemPoolsRegistry.sol";
+import "../interfaces/IRewardsDistribution.sol";
+import "../interfaces/IBasicPool.sol";
+import "../interfaces/IPRT.sol";
 
-import "./libraries/AssetsHelperLibrary.sol";
-import "./libraries/MathHelper.sol";
+import "../libraries/AssetsHelperLibrary.sol";
+import "../libraries/MathHelper.sol";
 
-import "./common/Globals.sol";
+import "../common/Globals.sol";
 
 contract DefiCore is
     IDefiCore,

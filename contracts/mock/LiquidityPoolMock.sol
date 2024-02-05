@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.17;
 
-import "../LiquidityPool.sol";
+import "../core/LiquidityPool.sol";
 
 contract LiquidityPoolMock is LiquidityPool {
     function getNormalizedAmount(

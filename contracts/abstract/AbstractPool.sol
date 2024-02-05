@@ -20,8 +20,8 @@ import "../interfaces/IInterestRateLibrary.sol";
 import "../libraries/AnnualRatesConverter.sol";
 import "../libraries/MathHelper.sol";
 
-import "../Registry.sol";
-import "../CompoundRateKeeper.sol";
+import "../core/Registry.sol";
+import "../core/CompoundRateKeeper.sol";
 
 abstract contract AbstractPool is IBasicPool, Initializable, AbstractDependant {
     using SafeERC20 for IERC20;

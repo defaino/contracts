@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.17;
 
-import "../SystemPoolsRegistry.sol";
+import "../core/SystemPoolsRegistry.sol";
 
 contract SystemPoolsRegistryMock is SystemPoolsRegistry {
     using EnumerableSet for EnumerableSet.Bytes32Set;
